@@ -168,14 +168,14 @@ namespace automation.mbtdistr.ru.Controllers
       switch (text)
       {
         case "/start":
-          await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Ваша роль: {GetEnumDisplayName(worker.Role)}");
+          await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {GetEnumDisplayName(worker.Role)}");
           break;
 
         case "/help":
           await HandleGetHelpAsync(msg, worker);
           break;
         case "/myrole":
-          await _botClient.SendMessage(msg.Chat.Id, $"Ваша роль: {GetEnumDisplayName(worker.Role)}");
+          await _botClient.SendMessage(msg.Chat.Id, $"Вы {GetEnumDisplayName(worker.Role)}");
           break;
         case "/cabinets":
           await HandleGetCabinetsAsync(msg, worker);
@@ -349,6 +349,10 @@ namespace automation.mbtdistr.ru.Controllers
           await SetCabinetUserAsync(cb, data);
           break;
 
+        case "delete_cab_user":
+          await DeleteCabinetUserAsync(cb, data);
+          break;
+
         case "add_cub_users":
           await PromptAddUserToCabinetAsync(cb, data);
           break;
@@ -401,6 +405,42 @@ namespace automation.mbtdistr.ru.Controllers
           await _botClient.AnswerCallbackQuery(cb.Id, "Неподдерживаемое действие.");
           break;
       }
+    }
+
+    private async Task DeleteCabinetUserAsync(CallbackQuery cb, string[] data)
+    {
+      if (data.Length != 5
+         || !int.TryParse(data[3], out var cabinetId)
+         || !int.TryParse(data[4], out var workerId))
+      {
+        await _botClient.AnswerCallbackQuery(cb.Id, "Неверные данные.");
+        return;
+      }
+
+      var cabinet = await _db.Cabinets
+          .Include(c => c.AssignedWorkers)
+          .FirstOrDefaultAsync(c => c.Id == cabinetId);
+      var worker = await _db.Workers.FindAsync(workerId);
+      if (cabinet == null || worker == null)
+      {
+        await _botClient.AnswerCallbackQuery(cb.Id, "Кабинет или пользователь не найдены.");
+        return;
+      }
+      if (!cabinet.AssignedWorkers.Any(w => w.Id == workerId))
+      {
+        await _botClient.AnswerCallbackQuery(cb.Id, "Пользователь не найден в кабинете.");
+        return;
+      }
+      cabinet.AssignedWorkers.Remove(worker);
+      await _db.SaveChangesAsync();
+      await _botClient.AnswerCallbackQuery(cb.Id, "Пользователь успешно удалён.");
+
+      //редактируем сообщение с пользователями кабинета
+      await HandleGetCabinetWorkersAsync(cb, cabinetId);
+
+      await _botClient.SendMessage(
+          long.Parse(worker.TelegramId),
+          $"Вы были удалены из кабинета: \"{cabinet.Marketplace} / {cabinet.Name}\".");
     }
 
     #region Добавление пользователя в кабинет
@@ -481,40 +521,14 @@ namespace automation.mbtdistr.ru.Controllers
       await _db.SaveChangesAsync();
 
       await _botClient.AnswerCallbackQuery(cb.Id, "Пользователь успешно добавлен.");
+   
+      // отправляем уведомление пользователю
+      await _botClient.SendMessage(
+          long.Parse(worker.TelegramId),
+          $"Вы были добавлены в кабинет  \"{cabinet.Marketplace} / {cabinet.Name}\".");
 
       // Обновляем список пользователей кабинета
       await HandleGetCabinetWorkersAsync(cb, cabinetId);
-    }
-
-    private async Task _SetCabinetUserAsync(CallbackQuery cb, string[] data)
-    {
-      if (data.Length < 3 || !int.TryParse(data[2], out var userId))
-      {
-        await _botClient.AnswerCallbackQuery(cb.Id, "Неверные данные");
-        return;
-      }
-      var cabinet = await _db.Cabinets
-          .Include(c => c.AssignedWorkers)
-          .FirstOrDefaultAsync(c => c.Id == int.Parse(data[1]));
-      if (cabinet == null)
-      {
-        await _botClient.AnswerCallbackQuery(cb.Id, "Кабинет не найден");
-        return;
-      }
-      var user = await _db.Workers.FindAsync(userId);
-      if (user == null)
-      {
-        await _botClient.AnswerCallbackQuery(cb.Id, "Пользователь не найден");
-        return;
-      }
-      if (cabinet.AssignedWorkers.Any(w => w.Id == userId))
-      {
-        await _botClient.AnswerCallbackQuery(cb.Id, "Пользователь уже назначен в кабинет");
-        return;
-      }
-      cabinet.AssignedWorkers.Add(user);
-      await _db.SaveChangesAsync();
-      await _botClient.AnswerCallbackQuery(cb.Id, $"Пользователь {user.Name} назначен в кабинет {cabinet.Marketplace}/{cabinet.Name}");
     }
 
     #endregion
@@ -543,7 +557,7 @@ namespace automation.mbtdistr.ru.Controllers
       var buttons = cabinet.AssignedWorkers
           .Select(u => InlineKeyboardButton.WithCallbackData(
               text: $"{u.Name} ({GetEnumDisplayName(u.Role)})",
-              callbackData: $"delete_cab_user_{u.Id}"))
+              callbackData: $"delete_cab_user_{cabinet.Id}_{u.Id}"))
           .Concat(new[] { InlineKeyboardButton.WithCallbackData("➕ Добавить", $"add_cub_users_{cabinet.Id}") })
           .Chunk(1)
           .Select(chunk => chunk.ToArray())
