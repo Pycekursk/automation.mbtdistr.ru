@@ -1,0 +1,280 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - automation.mbtdistr.ru</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/automation.mbtdistr.ru.styles.css" asp-append-version="true" />
+  <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+  <style>
+    body {
+      background-color: #000000;
+      /* Черный фон */
+      color: #ffffff;
+      /* Белый текст */
+      font-family: 'Acrom', sans-serif;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-family: 'Acrom', sans-serif;
+    }
+
+    /* Синий цвет для градиента: RGB(64,158,245) */
+    .gradient-text {
+      background: linear-gradient(to right, #ffffff, rgb(64, 158, 245));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-section {
+      position: relative;
+      min-height: 70vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: url('assets/img/futuristic-bg.jpg') no-repeat center center/cover;
+    }
+
+    .hero-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      /* затемнение фона */
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 10;
+      padding: 2rem;
+    }
+
+    .hero-title {
+      font-size: 3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .hero-subtitle {
+      font-size: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    /* Икс-образный элемент */
+    .x-mark {
+      display: inline-block;
+      position: relative;
+      width: 150px;
+      height: 150px;
+    }
+
+      .x-mark::before,
+      .x-mark::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 3px;
+        height: 100%;
+        background: #ffffff;
+      }
+
+      .x-mark::before {
+        transform: translate(-50%, -50%) rotate(45deg);
+      }
+
+      .x-mark::after {
+        transform: translate(-50%, -50%) rotate(-45deg);
+      }
+
+    .section-title {
+      text-align: center;
+      margin: 3rem 0 2rem 0;
+      font-size: 2rem;
+      font-weight: 600;
+    }
+
+    .underline {
+      width: 60px;
+      height: 3px;
+      background: rgb(64, 158, 245);
+      margin: 0.5rem auto 0 auto;
+    }
+
+    .about-text p {
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    /* Карточка компании */
+    .company-card {
+      background-color: #111111;
+      border: 1px solid #333333;
+      border-radius: 8px;
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+
+      .company-card h5 {
+        margin-top: 1rem;
+        color: rgb(64, 158, 245);
+      }
+
+    /* Контрастная полоса у основания (пример для футера) */
+    .footer-bar {
+      height: 4px;
+      background: #ffffff;
+      margin-bottom: 1rem;
+    }
+
+    footer {
+      background: #000000;
+      text-align: center;
+      padding: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    .contact-info a {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+
+    .brand-strip {
+      background: #ffffff;
+      color: #000000;
+      font-weight: 700;
+      text-align: center;
+      padding: 0.5rem 0;
+    }
+
+    @@media (max-width: 576px) {
+      .hero-title
+
+    {
+      font-size: 2rem;
+    }
+
+    .hero-subtitle {
+      font-size: 1rem;
+    }
+
+    }
+
+    .brand-logo {
+      width: 100%;
+      object-fit: contain;
+      max-height: 170px;
+    }
+
+    .logo {
+      max-height: 40px;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    img.hero-img {
+      object-fit: contain;
+      width: 100%;
+      max-height: 400px;
+      margin-bottom: 2rem;
+      margin-top: 2rem;
+    }
+
+    /* Стрелка вверх */
+    .scroll-to-top {
+      position: fixed;
+      bottom: 40px;
+      right: 40px;
+      width: 50px;
+      height: 50px;
+      background-color: rgba(255, 255, 255, 0.8);
+      color: rgb(0, 0, 0);
+      text-align: center;
+      line-height: 50px;
+      font-size: 24px;
+      border-radius: 10px;
+      text-decoration: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+      z-index: 999;
+    }
+
+      .scroll-to-top:hover {
+        background-color: rgb(64, 158, 245);
+        color: #000;
+      }
+
+      .scroll-to-top.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+    .navbar-nav {
+      text-align: right;
+      /* Выровнять текст по правому краю */
+      margin-left: auto;
+      /* Смещение вправо */
+    }
+
+      .navbar-nav .nav-item {
+        display: block;
+        /* Элементы будут занимать всю ширину */
+      }
+
+      .navbar-nav .nav-link {
+        text-align: right;
+        /* Применяется к тексту ссылок */
+      }
+  </style>
+</head>
+<body>
+  @*   <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">automation.mbtdistr.ru</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header> *@
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+@* 
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2025 - automation.mbtdistr.ru - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+        </div>
+    </footer> *@
+ 
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

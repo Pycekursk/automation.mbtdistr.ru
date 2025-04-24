@@ -1,0 +1,35 @@
+@font-face {
+    font-family: 'Acrom';
+    src: url('Acrom_regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Acrom';
+    src: url('Acrom_bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Acrom';
+    src: url('Acrom_extrabold.ttf') format('truetype');
+    font-weight: 800;
+    font-style: normal;
+}
+
+/* Пример использования */
+body {
+    font-family: 'Acrom', sans-serif;
+}
+
+h1 {
+    font-family: 'Acrom';
+    font-weight: 800;
+}
+
+p {
+    font-family: 'Acrom';
+    font-weight: normal;
+}
