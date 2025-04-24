@@ -28,15 +28,10 @@
       _httpClient = new HttpClient();
     }
 
-    public async Task<HttpResponseMessage> SendRequestAsync(OzonApiRequestType requestType, object body, int cabinetId)
+    public async Task<HttpResponseMessage> SendRequestAsync(OzonApiRequestType requestType, object body, Cabinet cabinet)
     {
       if (!_apiEndpoints.TryGetValue(requestType, out var endpoint))
         throw new Exception($"API endpoint for {requestType} not configured.");
-
-      var cabinet = await _dbContext.Cabinets
-        .Include(c => c.Settings)
-          .ThenInclude(s => s.ConnectionParameters)
-        .FirstOrDefaultAsync(c => c.Id == cabinetId);
 
       if (cabinet == null)
         throw new Exception("Cabinet not found");
@@ -45,7 +40,7 @@
         .FirstOrDefault(p => p.Key == "ClientId")?.Value;
 
       var apiKey = cabinet.Settings.ConnectionParameters
-        .FirstOrDefault(p => p.Key == "ApiKey")?.Value;
+        .FirstOrDefault(p => p.Key == "Api-Key")?.Value;
 
       if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(apiKey))
         throw new Exception("Connection parameters missing");
@@ -53,7 +48,7 @@
       var request = new HttpRequestMessage(endpoint.method, endpoint.url);
       request.Headers.Add("Client-Id", clientId);
       request.Headers.Add("Api-Key", apiKey);
-      request.Headers.Add("Content-Type", "application/json");
+      //request.Headers.Add("Content-Type", "application/json");
 
       if (body != null)
       {

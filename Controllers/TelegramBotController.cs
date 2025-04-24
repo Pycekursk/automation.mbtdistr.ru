@@ -25,13 +25,398 @@ namespace automation.mbtdistr.ru.Controllers
     private readonly UserInputWaitingService _waitingService;
     private readonly ILogger<TelegramBotController> _logger;
 
+    //public TelegramBotController(
+    //    UserInputWaitingService waitingService,
+    //    ITelegramBotClient botClient,
+    //    ApplicationDbContext db,
+    //    WildberriesApiService wb,
+    //    OzonApiService oz,
+    //    ILogger<TelegramBotController> logger)
+    //{
+    //  _waitingService = waitingService;
+    //  _botClient = botClient;
+    //  _db = db;
+    //  _wb = wb;
+    //  _oz = oz;
+    //  _logger = logger;
+    //}
+
+    //[HttpPost]
+    //public async Task<IActionResult> Post([FromBody] Update update)
+    //{
+    //  LogUpdate(update);
+    //  var worker = await GetOrCreateWorkerAsync(update);
+
+    //  switch (update.Type)
+    //  {
+    //    case UpdateType.Message:
+    //      var msg = update.Message!;
+    //      if (await TryHandleForceReplyAsync(msg))
+    //        return Ok();
+    //      await HandleTextMessageAsync(msg, worker);
+    //      break;
+
+    //    case UpdateType.CallbackQuery:
+    //      await HandleCallbackQueryAsync(update.CallbackQuery!);
+    //      break;
+
+
+    //    default:
+    //      _logger.LogWarning("Unsupported update type: {UpdateType}", update.Type);
+    //      break;
+    //  }
+
+    //  return Ok();
+    //}
+
+    //private async Task<Worker> GetOrCreateWorkerAsync(Update update)
+    //{
+    //  var userId = update.Message?.From?.Id ?? update.CallbackQuery?.From.Id;
+    //  var tgId = userId.ToString();
+    //  var worker = await _db.Workers
+    //      .Include(w => w.AssignedCabinets)
+    //      .FirstOrDefaultAsync(w => w.TelegramId == tgId);
+
+    //  if (worker == null && update.Message != null)
+    //  {
+    //    worker = new Worker
+    //    {
+    //      TelegramId = tgId,
+    //      Name = $"{update.Message.From.FirstName} {update.Message.From.LastName}".Trim(),
+    //      Role = RoleType.Guest,
+    //      CreatedAt = DateTime.UtcNow
+    //    };
+    //    _db.Workers.Add(worker);
+    //    await _db.SaveChangesAsync();
+    //    await _botClient.SendMessage(
+    //        update.Message.Chat.Id,
+    //        "Добро пожаловать! Вы зарегистрированы как Гость. Ожидайте назначения роли администратором.");
+
+    //    // Отправляем сообщение администраторам о новом пользователе
+    //    var admins = await _db.Workers
+    //        .Where(w => w.Role == RoleType.Admin)
+    //        .ToListAsync();
+
+    //    foreach (var admin in admins)
+    //    {
+    //      await _botClient.SendMessage(
+    //          admin.TelegramId,
+    //          $"Новый пользователь зарегистрирован: {worker.Name} ({worker.TelegramId}).");
+    //    }
+    //  }
+
+    //  return worker!;
+    //}
+
+    //private async Task<bool> TryHandleForceReplyAsync(Message msg)
+    //{
+    //  if (msg.ReplyToMessage == null)
+    //    return false;
+
+    //  var waiting = _waitingService.Get(msg.From.Id);
+
+    //  if (waiting == null)
+    //    return false;
+
+    //  var (action, entityId) = waiting.Value;
+    //  switch (action)
+    //  {
+    //    case "edit_user_name":
+    //      await EditUserNameAsync(msg.Chat.Id, msg.Text!, entityId);
+    //      break;
+
+    //    case "edit_user_role":
+    //      await PromptUserRoleSelectionAsync(msg.Chat.Id, entityId);
+    //      break;
+
+    //    case "edit_cab_name":
+    //      await EditCabinetNameAsync(msg.Chat.Id, msg.Text!, entityId);
+    //      break;
+
+    //    case "edit_cab_settings_key":
+    //      await UpdateCabinetParameterKeyAsync(msg.Chat.Id, msg.Text!, entityId);
+    //      break;
+    //    case "edit_cab_settings_value":
+    //      await UpdateCabinetParameterValueAsync(msg.Chat.Id, msg.Text!, entityId);
+    //      break;
+
+    //    case "create_cab_marketplace":
+    //      await HandleCreateCabinetMarketplaceAsync(msg.Chat.Id, msg.Text!);
+    //      break;
+
+    //    case "create_cab_name":
+    //      await HandleCreateCabinetNameAsync(msg.Chat.Id, msg.Text!, entityId);
+    //      break;
+    //  }
+
+    //  _waitingService.Remove(msg.From.Id);
+    //  return true;
+    //}
+
+    //// 3.1) Шаг 2: сохраняем marketplace и просим имя
+    //private async Task HandleCreateCabinetMarketplaceAsync(long chatId, int userId, string marketplace)
+    //{
+    //  var cabinet = new Cabinet
+    //  {
+    //    Marketplace = marketplace.Trim(),
+    //    Name = string.Empty
+    //  };
+    //  _db.Cabinets.Add(cabinet);
+    //  await _db.SaveChangesAsync();
+
+    //  await _botClient.SendMessage(
+    //     chatId,
+    //     $"Введите название для кабинета (Marketplace: {cabinet.Marketplace}):",
+    //     replyMarkup: new ForceReplyMarkup { Selective = true });
+    //  _waitingService.Register(userId, "create_cab_name", cabinet.Id);
+    //}
+
+    //// 3.2) Шаг 3: сохраняем имя и показываем детали
+    //private async Task HandleCreateCabinetNameAsync(long chatId, string name, int cabinetId)
+    //{
+    //  var cabinet = await _db.Cabinets
+    //      .Include(c => c.Settings)
+    //      .ThenInclude(s => s.ConnectionParameters)
+    //      .FirstOrDefaultAsync(c => c.Id == cabinetId);
+
+    //  if (cabinet == null)
+    //  {
+    //    await _botClient.SendMessage(chatId, "Ошибка: кабинет не найден.");
+    //    return;
+    //  }
+
+    //  cabinet.Name = name.Trim();
+    //  await _db.SaveChangesAsync();
+
+    //  var sb = new StringBuilder();
+    //  sb.AppendLine($"✅ Кабинет:\n#{cabinet.Id} {cabinet.Marketplace}/{cabinet.Name}");
+    //  sb.AppendLine("Настройки подключения:");
+    //  foreach (var p in cabinet.Settings.ConnectionParameters)
+    //    sb.AppendLine($"- {p.Key}: {p.Value}");
+
+    //  var buttons = new[]
+    //  {
+    //    new[] {
+    //        InlineKeyboardButton.WithCallbackData("✏️ Название", $"edit_cab_name_{cabinet.Id}"),
+    //        InlineKeyboardButton.WithCallbackData(" Настройки", $"edit_cab_settings_{cabinet.Id}")
+    //    },
+    //    new[] {
+    //        InlineKeyboardButton.WithCallbackData("❌ Удалить", $"delete_cab_{cabinet.Id}"),
+    //        InlineKeyboardButton.WithCallbackData(" Пользователи", $"get_cab_users_{cabinet.Id}")
+    //    }
+    //};
+
+    //  await _botClient.SendMessage(
+    //      chatId,
+    //      sb.ToString().TrimEnd(),
+    //      replyMarkup: new InlineKeyboardMarkup(buttons));
+    //}
+
+    //private async Task UpdateCabinetParameterValueAsync(long id, string v, int entityId)
+    //{
+    //  var parameter = await _db.ConnectionParameters.FindAsync(entityId);
+    //  if (parameter == null) return;
+    //  parameter.Value = v;
+    //  await _db.SaveChangesAsync();
+    //  await _botClient.SendMessage(id, $"Параметр {parameter.Key} обновлён на: {parameter.Value}");
+    //}
+
+    //private async Task UpdateCabinetParameterKeyAsync(long id, string v, int entityId)
+    //{
+    //  var parameter = await _db.ConnectionParameters.FindAsync(entityId);
+    //  if (parameter == null) return;
+    //  parameter.Key = v;
+    //  await _db.SaveChangesAsync();
+    //  await _botClient.SendMessage(id, $"Параметр {parameter.Key} обновлён на: {parameter.Value}");
+    //}
+
+    //private async Task EditCabinetNameAsync(long id, string v, int entityId)
+    //{
+    //  var cabinet = await _db.Cabinets.FindAsync(entityId);
+    //  if (cabinet != null)
+    //  {
+    //    cabinet.Name = v;
+    //    await _db.SaveChangesAsync();
+    //    await _botClient.SendMessage(id, $"Имя кабинета обновлено на: {cabinet.Name}");
+    //  }
+    //}
+
+    //private async Task HandleTextMessageAsync(Message msg, Worker worker)
+    //{
+    //  var text = msg.Text?.Trim().ToLower();
+    //  switch (text)
+    //  {
+    //    case "/start":
+    //      await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {GetEnumDisplayName(worker.Role)}");
+    //      break;
+
+    //    case "/help":
+    //      await HandleGetHelpAsync(msg, worker);
+    //      break;
+    //    case "/myrole":
+    //      await _botClient.SendMessage(msg.Chat.Id, $"Вы {GetEnumDisplayName(worker.Role)}");
+    //      break;
+    //    case "/cabinets":
+    //      await HandleGetCabinetsAsync(msg, worker);
+    //      break;
+    //    case "/workers":
+    //      await HandleGetWorkersAsync(msg);
+    //      break;
+    //    default:
+    //      await _botClient.SendMessage(msg.Chat.Id, "Команда не распознана или у вас нет прав. Напишите /help.");
+    //      break;
+    //  }
+    //}
+
+    //private async Task HandleGetWorkersAsync(Message msg)
+    //{
+    //  try
+    //  {
+    //    var workers = await _db.Workers.ToListAsync();
+    //    if (workers.Count == 0)
+    //    {
+    //      await _botClient.SendMessage(msg.Chat.Id, "Нет зарегистрированных пользователей.");
+    //      return;
+    //    }
+
+    //    var buttons = workers
+    //        .Select(w => InlineKeyboardButton.WithCallbackData(
+    //            text: $"{w.Name} ({GetEnumDisplayName(w.Role)})",
+    //            callbackData: $"select_user_{w.Id}"))
+    //        .Chunk(1)
+    //        .Select(chunk => chunk.ToArray())
+    //        .ToArray();
+
+    //    await _botClient.SendMessage(
+    //        msg.Chat.Id,
+    //        "Выберите пользователя:",
+    //        replyMarkup: new InlineKeyboardMarkup(buttons));
+    //  }
+    //  catch (Exception ex)
+    //  {
+    //    await _botClient.SendMessage(msg.Chat.Id, $"Ошибка: {ex.Message}");
+    //  }
+    //}
+
+    //private async Task HandleGetHelpAsync(Message msg, Worker worker)
+    //{
+    //  switch (worker.Role)
+    //  {
+    //    case RoleType.Admin:
+    //      await _botClient.SendMessage(msg.Chat.Id, "Доступные команды для администратора:\n" +
+    //          "/start - Начать взаимодействие\n" +
+    //          "/help - Получить помощь\n" +
+    //          "/myrole - Узнать свою роль\n" +
+    //          "/cabinets - Получить список кабинетов\n" +
+    //          "/workers - Получить список пользователей\n");
+    //      break;
+    //    case RoleType.CabinetManager:
+    //      await _botClient.SendMessage(msg.Chat.Id, "Доступные команды для менеджера кабинета:\n" +
+    //          "/start - Начать взаимодействие\n" +
+    //          "/help - Список команд\n" +
+    //          "/myrole - Узнать свою роль\n" +
+    //          "/cabinets - Список кабинетов");
+    //      break;
+    //    case RoleType.ClaimsManager:
+    //      await _botClient.SendMessage(msg.Chat.Id, "Доступные команды для менеджера по возвратам:\n" +
+    //          "/start - Начать взаимодействие\n" +
+    //          "/help - Список команд\n" +
+    //          "/myrole - Узнать свою роль");
+    //      break;
+    //    case RoleType.WarehouseStaff:
+    //      await _botClient.SendMessage(msg.Chat.Id, "Доступные команды для склада:\n" +
+    //          "/start - Начать взаимодействие\n" +
+    //          "/help - Список команд\n" +
+    //          "/myrole - Узнать свою роль");
+    //      break;
+    //    case RoleType.Courier:
+    //      await _botClient.SendMessage(msg.Chat.Id, "Доступные команды для курьера:\n" +
+    //          "/start - Начать взаимодействие\n" +
+    //          "/help - Список команд\n" +
+    //          "/myrole - Узнать свою роль");
+    //      break;
+    //    case 0:
+    //      break;
+    //  }
+
+
+    //  //var helpText = "Доступные команды:\n" +
+    //  //               "/start - Начать взаимодействие\n" +
+    //  //               "/help - Получить помощь\n" +
+    //  //               "/myrole - Узнать свою роль\n" +
+    //  //               "/getcabinets - Получить список кабинетов";
+    //  //await _botClient.SendMessage(msg.Chat.Id, helpText);
+    //}
+
+    //private async Task HandleGetCabinetsAsync(Message msg, Worker worker)
+    //{
+    //  if (worker.Role != RoleType.Admin && worker.Role != RoleType.CabinetManager)
+    //  {
+    //    await _botClient.SendMessage(msg.Chat.Id, "У вас нет прав для просмотра кабинетов.");
+    //    return;
+    //  }
+
+    //  try
+    //  {
+    //    List<Cabinet> cabinets;
+    //    if (worker.Role == RoleType.CabinetManager)
+    //    {
+    //      cabinets = await _db.Cabinets
+    //          .Where(c => c.AssignedWorkers.Any(w => w.Id == worker.Id))
+    //          .ToListAsync();
+    //      if (!cabinets.Any())
+    //      {
+    //        await _botClient.SendMessage(msg.Chat.Id, "Нет доступных кабинетов.");
+    //        return;
+    //      }
+    //    }
+    //    else
+    //    {
+    //      cabinets = await _db.Cabinets.ToListAsync();
+    //      if (!cabinets.Any())
+    //      {
+    //        await _botClient.SendMessage(msg.Chat.Id, "Нет доступных кабинетов.");
+    //        return;
+    //      }
+    //    }
+
+    //    // Список кнопок для существующих кабинетов
+    //    var buttons = cabinets
+    //        .Select(c => InlineKeyboardButton.WithCallbackData(
+    //            text: $"{c.Marketplace} / {c.Name}",
+    //            callbackData: $"select_cab_{c.Id}"))
+    //        .Chunk(1)
+    //        .Select(chunk => chunk.ToArray())
+    //        .ToList();
+
+    //    // Добавляем кнопку создания нового кабинета
+    //    buttons.Add(new[]
+    //    {
+    //        InlineKeyboardButton.WithCallbackData("➕ Создать кабинет", "create_cab")
+    //    });
+
+    //    await _botClient.SendMessage(
+    //        msg.Chat.Id,
+    //        "Выберите кабинет:",
+    //        replyMarkup: new InlineKeyboardMarkup(buttons.ToArray()));
+    //  }
+    //  catch (Exception ex)
+    //  {
+    //    await _botClient.SendMessage(msg.Chat.Id, $"Ошибка: {ex.Message}");
+    //  }
+    //}
+
+
+
+
+
     public TelegramBotController(
-        UserInputWaitingService waitingService,
-        ITelegramBotClient botClient,
-        ApplicationDbContext db,
-        WildberriesApiService wb,
-        OzonApiService oz,
-        ILogger<TelegramBotController> logger)
+    UserInputWaitingService waitingService,
+    ITelegramBotClient botClient,
+    ApplicationDbContext db,
+    WildberriesApiService wb,
+    OzonApiService oz,
+    ILogger<TelegramBotController> logger)
     {
       _waitingService = waitingService;
       _botClient = botClient;
@@ -90,6 +475,17 @@ namespace automation.mbtdistr.ru.Controllers
         await _botClient.SendMessage(
             update.Message.Chat.Id,
             "Добро пожаловать! Вы зарегистрированы как Гость. Ожидайте назначения роли администратором.");
+
+        var admins = await _db.Workers
+            .Where(w => w.Role == RoleType.Admin)
+            .ToListAsync();
+
+        foreach (var admin in admins)
+        {
+          await _botClient.SendMessage(
+              admin.TelegramId,
+              $"Новый пользователь зарегистрирован: {worker.Name} ({worker.TelegramId}).");
+        }
       }
 
       return worker!;
@@ -101,7 +497,6 @@ namespace automation.mbtdistr.ru.Controllers
         return false;
 
       var waiting = _waitingService.Get(msg.From.Id);
-
       if (waiting == null)
         return false;
 
@@ -127,10 +522,80 @@ namespace automation.mbtdistr.ru.Controllers
           await UpdateCabinetParameterValueAsync(msg.Chat.Id, msg.Text!, entityId);
           break;
 
+        case "create_cab_marketplace":
+          // Передаём userId для корректной регистрации следующего шага
+          await HandleCreateCabinetMarketplaceAsync(msg.Chat.Id, msg.From.Id, msg.Text!);
+          break;
+
+        case "create_cab_name":
+          await HandleCreateCabinetNameAsync(msg.Chat.Id, msg.Text!, entityId);
+          break;
+
+        default:
+          return false;
       }
 
       _waitingService.Remove(msg.From.Id);
       return true;
+    }
+
+    // Шаг 2: сохраняем marketplace и просим имя
+    private async Task HandleCreateCabinetMarketplaceAsync(long chatId, long userId, string marketplace)
+    {
+      var cabinet = new Cabinet
+      {
+        Marketplace = marketplace.Trim(),
+        Name = string.Empty
+      };
+      _db.Cabinets.Add(cabinet);
+      await _db.SaveChangesAsync();
+
+      await _botClient.SendMessage(
+         chatId,
+         $"Введите название для кабинета (Marketplace: {cabinet.Marketplace}):",
+         replyMarkup: new ForceReplyMarkup { Selective = true });
+      _waitingService.Register(userId, "create_cab_name", cabinet.Id);
+    }
+
+    // Шаг 3: сохраняем имя и показываем детали
+    private async Task HandleCreateCabinetNameAsync(long chatId, string name, int cabinetId)
+    {
+      var cabinet = await _db.Cabinets
+          .Include(c => c.Settings)
+          .ThenInclude(s => s.ConnectionParameters)
+          .FirstOrDefaultAsync(c => c.Id == cabinetId);
+
+      if (cabinet == null)
+      {
+        await _botClient.SendMessage(chatId, "Ошибка: кабинет не найден.");
+        return;
+      }
+
+      cabinet.Name = name.Trim();
+      await _db.SaveChangesAsync();
+
+      var sb = new StringBuilder();
+      sb.AppendLine($"✅ Кабинет:\n#{cabinet.Id} {cabinet.Marketplace}/{cabinet.Name}");
+      sb.AppendLine("Настройки подключения:");
+      foreach (var p in cabinet.Settings.ConnectionParameters)
+        sb.AppendLine($"- {p.Key}: {p.Value}");
+
+      var buttons = new[]
+      {
+        new[] {
+            InlineKeyboardButton.WithCallbackData("✏️ Название", $"edit_cab_name_{cabinet.Id}"),
+            InlineKeyboardButton.WithCallbackData(" Настройки", $"edit_cab_settings_{cabinet.Id}")
+        },
+        new[] {
+            InlineKeyboardButton.WithCallbackData("❌ Удалить", $"delete_cab_{cabinet.Id}"),
+            InlineKeyboardButton.WithCallbackData(" Пользователи", $"get_cab_users_{cabinet.Id}")
+        }
+      };
+
+      await _botClient.SendMessage(
+          chatId,
+          sb.ToString().TrimEnd(),
+          replyMarkup: new InlineKeyboardMarkup(buttons));
     }
 
     private async Task UpdateCabinetParameterValueAsync(long id, string v, int entityId)
@@ -256,17 +721,9 @@ namespace automation.mbtdistr.ru.Controllers
               "/help - Список команд\n" +
               "/myrole - Узнать свою роль");
           break;
-        case 0:
+        default:
           break;
       }
-
-
-      //var helpText = "Доступные команды:\n" +
-      //               "/start - Начать взаимодействие\n" +
-      //               "/help - Получить помощь\n" +
-      //               "/myrole - Узнать свою роль\n" +
-      //               "/getcabinets - Получить список кабинетов";
-      //await _botClient.SendMessage(msg.Chat.Id, helpText);
     }
 
     private async Task HandleGetCabinetsAsync(Message msg, Worker worker)
@@ -276,15 +733,16 @@ namespace automation.mbtdistr.ru.Controllers
         await _botClient.SendMessage(msg.Chat.Id, "У вас нет прав для просмотра кабинетов.");
         return;
       }
+
       try
       {
-        List<Cabinet> cabinets = new List<Cabinet>();
+        List<Cabinet> cabinets;
         if (worker.Role == RoleType.CabinetManager)
         {
           cabinets = await _db.Cabinets
               .Where(c => c.AssignedWorkers.Any(w => w.Id == worker.Id))
               .ToListAsync();
-          if (cabinets.Count == 0)
+          if (!cabinets.Any())
           {
             await _botClient.SendMessage(msg.Chat.Id, "Нет доступных кабинетов.");
             return;
@@ -293,12 +751,11 @@ namespace automation.mbtdistr.ru.Controllers
         else
         {
           cabinets = await _db.Cabinets.ToListAsync();
-        }
-
-        if (cabinets.Count == 0)
-        {
-          await _botClient.SendMessage(msg.Chat.Id, "Нет доступных кабинетов.");
-          return;
+          if (!cabinets.Any())
+          {
+            await _botClient.SendMessage(msg.Chat.Id, "Нет доступных кабинетов.");
+            return;
+          }
         }
 
         var buttons = cabinets
@@ -307,18 +764,28 @@ namespace automation.mbtdistr.ru.Controllers
                 callbackData: $"select_cab_{c.Id}"))
             .Chunk(1)
             .Select(chunk => chunk.ToArray())
-            .ToArray();
+            .ToList();
+
+        // кнопка создания кабинета
+        buttons.Add(new[]
+        {
+            InlineKeyboardButton.WithCallbackData("➕ Создать кабинет", "create_cab")
+        });
 
         await _botClient.SendMessage(
             msg.Chat.Id,
             "Выберите кабинет:",
-            replyMarkup: new InlineKeyboardMarkup(buttons));
+            replyMarkup: new InlineKeyboardMarkup(buttons.ToArray()));
       }
       catch (Exception ex)
       {
         await _botClient.SendMessage(msg.Chat.Id, $"Ошибка: {ex.Message}");
       }
     }
+
+
+
+
 
     private async Task HandleCallbackQueryAsync(CallbackQuery cb)
     {
@@ -329,7 +796,8 @@ namespace automation.mbtdistr.ru.Controllers
         return;
       }
       var command = string.Join("_", data.Where(item => !int.TryParse(item, out _)));
-      if (!int.TryParse(data.Last(), out var id))
+      bool anyParsableToInt = data.Any(a => int.TryParse(a, out _));
+      if (!int.TryParse(data.Last(), out var id) && anyParsableToInt)
       {
         await _botClient.AnswerCallbackQuery(cb.Id, "Неверный идентификатор");
         return;
@@ -340,7 +808,9 @@ namespace automation.mbtdistr.ru.Controllers
         case "select_cab":
           await DisplayCabinetDetailsAsync(cb, id);
           break;
-
+        case "create_cab":
+          await PromptCreateCabinetAsync(cb);
+          break;
         case "get_cab_users":
           await HandleGetCabinetWorkersAsync(cb, id);
           break;
@@ -443,6 +913,16 @@ namespace automation.mbtdistr.ru.Controllers
           $"Вы были удалены из кабинета: \"{cabinet.Marketplace} / {cabinet.Name}\".");
     }
 
+    private async Task PromptCreateCabinetAsync(CallbackQuery cb)
+    {
+      await _botClient.AnswerCallbackQuery(cb.Id);
+      await _botClient.SendMessage(
+          chatId: cb.Message.Chat.Id,
+          text: "Введите Marketplace для нового кабинета:",
+          replyMarkup: new ForceReplyMarkup { Selective = true });
+      _waitingService.Register(cb.From.Id, "create_cab_marketplace", 0);
+    }
+
     #region Добавление пользователя в кабинет
 
     // 1) Показываем список всех работников, чтобы выбрать, кого добавить
@@ -521,7 +1001,7 @@ namespace automation.mbtdistr.ru.Controllers
       await _db.SaveChangesAsync();
 
       await _botClient.AnswerCallbackQuery(cb.Id, "Пользователь успешно добавлен.");
-   
+
       // отправляем уведомление пользователю
       await _botClient.SendMessage(
           long.Parse(worker.TelegramId),
@@ -532,10 +1012,6 @@ namespace automation.mbtdistr.ru.Controllers
     }
 
     #endregion
-
-
-
-
 
     private async Task HandleGetCabinetWorkersAsync(CallbackQuery cb, int id)
     {
@@ -682,8 +1158,9 @@ namespace automation.mbtdistr.ru.Controllers
       var sb = new StringBuilder();
       sb.AppendLine($"✅ Кабинет:\n#{cabinet.Id} {cabinet.Marketplace}/{cabinet.Name}");
       sb.AppendLine("Настройки подключения:");
-      foreach (var p in cabinet.Settings.ConnectionParameters)
-        sb.AppendLine($"- {p.Key}: {p.Value}");
+      if (cabinet?.Settings?.ConnectionParameters != null)
+        foreach (var p in cabinet.Settings.ConnectionParameters)
+          sb.AppendLine($"- {p.Key}: {p.Value}");
 
       var buttons = new[]
       {

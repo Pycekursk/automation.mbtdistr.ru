@@ -11,7 +11,7 @@ namespace automation.mbtdistr.ru.Models
     public int Id { get; set; }
     public string Marketplace { get; set; }  // "Wildberries", "Ozon" и т.д.
     public string Name { get; set; }         // например, "Основной", "Резервный" и т.п.
-    public CabinetSettings Settings { get; set; }
+    public CabinetSettings Settings { get; set; } = new CabinetSettings();
 
     public ICollection<Worker> AssignedWorkers { get; set; }
             = new List<Worker>();

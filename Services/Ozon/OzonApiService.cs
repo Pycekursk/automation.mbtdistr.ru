@@ -1,5 +1,6 @@
 ﻿namespace automation.mbtdistr.ru.Services.Ozon
 {
+  using automation.mbtdistr.ru.Models;
   using automation.mbtdistr.ru.Services.Ozon.Models;
   using automation.mbtdistr.ru.temp;
 
@@ -21,7 +22,7 @@
       _logger = logger;
     }
 
-    public async Task<ReturnsListResponse> GetReturnsListAsync(int cabinetId, Filter filter, int limit = 500, long? lastId = null)
+    public async Task<ReturnsListResponse> GetReturnsListAsync(Cabinet cabinet, Filter filter, int limit = 500, long? lastId = null)
     {
       var requestBody = new ReturnsListRequest
       {
@@ -33,34 +34,44 @@
       var response = await _ozonSellerApiHttpClient.SendRequestAsync(
           OzonApiRequestType.ReturnsList,
           requestBody,
-          cabinetId
+          cabinet
       );
 
       response.EnsureSuccessStatusCode();
-      var stream = await response.Content.ReadAsStreamAsync();
-      var result = await JsonSerializer.DeserializeAsync<ReturnsListResponse>(stream, _jsonOptions);
+      var json = await response.Content.ReadAsStringAsync();
+
+      // Deserialize the JSON response into the ReturnsListResponse object
+
+      //сериализуем в динамический объект
+      var dynamicResult = JsonSerializer.Deserialize<dynamic>(json, _jsonOptions);
+      var str = dynamicResult.ToString();
+
+
+      var result = JsonSerializer.Deserialize<ReturnsListResponse>(json, _jsonOptions);
+
+      //var result = await JsonSerializer.DeserializeAsync<ReturnsListResponse>(json, _jsonOptions);
       return result!;
     }
 
-    public async Task RequestProductListAsync(int cabinetId)
-    {
-      var body = new
-      {
-        limit = 10,
-        offset = 0,
-        withDeleted = false
-      };
+    //public async Task RequestProductListAsync(int cabinetId)
+    //{
+    //  var body = new
+    //  {
+    //    limit = 10,
+    //    offset = 0,
+    //    withDeleted = false
+    //  };
 
-      var response = await _ozonSellerApiHttpClient.SendRequestAsync(
-        OzonApiRequestType.ProductList,
-        body,
-        cabinetId
-      );
+    //  var response = await _ozonSellerApiHttpClient.SendRequestAsync(
+    //    OzonApiRequestType.ProductList,
+    //    body,
+    //    cabinetId
+    //  );
 
-      if (!response.IsSuccessStatusCode)
-      {
-        _logger.LogError($"Ошибка получения списка товаров: {await response.Content.ReadAsStringAsync()}");
-      }
-    }
+    //  if (!response.IsSuccessStatusCode)
+    //  {
+    //    _logger.LogError($"Ошибка получения списка товаров: {await response.Content.ReadAsStringAsync()}");
+    //  }
+    //}
   }
 }

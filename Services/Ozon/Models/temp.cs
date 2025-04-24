@@ -170,22 +170,22 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
     public Money Sum { get; set; }
 
     [JsonPropertyName("tariffication_first_date")]
-    public DateTime TarifficationFirstDate { get; set; }
+    public DateTime? TarifficationFirstDate { get; set; }
 
     [JsonPropertyName("tariffication_start_date")]
-    public DateTime TarifficationStartDate { get; set; }
+    public DateTime? TarifficationStartDate { get; set; }
 
     [JsonPropertyName("arrived_moment")]
-    public DateTime ArrivedMoment { get; set; }
+    public DateTime? ArrivedMoment { get; set; }
 
     [JsonPropertyName("days")]
-    public string? Days { get; set; }
+    public int Days { get; set; }
 
     [JsonPropertyName("utilization_sum")]
     public Money UtilizationSum { get; set; }
 
     [JsonPropertyName("utilization_forecast_date")]
-    public DateTime UtilizationForecastDate { get; set; }
+    public DateTime? UtilizationForecastDate { get; set; }
   }
 
   /// <summary>
@@ -197,7 +197,7 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
     public string CurrencyCode { get; set; }
 
     [JsonPropertyName("price")]
-    public string Price { get; set; }
+    public float Price { get; set; }
   }
 
   /// <summary>
@@ -206,7 +206,7 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
   public class ProductInfo
   {
     [JsonPropertyName("sku")]
-    public string? Sku { get; set; }
+    public long Sku { get; set; }
 
     [JsonPropertyName("offer_id")]
     public string? OfferId { get; set; }
@@ -221,7 +221,7 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
     public Money PriceWithoutCommission { get; set; }
 
     [JsonPropertyName("commission_percent")]
-    public string? CommissionPercent { get; set; }
+    public float CommissionPercent { get; set; }
 
     [JsonPropertyName("commission")]
     public Money Commission { get; set; }
@@ -236,16 +236,16 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
   public class LogisticInfo
   {
     [JsonPropertyName("technical_return_moment")]
-    public DateTime TechnicalReturnMoment { get; set; }
+    public DateTime? TechnicalReturnMoment { get; set; }
 
     [JsonPropertyName("final_moment")]
-    public DateTime FinalMoment { get; set; }
+    public DateTime? FinalMoment { get; set; }
 
     [JsonPropertyName("cancelled_with_compensation_moment")]
-    public DateTime CancelledWithCompensationMoment { get; set; }
+    public DateTime? CancelledWithCompensationMoment { get; set; }
 
     [JsonPropertyName("return_date")]
-    public DateTime ReturnDate { get; set; }
+    public DateTime? ReturnDate { get; set; }
 
     [JsonPropertyName("barcode")]
     public string? Barcode { get; set; }
@@ -260,7 +260,7 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
     public StatusInfo Status { get; set; }
 
     [JsonPropertyName("change_moment")]
-    public DateTime ChangeMoment { get; set; }
+    public DateTime? ChangeMoment { get; set; }
   }
 
   /// <summary>
