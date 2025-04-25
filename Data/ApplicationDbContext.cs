@@ -1,4 +1,5 @@
 ﻿using automation.mbtdistr.ru.Models;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -13,8 +14,8 @@ namespace automation.mbtdistr.ru.Data
 {
   public class ApplicationDbContext : IdentityDbContext<IdentityUser>
   {
-
     public DbSet<Worker> Workers { get; set; }
+    public DbSet<NotificationOptions> NotificationOptions { get; set; }
     public DbSet<Return> Returns { get; set; }
     public DbSet<Cabinet> Cabinets { get; set; }
     public DbSet<CabinetSettings> CabinetSettings { get; set; }

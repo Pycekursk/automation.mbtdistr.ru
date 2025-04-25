@@ -9,7 +9,10 @@ namespace automation.mbtdistr.ru.Models
   {
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
-    public string Marketplace { get; set; }  // "Wildberries", "Ozon" и т.д.
+
+    private string marketplace;
+    public string Marketplace { get => marketplace.ToUpper(); set => marketplace = value.ToUpper(); }  // "Wildberries", "Ozon" и т.д.
+
     public string Name { get; set; }         // например, "Основной", "Резервный" и т.п.
     public CabinetSettings Settings { get; set; } = new CabinetSettings();
 

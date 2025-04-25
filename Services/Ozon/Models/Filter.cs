@@ -1,5 +1,6 @@
 ﻿using DevExpress.XtraEditors.Controls;
 
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Services.Ozon.Models
@@ -10,13 +11,13 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
   /// </summary>
   public class Filter
   {
-    [JsonPropertyName("logistic_return_date")]
+    [JsonPropertyName("logistic_return_date"), Display(Name = "Дата возврата")]
     public DateRange LogisticReturnDate { get; set; }
 
-    [JsonPropertyName("storage_tariffication_start_date")]
+    [JsonPropertyName("storage_tariffication_start_date"), Display(Name = "Дата начала тарификации")]
     public DateRange StorageTarifficationStartDate { get; set; }
 
-    [JsonPropertyName("visual_status_change_moment")]
+    [JsonPropertyName("visual_status_change_moment"), Display(Name = "Дата изменения визуального статуса")]
     public DateRange VisualStatusChangeMoment { get; set; }
 
     [JsonPropertyName("order_id")]

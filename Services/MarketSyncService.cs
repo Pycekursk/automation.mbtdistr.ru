@@ -11,6 +11,7 @@ using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 using Telegram.Bot;
+using static automation.mbtdistr.ru.Models.Internal;
 
 namespace automation.mbtdistr.ru.Services
 {
@@ -33,38 +34,39 @@ namespace automation.mbtdistr.ru.Services
       _botClient = botClient;
       _scopeFactory = scopeFactory;
       _logger = logger;
-      var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 30);
+      var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 15);
       _interval = TimeSpan.FromMinutes(minutes);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-      _logger.LogInformation("MarketSyncService запущен, интервал = {Interval}", _interval);
+      await _botClient.SendMessage(
+           chatId: 1406950293, // ID чата для отправки сообщений
+           text: $"Синхронизация площадок запущена, интервал = {_interval}",
+           cancellationToken: stoppingToken);
 
-      while (!stoppingToken.IsCancellationRequested)
+      //await SyncAllAsync(stoppingToken);
+
+      using var timer = new PeriodicTimer(_interval);
+      while (await timer.WaitForNextTickAsync(stoppingToken))
       {
         try
         {
-          await _botClient.SendMessage(
-               chatId: 1406950293, // ID чата для отправки сообщений
-               text: "Синхронизация площадок начата",
-               cancellationToken: stoppingToken);
-
           await SyncAllAsync(stoppingToken);
         }
         catch (Exception ex)
         {
           await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
-               text: $"Ошибка при синхронизации площадок: {ex.Message}",
+               text: $"Ошибка при синхронизации площадок:\n{ex.Message}",
                cancellationToken: stoppingToken);
-          _logger.LogError(ex, "Ошибка при синхронизации площадок");
         }
-
-        await Task.Delay(_interval, stoppingToken);
       }
 
-      _logger.LogInformation("MarketSyncService остановлен");
+      await _botClient.SendMessage(
+           chatId: 1406950293, // ID чата для отправки сообщений
+           text: "Синхронизация площадок остановлена",
+           cancellationToken: stoppingToken);
     }
 
     private async Task SyncAllAsync(CancellationToken ct)
@@ -83,14 +85,18 @@ namespace automation.mbtdistr.ru.Services
 
       foreach (var cab in cabinets)
       {
-        _logger.LogInformation("Синхронизируем для кабинета {CabinetId} ({Marketplace})", cab.Id, cab.Marketplace);
-
         try
         {
-          if (cab.Marketplace.ToLowerInvariant().Equals("ozon", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.ToLowerInvariant().Equals("oz", StringComparison.OrdinalIgnoreCase))
+          if (cab.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("OZ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗОН", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗ", StringComparison.OrdinalIgnoreCase))
           {
-            // TODO: фильтры по типам данных (возвраты, остатки и т.д.)
             var filter = new Services.Ozon.Models.Filter();
+
+            // Пример фильтрации по дате возврата
+            filter.LogisticReturnDate = new Services.Ozon.Models.DateRange
+            {
+              From = DateTime.UtcNow.AddDays(-40),
+              To = DateTime.UtcNow
+            };
 
             List<Ozon.Models.ReturnInfo> returns = new List<Ozon.Models.ReturnInfo>();
             long lastId = 0;
@@ -105,41 +111,42 @@ namespace automation.mbtdistr.ru.Services
               if (response.Returns != null && response.Returns.Count > 0)
               {
                 returns.AddRange(response.Returns);
-                lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
               }
               if (!response.HasNext)
               {
                 break; // Если нет следующей страницы, выходим из цикла
               }
+              lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
             } while (true);
             await ProcessOzonReturnsAsync(returns, cab, db, ct);
           }
-          else if (cab.Marketplace.ToLowerInvariant().Equals("wildberries", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.ToLowerInvariant().Equals("wb", StringComparison.OrdinalIgnoreCase))
+
+          else if (cab.Marketplace.Equals("WILDBERRIES", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("WB", StringComparison.OrdinalIgnoreCase))
           {
-            //await _botClient.SendMessage(
-            //      chatId: 1406950293, // ID чата для отправки сообщений
-            //      text: $"Синхронизация Wildberries для кабинета {cab.Name}",
-            //      cancellationToken: ct);
-            // var response = await wbSvc.GetReturnsListAsync(cab.Id);
-            // await ProcessWbReturnsAsync(response, cab, db, ct);
+
           }
+
+          else if (cab.Marketplace.Equals("МЕГАМАРКЕТ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ММ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("MEGAMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("MM", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("МЕГА", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("МЕГ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("СБЕР", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("СБЕР", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("SBER", StringComparison.OrdinalIgnoreCase))
+          {
+
+          }
+
+          else if (cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
+          {
+
+          }
+
           else
           {
-            //await _botClient.SendMessage(
-            //     chatId: 1406950293, // ID чата для отправки сообщений
-            //     text: $"Неизвестный Marketplace «{cab.Marketplace}» в кабинете {cab.Id}",
-            //     cancellationToken: ct);
-            //_logger.LogWarning("Неизвестный Marketplace «{Marketplace}» в кабинете {CabinetId}", cab.Marketplace, cab.Name);
+            throw new NotSupportedException($"Неизвестная площадка: {cab.Marketplace}");
           }
         }
         catch (Exception ex)
         {
           await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
-               text: $"Ошибка при синхронизации кабинета {cab.Id} ({cab.Marketplace}):\n{ex.Message}",
+               text: $"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Marketplace} / {cab.Name}:\n{ex.Message}",
                cancellationToken: ct);
-
-          _logger.LogError(ex, "Ошибка при синхронизации кабинета {CabinetId} ({Marketplace})", cab.Name, cab.Marketplace);
         }
       }
       try
@@ -147,15 +154,13 @@ namespace automation.mbtdistr.ru.Services
         var changes = await db.SaveChangesAsync(ct);
         if (changes > 0)
         {
-          _logger.LogInformation("Изменения сохранены в БД: {Changes} записей", changes);
           await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
-               text: $"Изменения сохранены в БД: {changes} записей",
+               text: $"Синхронизировано {changes} записей",
                cancellationToken: ct);
         }
         else
         {
-          _logger.LogInformation("Нет изменений для сохранения в БД");
           await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
                text: "Нет изменений для сохранения в БД",
@@ -178,7 +183,7 @@ namespace automation.mbtdistr.ru.Services
         CancellationToken ct)
     {
       // TODO: конкретно мапить response.Items → модели Return и upsert в db.Returns
-
+      string message = string.Empty;
       foreach (var x in returns)
       {
         // Проверяем, существует ли возврат с таким ID в базе данных
@@ -192,25 +197,28 @@ namespace automation.mbtdistr.ru.Services
           if (existingReturn.Info.Id == 0)
             existingReturn.Info = new ReturnMainInfo { ReturnId = existingReturn.Id };
 
-
           var newStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-          if (existingReturn.Info.ReturnStatus != newStatus)
+          var newStatusStr = GetEnumDisplayName(newStatus);
+          var currentStatus = existingReturn.Info.ReturnStatus;
+          var currentStatusStr = GetEnumDisplayName(currentStatus);
+          if (currentStatus != newStatus)
           {
-            var currentStatus = existingReturn.Info.ReturnStatus.ToString();
-            _logger.LogInformation($"Статус возврата {x.Id} изменился с {currentStatus} на {newStatus}");
+            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновлена информация по возврату:\n#{x.Id}\nЗаказ №{x.OrderId}\n\nПрошлый статус: {currentStatus}\nНовый статус: {newStatusStr}";
+
+            _logger.LogInformation(message);
             await _botClient.SendMessage(
                 chatId: 1406950293, // ID чата для отправки сообщений
-                text: $"Статус возврата {x.Id} изменился с {currentStatus} на {newStatus}",
+                text: message,
                 cancellationToken: ct);
           }
+
           var newChangedAt = x.Visual?.ChangeMoment;
           if (existingReturn.ChangedAt != newChangedAt)
           {
-            var currentChangedAt = existingReturn.ChangedAt?.ToString("yyyy-MM-dd HH:mm:ss");
-            _logger.LogInformation($"Дата изменения возврата {x.Id} изменилась с {currentChangedAt} на {newChangedAt}");
+            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновлена информация по возврату:\n#{x.Id}\nЗаказ №{x.OrderId}\n{newChangedAt}";
             await _botClient.SendMessage(
                 chatId: 1406950293, // ID чата для отправки сообщений
-                text: $"Дата изменения возврата {x.Id} изменилась с {currentChangedAt} на {newChangedAt}",
+                text: message,
                 cancellationToken: ct);
           }
 
@@ -219,16 +227,16 @@ namespace automation.mbtdistr.ru.Services
           {
             var currentIsOpened = existingReturn.IsOpened ? "открыт" : "закрыт";
             var newIsOpenedStr = newIsOpened ? "открыт" : "закрыт";
-            _logger.LogInformation($"Статус возврата {x.Id} изменился с {currentIsOpened} на {newIsOpenedStr}");
+            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновлена информация по возврату:\n#{x.Id}\nЗаказ №{x.OrderId}\nСтатус возврата: {newIsOpenedStr}";
+
             await _botClient.SendMessage(
                 chatId: 1406950293, // ID чата для отправки сообщений
-                text: $"Статус возврата {x.Id} изменился с {currentIsOpened} на {newIsOpenedStr}",
+                text: message,
                 cancellationToken: ct);
           }
 
           existingReturn.IsOpened = newIsOpened;
           existingReturn.IsSuperEconom = x.AdditionalInfo?.IsSuperEconom ?? false;
-
           existingReturn.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out status) ? (ReturnStatus)status : ReturnStatus.Unknown;
           existingReturn.Info.ReturnInfoId = x.Id;
           existingReturn.Info.ReturnReasonName = x.ReturnReasonName;
@@ -244,10 +252,18 @@ namespace automation.mbtdistr.ru.Services
             @return.CabinetId = cab.Id;
             @return.ChangedAt = x.Visual?.ChangeMoment;
             @return.Info.ReturnInfoId = x.Id;
+            @return.IsOpened = x.AdditionalInfo?.IsOpened ?? false;
+            @return.IsSuperEconom = x.AdditionalInfo?.IsSuperEconom ?? false;
             @return.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
             @return.Info.ReturnReasonName = x.ReturnReasonName;
             @return.Info.OrderId = x.OrderId;
             db.Returns.Add(@return);
+
+            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nСоздан новый возврат:\n#{x.Id}\nЗаказ №{x.OrderId}\nСтатус возврата: {GetEnumDisplayName(@return.Info.ReturnStatus)}\nПричина возврата: {x.ReturnReasonName}";
+            await _botClient.SendMessage(
+                chatId: 1406950293, // ID чата для отправки сообщений
+                text: message,
+                cancellationToken: ct);
           }
           catch (Exception ex)
           {
@@ -259,11 +275,6 @@ namespace automation.mbtdistr.ru.Services
           }
         }
       }
-      _logger.LogInformation($"Ozon: получено {returns.Count} возвратов", returns?.Count ?? 0);
-      _botClient.SendMessage(
-           chatId: 1406950293, // ID чата для отправки сообщений
-           text: $"Ozon: получено {returns?.Count} возвратов",
-           cancellationToken: ct);
     }
 
     private Task ProcessWbReturnsAsync(

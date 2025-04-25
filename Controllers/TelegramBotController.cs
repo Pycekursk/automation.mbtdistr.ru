@@ -12,6 +12,7 @@ using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 using DevExpress.Xpo.Helpers;
+using static automation.mbtdistr.ru.Models.Internal;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -652,7 +653,7 @@ ILogger<TelegramBotController> logger)
       //добавляем кнопки удаления пользователей уже записанных в кабинет и последней кнопкой выводим "Добавить"
       var buttons = cabinet.AssignedWorkers
           .Select(u => InlineKeyboardButton.WithCallbackData(
-              text: $"{u.Name} ({GetEnumDisplayName(u.Role)})",
+              text: $"{u.Name} ({Models.Internal.GetEnumDisplayName(u.Role)})",
               callbackData: $"delete_cab_user_{cabinet.Id}_{u.Id}"))
           .Concat(new[] { InlineKeyboardButton.WithCallbackData("➕ Добавить", $"add_cub_users_{cabinet.Id}") })
           .Chunk(1)
@@ -725,7 +726,8 @@ ILogger<TelegramBotController> logger)
       var param = await _db.ConnectionParameters.FindAsync(paramId);
       if (param == null)
       {
-        param = new Models.ConnectionParameter() {
+        param = new Models.ConnectionParameter()
+        {
           Id = paramId,
           Key = "",
           Value = ""
@@ -1023,15 +1025,6 @@ ILogger<TelegramBotController> logger)
     #endregion
 
     #region Helper Methods
-    private static string GetEnumDisplayName(Enum enumValue)
-    {
-      var display = enumValue.GetType()
-          .GetField(enumValue.ToString())
-          ?.GetCustomAttributes(typeof(DisplayAttribute), false)
-          .FirstOrDefault() as DisplayAttribute;
-
-      return display?.Name ?? enumValue.ToString();
-    }
 
     private void LogUpdate(Update update)
     {
