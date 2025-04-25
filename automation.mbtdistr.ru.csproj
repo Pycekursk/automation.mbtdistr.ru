@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <Folder Include="Services\Wildberries\Models\" />
+    <Folder Include="Services\YandexMarket\" />
+    <Folder Include="Services\Megamarket\" />
     <Folder Include="wwwroot\data\" />
     <Folder Include="wwwroot\logs\tg\" />
   </ItemGroup>

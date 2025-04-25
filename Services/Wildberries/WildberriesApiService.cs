@@ -36,6 +36,11 @@ namespace automation.mbtdistr.ru.Services.Wildberries
       return await resp.Content.ReadAsStringAsync();
     }
 
+    internal async Task<dynamic> GetReturnsListAsync(int id)
+    {
+      throw new NotImplementedException();
+    }
+
     // …другие методы Wildberries (GetReturnsAsync, ProcessReturnAsync и т.п.), все с cabinetId
   }
 }

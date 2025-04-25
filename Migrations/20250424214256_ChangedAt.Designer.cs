@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250424214256_ChangedAt")]
+    partial class ChangedAt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -397,14 +400,19 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<bool>("IsOpened")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<bool>("IsSuperEconom")
-                        .HasColumnType("tinyint(1)");
+                    b.Property<string>("Marketplace")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<long>("ReturnInfoId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReturnStatus")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
@@ -416,38 +424,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Returns");
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnMainInfo", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<long>("OrderId")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("ReturnId")
-                        .HasColumnType("int");
-
-                    b.Property<long>("ReturnInfoId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ReturnReasonName")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("ReturnStatus")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReturnId")
-                        .IsUnique();
-
-                    b.ToTable("ReturnMainInfo");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Worker", b =>
@@ -614,17 +590,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnMainInfo", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Models.Return", "Return")
-                        .WithOne("Info")
-                        .HasForeignKey("automation.mbtdistr.ru.Models.ReturnMainInfo", "ReturnId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Return");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Cabinet", b =>
                 {
                     b.Navigation("Settings")
@@ -639,9 +604,6 @@ namespace automation.mbtdistr.ru.Migrations
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Return", b =>
                 {
                     b.Navigation("Compensation");
-
-                    b.Navigation("Info")
-                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -26,7 +26,7 @@ namespace automation.mbtdistr.ru
      
       builder.Services.AddControllersWithViews();
 
-    
+      builder.Services.AddHostedService<automation.mbtdistr.ru.Services.MarketSyncService>();
 
       builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
       {

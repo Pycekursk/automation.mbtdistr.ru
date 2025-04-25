@@ -28,7 +28,7 @@
       {
         Filter = filter,
         Limit = limit,
-        LastId = lastId
+        LastId = lastId,
       };
 
       var response = await _ozonSellerApiHttpClient.SendRequestAsync(
@@ -39,17 +39,7 @@
 
       response.EnsureSuccessStatusCode();
       var json = await response.Content.ReadAsStringAsync();
-
-      // Deserialize the JSON response into the ReturnsListResponse object
-
-      //сериализуем в динамический объект
-      var dynamicResult = JsonSerializer.Deserialize<dynamic>(json, _jsonOptions);
-      var str = dynamicResult.ToString();
-
-
       var result = JsonSerializer.Deserialize<ReturnsListResponse>(json, _jsonOptions);
-
-      //var result = await JsonSerializer.DeserializeAsync<ReturnsListResponse>(json, _jsonOptions);
       return result!;
     }
 

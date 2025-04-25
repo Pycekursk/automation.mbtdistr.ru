@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250424223804_ReturnMainInfo")]
+    partial class ReturnMainInfo
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -397,14 +400,18 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<bool>("IsOpened")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<bool>("IsSuperEconom")
-                        .HasColumnType("tinyint(1)");
+                    b.Property<string>("Marketplace")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<long>("ReturnInfoId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReturnReasonName")
+                        .HasColumnType("longtext");
 
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
@@ -426,21 +433,11 @@ namespace automation.mbtdistr.ru.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<long>("OrderId")
-                        .HasColumnType("bigint");
-
                     b.Property<int>("ReturnId")
                         .HasColumnType("int");
 
-                    b.Property<long>("ReturnInfoId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ReturnReasonName")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("ReturnStatus")
-                        .IsRequired()
-                        .HasColumnType("longtext");
+                    b.Property<int>("ReturnStatus")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 

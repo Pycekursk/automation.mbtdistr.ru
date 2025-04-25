@@ -18,10 +18,10 @@ namespace automation.mbtdistr.ru.Controllers
     public IActionResult Index()
     {
       //если включен режим отладки, то переходим на метод Get RefundsController
-      if (Debugger.IsAttached)
-      {
-        return RedirectToAction("Get", "Refunds");
-      }
+      //if (Debugger.IsAttached)
+      //{
+      //  return RedirectToAction("Get", "Refunds");
+      //}
       //иначе переходим на метод Index
 
 

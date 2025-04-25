@@ -22,6 +22,8 @@ namespace automation.mbtdistr.ru.Data
     public DbSet<Compensation> Compensations { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
 
+    public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }
+
     public DbSet<CallbackAction> CallbackActions { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -32,6 +34,10 @@ namespace automation.mbtdistr.ru.Data
     protected override void OnModelCreating(ModelBuilder mb)
     {
       base.OnModelCreating(mb);
+
+      mb.Entity<ReturnMainInfo>()
+        .Property(r => r.ReturnStatus)
+        .HasConversion<string>();
 
       // 1:1 Cabinet ↔ CabinetSettings
       mb.Entity<Cabinet>()
