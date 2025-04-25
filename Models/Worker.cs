@@ -27,10 +27,13 @@ namespace automation.mbtdistr.ru.Models
   {
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
-    public bool IsReceiveNotification { get; set; } = true;
-    public List<NotificationLevel> NotificationLevels { get; set; } = new List<NotificationLevel>();
+    public bool IsReceiveNotification { get; set; }
+    public List<NotificationLevel> NotificationLevels { get; set; } = new List<NotificationLevel> { };
 
+    [ForeignKey("Worker")]
     public int WorkerId { get; set; }
+
+
     public Worker Worker { get; set; }
   }
 
@@ -42,9 +45,9 @@ namespace automation.mbtdistr.ru.Models
     OrderNotification,
     [Display(Name = "Уведомления о новых сообщениях")]
     MessageNotification,
-    [Display(Name = "Уровень отладки")]
-    DebugNotification,
-    [Display(Name = "Уровень администратора")]
-    AdminNotification,
+    [Display(Name = "Логи")]
+    LogNotification,
+    [Display(Name = "Глубокая отладка")]
+    DeepDegugNotification
   }
 }

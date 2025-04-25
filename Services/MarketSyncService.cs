@@ -12,6 +12,11 @@ using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 using Telegram.Bot;
 using static automation.mbtdistr.ru.Models.Internal;
+using static System.Formats.Asn1.AsnWriter;
+using System.Text.Json;
+using automation.mbtdistr.ru.Services.Ozon.Models;
+using System.Text;
+using Telegram.Bot.Types.Enums;
 
 namespace automation.mbtdistr.ru.Services
 {
@@ -34,16 +39,25 @@ namespace automation.mbtdistr.ru.Services
       _botClient = botClient;
       _scopeFactory = scopeFactory;
       _logger = logger;
-      var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 15);
+      var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-      await _botClient.SendMessage(
-           chatId: 1406950293, // ID чата для отправки сообщений
-           text: $"Синхронизация площадок запущена, интервал = {_interval}",
-           cancellationToken: stoppingToken);
+      var adminNotify = false;
+      using var scope = _scopeFactory.CreateScope();
+      var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+      var admin = await db.Workers.FirstOrDefaultAsync(w => w.TelegramId == 1406950293.ToString());
+      if (admin != null && admin.NotificationOptions != null && admin.NotificationOptions.IsReceiveNotification)
+        adminNotify = true;
+
+
+      if (adminNotify)
+        await _botClient.SendMessage(
+             chatId: 1406950293, // ID чата для отправки сообщений
+             text: $"Синхронизация площадок запущена, интервал = {_interval}",
+             cancellationToken: stoppingToken);
 
       //await SyncAllAsync(stoppingToken);
 
@@ -56,14 +70,15 @@ namespace automation.mbtdistr.ru.Services
         }
         catch (Exception ex)
         {
-          await _botClient.SendMessage(
+          if (adminNotify)
+            await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
                text: $"Ошибка при синхронизации площадок:\n{ex.Message}",
                cancellationToken: stoppingToken);
         }
       }
-
-      await _botClient.SendMessage(
+      if (adminNotify)
+        await _botClient.SendMessage(
            chatId: 1406950293, // ID чата для отправки сообщений
            text: "Синхронизация площадок остановлена",
            cancellationToken: stoppingToken);
@@ -76,6 +91,11 @@ namespace automation.mbtdistr.ru.Services
       var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
       var ozSvc = scope.ServiceProvider.GetRequiredService<OzonApiService>();
+
+
+      var adminNotify = db.Workers
+     .FirstOrDefault(w => w.TelegramId == "1406950293")?
+     .NotificationOptions?.IsReceiveNotification ?? false;
 
       // подтягиваем все кабинеты вместе с настройками
       var cabinets = await db.Cabinets
@@ -131,7 +151,7 @@ namespace automation.mbtdistr.ru.Services
 
           }
 
-          else if (cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
+          else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
           {
 
           }
@@ -143,10 +163,11 @@ namespace automation.mbtdistr.ru.Services
         }
         catch (Exception ex)
         {
-          await _botClient.SendMessage(
-               chatId: 1406950293, // ID чата для отправки сообщений
-               text: $"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Marketplace} / {cab.Name}:\n{ex.Message}",
-               cancellationToken: ct);
+          if (adminNotify)
+            await _botClient.SendMessage(
+                 chatId: 1406950293, // ID чата для отправки сообщений
+                 text: $"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Marketplace} / {cab.Name}:\n{ex.Message}",
+                 cancellationToken: ct);
         }
       }
       try
@@ -154,14 +175,16 @@ namespace automation.mbtdistr.ru.Services
         var changes = await db.SaveChangesAsync(ct);
         if (changes > 0)
         {
-          await _botClient.SendMessage(
+          if (adminNotify)
+            await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
                text: $"Синхронизировано {changes} записей",
                cancellationToken: ct);
         }
         else
         {
-          await _botClient.SendMessage(
+          if (adminNotify)
+            await _botClient.SendMessage(
                chatId: 1406950293, // ID чата для отправки сообщений
                text: "Нет изменений для сохранения в БД",
                cancellationToken: ct);
@@ -169,7 +192,8 @@ namespace automation.mbtdistr.ru.Services
       }
       catch (Exception ex)
       {
-        await _botClient.SendMessage(
+        if (adminNotify)
+          await _botClient.SendMessage(
              chatId: 1406950293, // ID чата для отправки сообщений
              text: $"Ошибка при сохранении данных в БД:\n{ex.Message}\n" + $"{ex.InnerException?.Message ?? string.Empty}",
              cancellationToken: ct);
@@ -184,6 +208,7 @@ namespace automation.mbtdistr.ru.Services
     {
       // TODO: конкретно мапить response.Items → модели Return и upsert в db.Returns
       string message = string.Empty;
+      var admin = await db.Workers.FirstOrDefaultAsync(w => w.TelegramId == 1406950293.ToString(), ct);
       foreach (var x in returns)
       {
         // Проверяем, существует ли возврат с таким ID в базе данных
@@ -191,6 +216,7 @@ namespace automation.mbtdistr.ru.Services
           .Include(r => r.Info)
           .Include(r => r.Compensation)
           .Include(r => r.Cabinet)
+          .ThenInclude(c => c.AssignedWorkers)
           .FirstOrDefaultAsync(r => r.Info.ReturnInfoId == x.Id && r.CabinetId == cab.Id, ct);
         if (existingReturn != null)
         {
@@ -201,18 +227,47 @@ namespace automation.mbtdistr.ru.Services
           var newStatusStr = GetEnumDisplayName(newStatus);
           var currentStatus = existingReturn.Info.ReturnStatus;
           var currentStatusStr = GetEnumDisplayName(currentStatus);
+          var newChangedAt = x.Visual?.ChangeMoment;
           if (currentStatus != newStatus)
           {
-            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновлена информация по возврату:\n#{x.Id}\nЗаказ №{x.OrderId}\n\nПрошлый статус: {currentStatus}\nНовый статус: {newStatusStr}";
+            message = FormatReturnHtml(x, cab, false, currentStatus);
+            //отправляем всем участникам кабинета
+            foreach (var worker in cab.AssignedWorkers)
+            {
+              if (worker.NotificationOptions != null && worker.NotificationOptions.IsReceiveNotification && worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.ReturnNotification))
+              {
+                await _botClient.SendMessage(
+                    chatId: worker.TelegramId,
+                    text: message,
+                    parseMode: ParseMode.Html,
+                    cancellationToken: ct);
+              }
+            }
 
-            _logger.LogInformation(message);
-            await _botClient.SendMessage(
-                chatId: 1406950293, // ID чата для отправки сообщений
-                text: message,
-                cancellationToken: ct);
+            // если админ подписан на уведомления, отправляем ему
+            if (admin != null && admin.NotificationOptions != null && admin.NotificationOptions.IsReceiveNotification && admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.ReturnNotification))
+            {
+              var inputJson = JsonSerializer.Serialize(new
+              {
+                existingReturn,
+                x
+              }, new JsonSerializerOptions
+              {
+                WriteIndented = true
+              });
+              message += $"\n\n<b>Дебаг:</b>\n<pre><code>{inputJson.EscapeHtml()}</code></pre>";
+              await _botClient.SendMessage(
+              chatId: admin.TelegramId, // ID чата для отправки сообщений
+              parseMode: ParseMode.Html,
+              text: message,
+              cancellationToken: ct);
+            }
+
+            //message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновился статус возврата:\n#{x.Id}\nСостояние:{((x.AdditionalInfo?.IsOpened).GetValueOrDefault(false) ? "открыт" : "закрыт")}\nЗаказ №{x.OrderId}\n\nПрошлый статус: {currentStatusStr}\nНовый статус: {newStatusStr}\nИзменен: {newChangedAt}";
+            // Отправляем сообщение пользователю, если он подписан на уведомления
+
           }
 
-          var newChangedAt = x.Visual?.ChangeMoment;
           if (existingReturn.ChangedAt != newChangedAt)
           {
             message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновлена информация по возврату:\n#{x.Id}\nЗаказ №{x.OrderId}\n{newChangedAt}";
@@ -220,20 +275,60 @@ namespace automation.mbtdistr.ru.Services
                 chatId: 1406950293, // ID чата для отправки сообщений
                 text: message,
                 cancellationToken: ct);
+            if ((admin?.NotificationOptions?.IsReceiveNotification ?? false) && (admin?.NotificationOptions?.NotificationLevels.Any(l => l == NotificationLevel.LogNotification) ?? false))
+            {
+              message = $@"<b>Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>
+                            <b>Обновлён возврат:</b> #{x.Id}
+                            <b>Заказ №</b> {x.OrderId}
+                            <b>Состояние:</b> {(x.AdditionalInfo?.IsOpened ?? false ? "открыт" : "закрыт")}";
+              if (admin?.NotificationOptions?.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false)
+              {
+                var inputJson = JsonSerializer.Serialize(new
+                {
+                  existingReturn,
+                  x
+                }, new JsonSerializerOptions
+                {
+                  WriteIndented = true
+                });
+                message += $"\n\n<b>Дебаг:</b>\n```json\n{inputJson}\n```";
+              }
+              await _botClient.SendMessage(
+                  chatId: admin!.TelegramId, // ID чата для отправки сообщений
+                  text: message,
+                  parseMode: ParseMode.Html,
+                  cancellationToken: ct);
+            }
           }
 
           var newIsOpened = x.AdditionalInfo?.IsOpened ?? false;
-          if (existingReturn.IsOpened != newIsOpened)
-          {
-            var currentIsOpened = existingReturn.IsOpened ? "открыт" : "закрыт";
-            var newIsOpenedStr = newIsOpened ? "открыт" : "закрыт";
-            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nОбновлена информация по возврату:\n#{x.Id}\nЗаказ №{x.OrderId}\nСтатус возврата: {newIsOpenedStr}";
-
-            await _botClient.SendMessage(
-                chatId: 1406950293, // ID чата для отправки сообщений
-                text: message,
-                cancellationToken: ct);
-          }
+          //if (existingReturn.IsOpened != newIsOpened)
+          //{
+          //  if ((admin?.NotificationOptions?.IsReceiveNotification ?? false) && (admin?.NotificationOptions?.NotificationLevels.Any(l => l == NotificationLevel.LogNotification) ?? false))
+          //  {
+          //    message = $@"<b>Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>
+          //                  <b>Обновлён возврат:</b> #{x.Id}
+          //                  <b>Заказ №</b> {x.OrderId}
+          //                  <b>Состояние:</b> {(x.AdditionalInfo?.IsOpened ?? false ? "открыт" : "закрыт")}";
+          //    if (admin?.NotificationOptions?.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false)
+          //    {
+          //      var inputJson = JsonSerializer.Serialize(new
+          //      {
+          //        existingReturn,
+          //        x
+          //      }, new JsonSerializerOptions
+          //      {
+          //        WriteIndented = true
+          //      });
+          //      message += $"\n\n<b>Дебаг:</b>\n```json\n{inputJson}\n```";
+          //    }
+          //    await _botClient.SendMessage(
+          //        chatId: admin!.TelegramId, // ID чата для отправки сообщений
+          //        text: message,
+          //        parseMode: ParseMode.Html,
+          //        cancellationToken: ct);
+          //  }
+          //}
 
           existingReturn.IsOpened = newIsOpened;
           existingReturn.IsSuperEconom = x.AdditionalInfo?.IsSuperEconom ?? false;
@@ -259,22 +354,61 @@ namespace automation.mbtdistr.ru.Services
             @return.Info.OrderId = x.OrderId;
             db.Returns.Add(@return);
 
-            message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nСоздан новый возврат:\n#{x.Id}\nЗаказ №{x.OrderId}\nСтатус возврата: {GetEnumDisplayName(@return.Info.ReturnStatus)}\nПричина возврата: {x.ReturnReasonName}";
+            //message = $"Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}\nНовый возврат:\n#{x.Id}\nЗаказ №{x.OrderId}\nСостояние: {(@return.IsOpened ? "открыт" : "закрыт")}\nСтатус: {GetEnumDisplayName(@return.Info.ReturnStatus)}\nПричина возврата: {x.ReturnReasonName}\nДата изменения: {x.Visual?.ChangeMoment}";
+
+            message = FormatReturnHtml(x, cab, true);
+
             await _botClient.SendMessage(
                 chatId: 1406950293, // ID чата для отправки сообщений
                 text: message,
+                parseMode: ParseMode.Html,
                 cancellationToken: ct);
           }
           catch (Exception ex)
           {
-            await _botClient.SendMessage(
-                  chatId: 1406950293, // ID чата для отправки сообщений
-                  text: $"Ошибка при обработке возврата {x.Id} для кабинета {cab.Id}:\n{ex.Message}",
-                  cancellationToken: ct);
+            if (admin != null && admin.NotificationOptions != null && admin.NotificationOptions.IsReceiveNotification)
+              await _botClient.SendMessage(
+                    chatId: 1406950293, // ID чата для отправки сообщений
+                    text: $"Ошибка при обработке возврата {x.Id} для кабинета {cab.Id}:\n{ex.Message}",
+                    cancellationToken: ct);
             _logger.LogError(ex, "Ошибка при обработке возврата {ReturnId} для кабинета {CabinetId}", x.Id, cab.Id);
           }
         }
       }
+    }
+
+    string FormatReturnHtml(ReturnInfo x, Cabinet cab, bool isNew, ReturnStatus? oldStatus = null)
+    {
+      var sb = new StringBuilder();
+      sb.AppendLine(isNew
+          ? $"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>"
+          : $"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+      sb.AppendLine($"<b>Возврат</b>#{x.Id}");
+      sb.AppendLine($"<b>Заказ</b>{x.OrderId}");
+      if (!isNew && oldStatus.HasValue)
+      {
+        sb.AppendLine($"<b>Старый статус:</b> {GetEnumDisplayName(oldStatus.Value)}");
+        var newStatus = GetEnumDisplayName(Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown);
+        sb.AppendLine($"<b>Новый статус:</b> {newStatus}");
+      }
+      //sb.AppendLine($"<b>Статус возврата:</b> {GetEnumDisplayName(x.Visual.Status.SysName)}");
+      sb.AppendLine($"<b>Причина возврата:</b> {x.ReturnReasonName}");
+      sb.AppendLine($"<b>Дата изменения:</b> {x?.Visual?.ChangeMoment:dd.MM.yyyy HH:mm:ss}");
+      var db = _scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
+      var admin = db.Workers.FirstOrDefault(w => w.TelegramId == 1406950293.ToString());
+      if ((admin?.NotificationOptions?.IsReceiveNotification ?? false) && (admin?.NotificationOptions?.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false))
+      {
+        // Отправляем дебаг-вывод
+        var inputJson = JsonSerializer.Serialize(new
+        {
+          x
+        }, new JsonSerializerOptions
+        {
+          WriteIndented = true
+        });
+        sb.AppendLine($"<b>Дебаг:</b>\n```json\n{inputJson}\n```");
+      }
+      return sb.ToString();
     }
 
     private Task ProcessWbReturnsAsync(

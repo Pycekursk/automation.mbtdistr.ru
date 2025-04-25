@@ -16,11 +16,13 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="OpenAI" Version="2.1.0" />
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.3" />
     <PackageReference Include="Telegram.Bot" Version="22.5.2-dev.3" />
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Services\OpenAI\Models\" />
     <Folder Include="Services\Wildberries\Models\" />
     <Folder Include="Services\YandexMarket\" />
     <Folder Include="Services\Megamarket\" />

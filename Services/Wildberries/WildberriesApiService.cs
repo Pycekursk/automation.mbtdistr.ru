@@ -21,7 +21,7 @@ namespace automation.mbtdistr.ru.Services.Wildberries
       var token = await _db.CabinetSettings
           .Where(s => s.CabinetId == cabinetId)
           .SelectMany(s => s.ConnectionParameters)
-          .Where(p => p.Key == "Token")
+          .Where(p => p.Key.ToLower() == "token")
           .Select(p => p.Value)
           .FirstOrDefaultAsync();
 
@@ -38,6 +38,7 @@ namespace automation.mbtdistr.ru.Services.Wildberries
 
     internal async Task<dynamic> GetReturnsListAsync(int id)
     {
+
       throw new NotImplementedException();
     }
 

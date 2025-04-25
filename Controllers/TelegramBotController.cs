@@ -13,6 +13,7 @@ using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 using DevExpress.Xpo.Helpers;
 using static automation.mbtdistr.ru.Models.Internal;
+using System.Text.Json;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -407,6 +408,33 @@ ILogger<TelegramBotController> logger)
     private async Task HandleCallbackQueryAsync(CallbackQuery cb)
     {
       var data = cb.Data?.Split('_');
+
+
+      //получаем обьект работника с тг 1406950293 и проверяем у него обьект уведомлений и массив типов уведомлений на которые подписан пользователь
+      var worker = await _db.Workers
+          .Include(w => w.AssignedCabinets)
+          .Include(w => w.NotificationOptions)
+          .FirstOrDefaultAsync(w => w.TelegramId == cb.From.Id.ToString());
+
+      var deepDebug = worker?.NotificationOptions.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false;
+
+      if (deepDebug)
+      {
+        var inputJson = System.Text.Json.JsonSerializer.Serialize(cb, new JsonSerializerOptions
+        {
+          WriteIndented = true
+        });
+        try
+        {
+          await _botClient.SendMessage(cb.From.Id, $"*Дебаг:*\n```json\n{inputJson.EscapeHtml()}\n```");
+
+        }
+        catch (Exception ex)
+        {
+          await _botClient.SendMessage(cb.From.Id, $"*Ошибка при отправке сообщения в Telegram:*\n```json\n{ex.Message}\n```");
+        }
+      }
+
       if (data == null || data.Length < 2)
       {
         await _botClient.AnswerCallbackQuery(cb.Id, "Неподдерживаемый формат данных");
@@ -733,6 +761,9 @@ ILogger<TelegramBotController> logger)
           Value = ""
         };
 
+        _db.ConnectionParameters.Add(param);
+        await _db.SaveChangesAsync();
+
         //await _botClient.AnswerCallbackQuery(cb.Id, "Параметр не найден.");
         //return;
       }
@@ -802,7 +833,10 @@ ILogger<TelegramBotController> logger)
                 new[] {
                     InlineKeyboardButton.WithCallbackData("❌ Удалить", $"delete_cab_{cabinet.Id}"),
                     InlineKeyboardButton.WithCallbackData("👤 Пользователи", $"get_cab_users_{cabinet.Id}")
-            }
+            },
+                new[] {
+                    InlineKeyboardButton.WithCallbackData("↩️ Назад", "cabinets")
+                }
       };
 
       await _botClient.SendMessage(cb.Message.Chat.Id, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(buttons));

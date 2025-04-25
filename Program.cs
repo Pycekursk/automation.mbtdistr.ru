@@ -1,5 +1,6 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.LLM;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 using automation.mbtdistr.ru.temp;
@@ -23,7 +24,7 @@ namespace automation.mbtdistr.ru
     options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
     new MySqlServerVersion(new Version(8, 0, 21))));
 
-     
+
       builder.Services.AddControllersWithViews();
 
       builder.Services.AddHostedService<automation.mbtdistr.ru.Services.MarketSyncService>();
@@ -56,6 +57,11 @@ namespace automation.mbtdistr.ru
       // 2) Регистрация handler’ов
       builder.Services.AddTransient<WildberriesAuthHandler>();
       builder.Services.AddTransient<OzonAuthHandler>();
+
+      string? openAiApiKey = builder.Configuration.GetSection("OpenAI:ApiKey").Value;
+      string? openAiProxy = builder.Configuration.GetSection("Proxy:String").Value;
+      if (!string.IsNullOrEmpty(openAiApiKey) && !string.IsNullOrEmpty(openAiProxy))
+        builder.Services.AddTransient<OpenAiApiService>(s => new OpenAiApiService(openAiApiKey, openAiProxy));
 
       // 3) HTTP‑клиенты
       builder.Services.AddHttpClient<WildberriesApiService>()

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 using System;
+using System.Text.Json;
 
 using Telegram.Bot.Types;
 
@@ -35,6 +36,14 @@ namespace automation.mbtdistr.ru.Data
     protected override void OnModelCreating(ModelBuilder mb)
     {
       base.OnModelCreating(mb);
+
+      //mb.Entity<NotificationOptions>()
+      //    .Property(o => o.NotificationLevels)
+      //    .HasConversion(
+      //v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+      //v => JsonSerializer.Deserialize<List<NotificationLevel>>(v, (JsonSerializerOptions?)null))
+      //   .HasColumnType("longtext"); // или longtext, если JSON не поддерживается
+
 
       mb.Entity<ReturnMainInfo>()
         .Property(r => r.ReturnStatus)

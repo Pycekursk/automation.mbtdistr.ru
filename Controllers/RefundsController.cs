@@ -50,17 +50,17 @@ namespace automation.mbtdistr.ru.Controllers
     }
 
 
-    // GET api/returns/wildberries/{cabinetId}/seller-info  
-    [HttpGet("wildberries/{cabinetId:int}/seller-info")]
-    public async Task<IActionResult> WildberriesSellerInfo(int cabinetId)
-        => Ok(await _wb.GetSellerInfoAsync(cabinetId));
+    //// GET api/returns/wildberries/{cabinetId}/seller-info  
+    //[HttpGet("wildberries/{cabinetId:int}/seller-info")]
+    //public async Task<IActionResult> WildberriesSellerInfo(int cabinetId)
+    //    => Ok(await _wb.GetSellerInfoAsync(cabinetId));
 
-    // GET api/returns/ozon/{cabinetId}/products  
-    [HttpGet("ozon/{cabinetId:int}/returns")]
-    public async Task<IActionResult> OzonProducts(int cabinetId)
-    {
-      var cabinet = new Cabinet { Id = cabinetId }; // Assuming Cabinet has an Id property  
-      return Ok(await _oz.GetReturnsListAsync(cabinet, new Services.Ozon.Models.Filter()));
-    }
+    //// GET api/returns/ozon/{cabinetId}/products  
+    //[HttpGet("ozon/{cabinetId:int}/returns")]
+    //public async Task<IActionResult> OzonProducts(int cabinetId)
+    //{
+    //  var cabinet = new Cabinet { Id = cabinetId }; // Assuming Cabinet has an Id property  
+    //  return Ok(await _oz.GetReturnsListAsync(cabinet, new Services.Ozon.Models.Filter()));
+    //}
   }
 }

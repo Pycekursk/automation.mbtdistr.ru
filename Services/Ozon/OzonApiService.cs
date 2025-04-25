@@ -42,26 +42,5 @@
       var result = JsonSerializer.Deserialize<ReturnsListResponse>(json, _jsonOptions);
       return result!;
     }
-
-    //public async Task RequestProductListAsync(int cabinetId)
-    //{
-    //  var body = new
-    //  {
-    //    limit = 10,
-    //    offset = 0,
-    //    withDeleted = false
-    //  };
-
-    //  var response = await _ozonSellerApiHttpClient.SendRequestAsync(
-    //    OzonApiRequestType.ProductList,
-    //    body,
-    //    cabinetId
-    //  );
-
-    //  if (!response.IsSuccessStatusCode)
-    //  {
-    //    _logger.LogError($"Ошибка получения списка товаров: {await response.Content.ReadAsStringAsync()}");
-    //  }
-    //}
   }
 }
