@@ -1,6 +1,4 @@
-﻿using DevExpress.Utils.About;
-
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace automation.mbtdistr.ru.Models
@@ -24,27 +22,28 @@ namespace automation.mbtdistr.ru.Models
     public Compensation? Compensation { get; set; }
 
     public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате
-    public bool IsOpened { get;  set; }
-    public bool IsSuperEconom { get;  set; }
+    public bool IsOpened { get; set; }
+    public bool IsSuperEconom { get; set; }
+    public DateTime OrderedAt { get; internal set; }
   }
 
   public class ReturnMainInfo
   {
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+
     public int ReturnId { get; set; }
     public Return Return { get; set; }
 
-
     public ReturnStatus ReturnStatus { get; set; } = ReturnStatus.Unknown; // статус возврата
-
-
 
     public string? ReturnReasonName { get; set; } // причина возврата
 
     public long ReturnInfoId { get; set; } // ID возврата в системе
 
     public long OrderId { get; set; } // ID заказа в системе
+
+    public string? ClaimId { get; set; } // ID обращения в системе
   }
 
   public enum ReturnStatus
@@ -62,7 +61,7 @@ namespace automation.mbtdistr.ru.Models
     OnSellerClarification,
 
     [Display(Name = "На уточнении у продавца после частичной компенсации")]
-    OnSellerClarificationAfterPartialCompensation,  
+    OnSellerClarificationAfterPartialCompensation,
 
     [Display(Name = "Предложена частичная компенсация")]
     OfferedPartialCompensation,
@@ -152,6 +151,6 @@ namespace automation.mbtdistr.ru.Models
     WaitingShipment,
 
     [Display(Name = "Неизвестен")]
-    Unknown 
+    Unknown
   }
 }

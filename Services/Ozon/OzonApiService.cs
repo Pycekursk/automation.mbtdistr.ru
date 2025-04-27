@@ -31,16 +31,23 @@
         LastId = lastId,
       };
 
-      var response = await _ozonSellerApiHttpClient.SendRequestAsync(
-          OzonApiRequestType.ReturnsList,
-          requestBody,
-          cabinet
-      );
+      try
+      {
+        var response = await _ozonSellerApiHttpClient.SendRequestAsync(
+            MarketApiRequestType.ReturnsList,
+            requestBody,
+            cabinet
+        );
 
-      response.EnsureSuccessStatusCode();
-      var json = await response.Content.ReadAsStringAsync();
-      var result = JsonSerializer.Deserialize<ReturnsListResponse>(json, _jsonOptions);
-      return result!;
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ReturnsListResponse>(json, _jsonOptions);
+        return result!;
+      }
+      catch (Exception)
+      {
+        throw;
+      }
     }
   }
 }

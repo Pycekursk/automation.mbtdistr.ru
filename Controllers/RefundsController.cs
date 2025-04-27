@@ -27,8 +27,6 @@ namespace automation.mbtdistr.ru.Controllers
       _oz = oz;
     }
 
-
-
     [HttpGet]
     public async Task<IActionResult> Get()
     {
@@ -37,17 +35,10 @@ namespace automation.mbtdistr.ru.Controllers
         Message = "RefundsController",
         Description = "Контроллер для работы с возвратами"
       };
-
-      //Cabinet? cabinet = _db.Cabinets
-      //    .Include(c => c.Settings)
-      //    .ThenInclude(s => s.ConnectionParameters)
-      //    .FirstOrDefault(c => c.Marketplace == "Ozon");
-
-      //if (cabinet != null)
-      //  await _oz.GetReturnsListAsync(cabinet, new Services.Ozon.Models.Filter());
-
       return Ok(JsonSerializer.Serialize(response));
     }
+
+
 
 
     //// GET api/returns/wildberries/{cabinetId}/seller-info  

@@ -1,6 +1,4 @@
-﻿using DevExpress.XtraEditors.Controls;
-
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Services.Ozon.Models

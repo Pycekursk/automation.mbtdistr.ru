@@ -28,6 +28,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
+using static System.Collections.Specialized.BitVector32;
+
 namespace automation.mbtdistr.ru.Models
 {
   /// <summary>  
@@ -54,6 +56,8 @@ namespace automation.mbtdistr.ru.Models
     /// <param name="entityId">Идентификатор сущности, связанной с действием.</param>  
     public void Register(long userId, string action, int entityId)
     {
+      Extensions.SendDebugMessage(new { Register = new { userId, action, entityId } }.ToJson());
+
       // Отмена и освобождение существующего таймера для данного пользователя  
       if (_timers.TryGetValue(userId, out var existingTimer))
       {
@@ -89,6 +93,8 @@ namespace automation.mbtdistr.ru.Models
     /// <param name="userId">Идентификатор пользователя.</param>  
     public void Remove(long userId)
     {
+      Extensions.SendDebugMessage(new { Remove = new { userId } }.ToJson());
+
       _waiting.Remove(userId);
 
       if (_timers.TryGetValue(userId, out var timer))

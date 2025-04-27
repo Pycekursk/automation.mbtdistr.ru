@@ -1,12 +1,18 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.BarcodeService;
 using automation.mbtdistr.ru.Services.LLM;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
-using automation.mbtdistr.ru.temp;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+
+using Swashbuckle.AspNetCore.Filters;
+using Swashbuckle.AspNetCore.SwaggerUI;
+
+using System.Reflection;
 
 using Telegram.Bot;
 
@@ -14,9 +20,12 @@ namespace automation.mbtdistr.ru
 {
   public class Program
   {
+    public static IConfiguration Configuration { get; set; } = null!;
+
     public static void Main(string[] args)
     {
       var builder = WebApplication.CreateBuilder(args);
+      Configuration = builder.Configuration;
 
       // Add services to the container.
 
@@ -27,7 +36,39 @@ namespace automation.mbtdistr.ru
 
       builder.Services.AddControllersWithViews();
 
+      // 2. Генерация XML-комментариев
+      var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+      var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+
+      // 3. SwaggerGen
+      builder.Services.AddSwaggerGen(c =>
+      {
+        // Основная документация
+        c.SwaggerDoc("v1", new OpenApiInfo
+        {
+          Title = "My API",
+          Version = "v1",
+          Description = "Максимальная функциональность Swagger UI",
+          Contact = new OpenApiContact { Name = "Руслан", Email = "boss@example.com" },
+          License = new OpenApiLicense { Name = "MIT" }
+        });
+
+        // Подключаем XML-комментарии
+        c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+
+        // Фильтры и примеры запросов/ответов
+        c.ExampleFilters();                                      // из Swashbuckle.AspNetCore.Filters
+
+        // Настройка нейминга схем (избежать коллизий)
+        c.CustomSchemaIds(type => type.FullName);
+      });
+
+      // Регистрация Swagger примеров (если используете Swashbuckle.AspNetCore.Filters)
+      builder.Services.AddSwaggerExamplesFromAssemblyOf<Program>();
+
+
       builder.Services.AddHostedService<automation.mbtdistr.ru.Services.MarketSyncService>();
+
 
       builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
       {
@@ -55,7 +96,7 @@ namespace automation.mbtdistr.ru
       });
 
       // 2) Регистрация handler’ов
-      builder.Services.AddTransient<WildberriesAuthHandler>();
+      // builder.Services.AddTransient<WildberriesAuthHandler>();
       builder.Services.AddTransient<OzonAuthHandler>();
 
       string? openAiApiKey = builder.Configuration.GetSection("OpenAI:ApiKey").Value;
@@ -70,11 +111,21 @@ namespace automation.mbtdistr.ru
           .AddHttpMessageHandler<OzonAuthHandler>();
 
 
+      builder.Services.AddScoped<WBApiHttpClient>();
+      builder.Services.AddScoped<WildberriesApiService>();
+
+
+
       builder.Services.AddScoped<OzonSellerApiHttpClient>();
       builder.Services.AddScoped<OzonApiService>();
       builder.Services.AddSingleton<UserInputWaitingService>();
 
+      builder.Services.AddScoped<BarcodeService>();
+
+
       var app = builder.Build();
+
+      app.UseStaticFiles();
 
       // После сборки app
       var scopeFactory = app.Services.GetRequiredService<IServiceScopeFactory>();
@@ -90,7 +141,7 @@ namespace automation.mbtdistr.ru
           adminWorker = new automation.mbtdistr.ru.Models.Worker
           {
             TelegramId = "1406950293", // Можете сюда поставить фиксированное значение или оставить пустым
-            Name = "Administrator",
+            Name = "Руслан",
             Role = Models.RoleType.Admin,
             CreatedAt = DateTime.UtcNow
           };
@@ -107,10 +158,59 @@ namespace automation.mbtdistr.ru
         // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
         app.UseHsts();
       }
+      else
+      {
+        app.UseDeveloperExceptionPage();
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
+        {
+          c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
+          c.RoutePrefix = string.Empty; // Открывать Swagger по корню сайта
+        });
+      }
+
+      if (app.Environment.IsDevelopment())
+      {
+        // 5. Swagger middleware
+        app.UseSwagger(c =>
+        {
+          c.RouteTemplate = "docs/{documentName}/swagger.json";
+          // при необходимости пишем PreSerializeFilters, чтобы динамически менять host, schemes и т.д.
+        });
+
+        // 6. Swagger UI
+        app.UseSwaggerUI(c =>
+        {
+          // несколько версий
+          c.SwaggerEndpoint("/docs/v1/swagger.json", "My API V1");
+          // c.SwaggerEndpoint("/docs/v2/swagger.json", "My API V2");
+
+          // UI-параметры
+          c.RoutePrefix = "docs";                   // UI будет доступен по /docs
+          c.DocumentTitle = "Документация My API";    // <title> страницы
+          c.DocExpansion(DocExpansion.None);        // минимальное раскрытие разделов
+          c.DefaultModelsExpandDepth(-1);                    // скрыть модели по умолчанию
+          c.DisplayOperationId();                            // показывать operationId
+          c.DisplayRequestDuration();                        // время выполнения запроса
+          c.EnableDeepLinking();                             // прямые ссылки
+          c.ShowExtensions();                                // показывать custom-расширения
+          c.EnableFilter();                                  // фильтр по тегам и путям
+          c.MaxDisplayedTags(10);                            // максимум тегов в фильтре
+          c.SupportedSubmitMethods(new[] { SubmitMethod.Get, SubmitMethod.Post, SubmitMethod.Put, SubmitMethod.Delete, SubmitMethod.Patch });
+          c.OAuthClientId("swagger-ui-client");
+          c.OAuthClientSecret("secret-if-needed");
+          c.OAuthAppName("Swagger UI for My API");
+          c.OAuthUsePkce();                                  // для Authorization Code Flow
+          c.InjectStylesheet("/swagger-ui/styles.css");      // свой CSS
+          c.InjectJavascript("/swagger-ui/scripts.js");       // свой JS
+          c.InjectJavascript("console.log('Swagger UI Loaded');");
+          c.HeadContent = "<link rel=\"icon\" href=\"/swagger-ui/favicon.ico\" />";
+          c.IndexStream = () => File.OpenRead("wwwroot/swagger-ui/index.html");
+          // чтобы полностью заменить index.html
+        });
+      }
 
       app.UseHttpsRedirection();
-      app.UseStaticFiles();
-
       app.UseRouting();
 
       app.UseAuthorization();

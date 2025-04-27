@@ -1,47 +1,73 @@
 ﻿using automation.mbtdistr.ru.Data;
+using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.Wildberries.Models;
+using automation.mbtdistr.ru.temp;
 
 using Microsoft.EntityFrameworkCore;
+
+using System.Text.Json;
 
 namespace automation.mbtdistr.ru.Services.Wildberries
 {
   public class WildberriesApiService
   {
-    private readonly HttpClient _httpClient;
-    private readonly ApplicationDbContext _db;
+    private readonly WBApiHttpClient _wbApiHttpClient;
 
-    public WildberriesApiService(HttpClient httpClient, ApplicationDbContext db)
+    public WildberriesApiService(WBApiHttpClient wbApiHttpClient)
     {
-      _httpClient = httpClient;
-      _db = db;
+      _wbApiHttpClient = wbApiHttpClient;
+
+
     }
 
-    public async Task<string> GetSellerInfoAsync(int cabinetId)
+    public async Task<string> GetSellerInfoAsync(Cabinet cabinet)
     {
       // Вытаскиваем токен из БД
-      var token = await _db.CabinetSettings
-          .Where(s => s.CabinetId == cabinetId)
-          .SelectMany(s => s.ConnectionParameters)
-          .Where(p => p.Key.ToLower() == "token")
-          .Select(p => p.Value)
-          .FirstOrDefaultAsync();
-
-      using var req = new HttpRequestMessage(
-          HttpMethod.Get,
-          "https://common-api.wildberries.ru/api/v1/seller-info"
+      var response = await _wbApiHttpClient.SendRequestAsync(
+          MarketApiRequestType.SellerInfo,
+          cabinet
       );
-      req.Headers.Add("Authorization", token);
-
-      var resp = await _httpClient.SendAsync(req);
-      resp.EnsureSuccessStatusCode();
-      return await resp.Content.ReadAsStringAsync();
+      response.EnsureSuccessStatusCode();
+      var json = await response.Content.ReadAsStringAsync();
+      return json;
     }
 
-    internal async Task<dynamic> GetReturnsListAsync(int id)
+    public async Task<string> PingAsync(Cabinet cabinet)
     {
-
-      throw new NotImplementedException();
+      // Вытаскиваем токен из БД
+      var response = await _wbApiHttpClient.SendRequestAsync(
+          MarketApiRequestType.Ping,
+          cabinet
+      );
+      response.EnsureSuccessStatusCode();
+      var json = await response.Content.ReadAsStringAsync();
+      return json;
     }
 
-    // …другие методы Wildberries (GetReturnsAsync, ProcessReturnAsync и т.п.), все с cabinetId
+    internal async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, bool archive = false)
+    {
+      try
+      {
+        var response = await _wbApiHttpClient.SendRequestAsync(
+        MarketApiRequestType.ReturnsList,
+        cabinet,
+         queryParams: new Dictionary<string, string>
+         {
+           { "is_archive", archive.ToString().ToLowerInvariant() }
+         }
+        );
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        Extensions.SendDebugMessage(json);
+
+        var result = json.FromJson<ReturnsListResponse>();
+        return result;
+      }
+      catch (Exception ex)
+      {
+        Extensions.SendDebugObject<Exception>(ex);
+        throw;
+      }
+    }
   }
 }

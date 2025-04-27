@@ -11,9 +11,12 @@ using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
-using DevExpress.Xpo.Helpers;
 using static automation.mbtdistr.ru.Models.Internal;
 using System.Text.Json;
+using System.Text.Encodings.Web;
+using System.Text.Unicode;
+using automation.mbtdistr.ru.Services.Wildberries.Models;
+using automation.mbtdistr.ru.Services.BarcodeService;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -27,6 +30,7 @@ namespace automation.mbtdistr.ru.Controllers
     private readonly OzonApiService _oz;
     private readonly UserInputWaitingService _waitingService;
     private readonly ILogger<TelegramBotController> _logger;
+    private readonly BarcodeService _barcodeService;
 
     public TelegramBotController(
 UserInputWaitingService waitingService,
@@ -34,6 +38,7 @@ ITelegramBotClient botClient,
 ApplicationDbContext db,
 WildberriesApiService wb,
 OzonApiService oz,
+BarcodeService barcodeService,
 ILogger<TelegramBotController> logger)
     {
       _waitingService = waitingService;
@@ -42,32 +47,69 @@ ILogger<TelegramBotController> logger)
       _wb = wb;
       _oz = oz;
       _logger = logger;
+      _barcodeService = barcodeService;
     }
-
+    /// <summary>  
+    /// Обрабатывает входящие обновления от Telegram Bot API.  
+    /// </summary>  
+    /// <param name="update">Обновление, полученное от Telegram Bot API.</param>  
+    /// <returns>Объект IActionResult, указывающий результат операции.</returns>
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] Update update)
     {
-      LogUpdate(update);
-      var worker = await GetOrCreateWorkerAsync(update);
-
-      switch (update.Type)
+      if (update.Message?.Photo != null)
       {
-        case UpdateType.Message:
-          var msg = update.Message!;
-          if (await TryHandleForceReplyAsync(msg))
-            return Ok();
-          await HandleTextMessageAsync(msg, worker);
-          break;
-
-        case UpdateType.CallbackQuery:
-          await HandleCallbackQueryAsync(update.CallbackQuery!);
-          break;
-
-        default:
-          _logger.LogWarning("Unsupported update type: {UpdateType}", update.Type);
-          break;
+        _barcodeService.HandlePhotoAsync(update);
+        return Ok();
       }
 
+      try
+      {
+        // Updated code to fix CS8072 by avoiding null propagation in the lambda expression.  
+        var admin = await _db.Workers
+           .Include(w => w.NotificationOptions)
+           .FirstOrDefaultAsync(w =>
+               (update.CallbackQuery != null && w.TelegramId == update.CallbackQuery.From.Id.ToString()) ||
+               (update.Message != null && w.TelegramId == update.Message.From.Id.ToString()));
+
+        // Check if the admin has the DeepDebugNotification option enabled
+        var deepDebug = admin?.NotificationOptions.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false;
+        var doLog = admin?.NotificationOptions.NotificationLevels.Any(l => l == NotificationLevel.LogNotification) ?? false;
+        if (deepDebug)
+        {
+          await Extensions.SendDebugObject<Update>(update, update?.Message?.Text);
+        }
+        //LogUpdate(update);
+        var worker = await GetOrCreateWorkerAsync(update);
+
+        //if (update.Message.ReplyToMessage != null && update.Message.ReplyToMessage.From.Id == _botClient.BotId)
+        //{
+        //  Extensions.SendDebugMessage(new { ReplyToMessage = new { update.Message.ReplyToMessage.From.Id, _botClient.BotId } }.ToJson());
+        //}
+
+        switch (update.Type)
+        {
+          case UpdateType.Message:
+            var msg = update.Message!;
+            if (await TryHandleForceReplyAsync(msg))
+              return Ok();
+            await HandleTextMessageAsync(msg, worker);
+            break;
+
+          case UpdateType.CallbackQuery:
+            await HandleCallbackQueryAsync(update.CallbackQuery!, worker);
+            break;
+
+          default:
+            _logger.LogWarning("Unsupported update type: {UpdateType}", update.Type);
+            break;
+        }
+      }
+      catch (Exception ex)
+      {
+        //if (doLog)
+        Extensions.SendDebugObject<Exception>(ex);
+      }
       return Ok();
     }
 
@@ -114,7 +156,11 @@ ILogger<TelegramBotController> logger)
       if (msg.ReplyToMessage == null)
         return false;
 
+      // _waitingService.Register(msg.From.Id, "", 0);
+
       var waiting = _waitingService.Get(msg.From.Id);
+
+
       if (waiting == null)
         return false;
 
@@ -134,15 +180,15 @@ ILogger<TelegramBotController> logger)
           break;
 
         case "edit_cab_settings_key":
-          await UpdateCabinetParameterKeyAsync(msg.Chat.Id, msg.Text!, entityId);
+          await UpdateCabinetParameterKeyAsync(msg.Chat.Id, msg.Text!, entityId, msg.Id);
           break;
         case "edit_cab_settings_value":
-          await UpdateCabinetParameterValueAsync(msg.Chat.Id, msg.Text!, entityId);
+          await UpdateCabinetParameterValueAsync(msg.Chat.Id, msg.Text!, entityId, msg.Id);
           break;
 
         case "create_cab_marketplace":
           // Передаём userId для корректной регистрации следующего шага
-          await HandleCreateCabinetMarketplaceAsync(msg.Chat.Id, msg.From.Id, msg.Text!);
+          await HandleCreateCabinetMarketplaceAsync(msg.Chat.Id, entityId, msg.Text!);
           break;
 
         case "create_cab_name":
@@ -200,6 +246,7 @@ ILogger<TelegramBotController> logger)
 
       var buttons = new[]
       {
+        new[] { InlineKeyboardButton.WithCallbackData("↩️ Назад", $"select_cab_{cabinet.Id}") },
         new[] {
             InlineKeyboardButton.WithCallbackData("✏️ Название", $"edit_cab_name_{cabinet.Id}"),
             InlineKeyboardButton.WithCallbackData(" Настройки", $"edit_cab_settings_{cabinet.Id}")
@@ -216,22 +263,34 @@ ILogger<TelegramBotController> logger)
           replyMarkup: new InlineKeyboardMarkup(buttons));
     }
 
-    private async Task UpdateCabinetParameterValueAsync(long id, string v, int entityId)
+    private async Task UpdateCabinetParameterValueAsync(long id, string v, int entityId, long messageId)
     {
       var parameter = await _db.ConnectionParameters.FindAsync(entityId);
+      var cabinet = await _db.Cabinets.Include(c => c.Settings).Where(cs => cs.Settings.ConnectionParameters.Any(cp => cp.Id == entityId)).FirstOrDefaultAsync();
+
       if (parameter == null) return;
       parameter.Value = v;
       await _db.SaveChangesAsync();
-      await _botClient.SendMessage(id, $"Параметр {parameter.Key} обновлён на: {parameter.Value}");
+      //отправляем всплывающее сообщение
+      await _botClient.SendMessage(messageId.ToString(), $"Новое значение: {parameter.Value}");
+
+      _waitingService.Remove(id);
     }
 
-    private async Task UpdateCabinetParameterKeyAsync(long id, string v, int entityId)
+
+
+    private async Task UpdateCabinetParameterKeyAsync(long id, string v, int entityId, long messageId)
     {
       var parameter = await _db.ConnectionParameters.FindAsync(entityId);
       if (parameter == null) return;
       parameter.Key = v;
       await _db.SaveChangesAsync();
-      await _botClient.SendMessage(id, $"Параметр {parameter.Key} обновлён на: {parameter.Value}");
+
+      //отправляем сообщение с новым значением
+      await _botClient.SendMessage(messageId.ToString(), $"Новое имя: {parameter.Key}");
+
+      _waitingService.Remove(id);
+      // await _botClient.AnswerCallbackQuery(id.ToString(), $"Новое имя: {parameter.Key}");
     }
 
     private async Task EditCabinetNameAsync(long id, string v, int entityId)
@@ -247,32 +306,67 @@ ILogger<TelegramBotController> logger)
 
     private async Task HandleTextMessageAsync(Message msg, Worker worker)
     {
-      var text = msg.Text?.Trim().ToLower();
-      switch (text)
+      try
       {
-        case "/start":
-          await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {GetEnumDisplayName(worker.Role)}");
-          break;
+        var text = msg.Text?.Trim().ToLower();
+        switch (text)
+        {
+          case "/start":
+            await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {GetEnumDisplayName(worker.Role)}");
+            break;
 
-        case "/help":
-          await HandleGetHelpAsync(msg, worker);
-          break;
-        case "/myrole":
-          await _botClient.SendMessage(msg.Chat.Id, $"Вы {GetEnumDisplayName(worker.Role)}");
-          break;
-        case "/cabinets":
-          await HandleGetCabinetsAsync(msg, worker);
-          break;
-        case "/workers":
-          await HandleGetWorkersAsync(msg);
-          break;
-        default:
-          await _botClient.SendMessage(msg.Chat.Id, "Команда не распознана или у вас нет прав. Напишите /help.");
-          break;
+          case "/help":
+            await HandleGetHelpAsync(msg, worker);
+            break;
+          case "/myrole":
+            await _botClient.SendMessage(msg.Chat.Id, $"Вы {GetEnumDisplayName(worker.Role)}");
+            break;
+          case "/cabinets":
+            await HandleGetCabinetsAsync(msg, worker);
+            break;
+          case "/workers":
+            await HandleGetWorkersAsync(msg);
+            break;
+          case "/debug":
+            //получаем обьект кабинета на вб
+            var cabinet = await _db.Cabinets
+                .Include(c => c.Settings)
+                    .ThenInclude(s => s.ConnectionParameters)
+                .FirstOrDefaultAsync(c => c.Marketplace.ToUpper() == "WB");
+            var json = await _wb.GetSellerInfoAsync(cabinet);
+            Extensions.SendDebugMessage(json);
+            //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {result}");
+            break;
+          case "/debug2":
+            //получаем обьект кабинета на вб
+            var cabinets = await _db.Cabinets
+                 .Include(c => c.Settings)
+                     .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "WB").ToListAsync();
+
+            foreach (var cab in cabinets)
+            {
+              var returns = await _wb.GetReturnsListAsync(cab);
+              string caption = $"Кабинет: {cab.Marketplace} / {cab.Name}";
+
+              // var result = JsonSerializer.Deserialize<dynamic>(json);
+
+              Extensions.SendDebugObject<ReturnsListResponse>(returns);
+            }
+
+            //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {result}");
+            break;
+          default:
+            await _botClient.SendMessage(msg.Chat.Id, "Команда не распознана или у вас нет прав. Напишите /help.");
+            break;
+        }
+      }
+      catch (Exception ex)
+      {
+        Extensions.SendDebugObject<Exception>(ex);
       }
     }
 
-    private async Task HandleGetWorkersAsync(Message msg)
+    private async Task HandleGetWorkersAsync(Message msg, bool editPrev = false)
     {
       try
       {
@@ -290,6 +384,16 @@ ILogger<TelegramBotController> logger)
             .Chunk(1)
             .Select(chunk => chunk.ToArray())
             .ToArray();
+
+        if (editPrev)
+        {
+          await _botClient.EditMessageText(
+              chatId: msg.Chat.Id,
+              messageId: msg.MessageId,
+              text: "Выберите пользователя: ",
+              replyMarkup: new InlineKeyboardMarkup(buttons));
+          return;
+        }
 
         await _botClient.SendMessage(
             msg.Chat.Id,
@@ -344,7 +448,7 @@ ILogger<TelegramBotController> logger)
       }
     }
 
-    private async Task HandleGetCabinetsAsync(Message msg, Worker worker)
+    private async Task HandleGetCabinetsAsync(Message msg, Worker worker, bool editPrev = false)
     {
       if (worker.Role != RoleType.Admin && worker.Role != RoleType.CabinetManager)
       {
@@ -375,9 +479,10 @@ ILogger<TelegramBotController> logger)
             return;
           }
         }
-
         var buttons = cabinets
-            .Select(c => InlineKeyboardButton.WithCallbackData(
+            .OrderBy(c => c.Marketplace)
+            .ThenBy(c => c.Name)
+             .Select(c => InlineKeyboardButton.WithCallbackData(
                 text: $"{c.Marketplace} / {c.Name}",
                 callbackData: $"select_cab_{c.Id}"))
             .Chunk(1)
@@ -389,6 +494,18 @@ ILogger<TelegramBotController> logger)
         {
             InlineKeyboardButton.WithCallbackData("➕ Создать кабинет", "create_cab")
         });
+
+
+        if (editPrev)
+        {
+          await _botClient.EditMessageText(
+              chatId: msg.Chat.Id,
+              messageId: msg.MessageId,
+              text: "Выберите кабинет:",
+              replyMarkup: new InlineKeyboardMarkup(buttons.ToArray()));
+          return;
+        }
+
 
         await _botClient.SendMessage(
             msg.Chat.Id,
@@ -405,36 +522,9 @@ ILogger<TelegramBotController> logger)
 
 
 
-    private async Task HandleCallbackQueryAsync(CallbackQuery cb)
+    private async Task HandleCallbackQueryAsync(CallbackQuery cb, Worker worker)
     {
       var data = cb.Data?.Split('_');
-
-
-      //получаем обьект работника с тг 1406950293 и проверяем у него обьект уведомлений и массив типов уведомлений на которые подписан пользователь
-      var worker = await _db.Workers
-          .Include(w => w.AssignedCabinets)
-          .Include(w => w.NotificationOptions)
-          .FirstOrDefaultAsync(w => w.TelegramId == cb.From.Id.ToString());
-
-      var deepDebug = worker?.NotificationOptions.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false;
-
-      if (deepDebug)
-      {
-        var inputJson = System.Text.Json.JsonSerializer.Serialize(cb, new JsonSerializerOptions
-        {
-          WriteIndented = true
-        });
-        try
-        {
-          await _botClient.SendMessage(cb.From.Id, $"*Дебаг:*\n```json\n{inputJson.EscapeHtml()}\n```");
-
-        }
-        catch (Exception ex)
-        {
-          await _botClient.SendMessage(cb.From.Id, $"*Ошибка при отправке сообщения в Telegram:*\n```json\n{ex.Message}\n```");
-        }
-      }
-
       if (data == null || data.Length < 2)
       {
         await _botClient.AnswerCallbackQuery(cb.Id, "Неподдерживаемый формат данных");
@@ -453,6 +543,15 @@ ILogger<TelegramBotController> logger)
         case "select_cab":
           await DisplayCabinetDetailsAsync(cb, id);
           break;
+
+        case "list_cabs":
+          await HandleGetCabinetsAsync(cb.Message, worker, true);
+          break;
+
+        case "list_workers":
+          await HandleGetWorkersAsync(cb.Message, true);
+          break;
+
         case "create_cab":
           await PromptCreateCabinetAsync(cb);
           break;
@@ -461,7 +560,7 @@ ILogger<TelegramBotController> logger)
           break;
 
         case "add_cab_settings":
-          await PromptCabinetSettingsEditKeyAsync(cb, id);
+          await PromptCabinetSettingsEditKeyAsync(cb, cabId: id);
           break;
 
         case "add_cub_user":
@@ -477,7 +576,7 @@ ILogger<TelegramBotController> logger)
           break;
 
         case "select_user":
-          await DisplayUserDetailsAsync(cb, id);
+          await DisplayUserDetailsAsync(cb, id, true);
           break;
 
         case "edit_user_name":
@@ -505,7 +604,7 @@ ILogger<TelegramBotController> logger)
           break;
 
         case "edit_cab_settings_key":
-          await PromptCabinetSettingsEditKeyAsync(cb, id);
+          await PromptCabinetSettingsEditKeyAsync(cb, paramId: id);
           break;
 
         case "edit_cab_settings_value":
@@ -673,22 +772,42 @@ ILogger<TelegramBotController> logger)
         return;
       }
       var sb = new StringBuilder();
-      sb.AppendLine($"✅ Сотрудники ЛК:\n{cabinet.Marketplace} / {cabinet.Name}:");
+      sb.AppendLine($"✅ Сотрудники {cabinet.Marketplace} / {cabinet.Name}");
       foreach (var user in cabinet.AssignedWorkers)
-        sb.AppendLine($"- {user.Name} ({GetEnumDisplayName(user.Role)})");
+        sb.AppendLine($"{user.Name} ({GetEnumDisplayName(user.Role)})");
 
+      //другой вариант клавиатуры где на каждого сотрдуника в строку будет по две кнопки одна для перехода в профиль другая для удаления
 
-      //добавляем кнопки удаления пользователей уже записанных в кабинет и последней кнопкой выводим "Добавить"
+      var keyboard = new List<InlineKeyboardButton[]>
+      {
+           new[] {
+              InlineKeyboardButton.WithCallbackData("↩️ Назад", $"select_cab_{cabinet.Id}")
+          }
+      };
+
       var buttons = cabinet.AssignedWorkers
-          .Select(u => InlineKeyboardButton.WithCallbackData(
-              text: $"{u.Name} ({Models.Internal.GetEnumDisplayName(u.Role)})",
-              callbackData: $"delete_cab_user_{cabinet.Id}_{u.Id}"))
-          .Concat(new[] { InlineKeyboardButton.WithCallbackData("➕ Добавить", $"add_cub_users_{cabinet.Id}") })
-          .Chunk(1)
-          .Select(chunk => chunk.ToArray())
-          .ToArray();
+          .Select(u => new[]
+          {
+              InlineKeyboardButton.WithCallbackData(
+                  text: $"{u.Name} ({Models.Internal.GetEnumDisplayName(u.Role)})",
+                  callbackData: $"select_user_{u.Id}"),
+              InlineKeyboardButton.WithCallbackData(
+                  text: "❌ Удалить",
+                  callbackData: $"delete_cab_user_{cabinet.Id}_{u.Id}")
+          }
+          ).ToArray();
 
-      await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: buttons);
+      keyboard.AddRange(buttons);
+
+      // Добавляем кнопку для добавления нового пользователя
+      keyboard.Add(new[]
+      {
+          InlineKeyboardButton.WithCallbackData(
+              text: "➕ Добавить пользователя",
+              callbackData: $"add_cub_users_{cabinet.Id}")
+      });
+
+      await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(keyboard));
     }
 
     #region Cabinet Settings Handlers
@@ -715,8 +834,15 @@ ILogger<TelegramBotController> logger)
         return;
       }
 
+      var keyboard = new List<InlineKeyboardButton[]>
+      {
+        new[] {
+            InlineKeyboardButton.WithCallbackData("↩️ Назад", $"select_cab_{cabinet.Id}")
+        }
+      };
+
       // Строим клавиатуру: для каждого параметра — две кнопки (редактировать ключ/значение)
-      var buttons = cabinet.Settings.ConnectionParameters
+      keyboard.AddRange(cabinet.Settings.ConnectionParameters
           .Select(param => new[]
           {
             InlineKeyboardButton.WithCallbackData(
@@ -725,15 +851,12 @@ ILogger<TelegramBotController> logger)
             InlineKeyboardButton.WithCallbackData(
                 text: $"✏️ {param.Value}",
                 callbackData: $"edit_cab_settings_value_{param.Id}")
-          })
-          .ToList();
+          }));
 
       // (Опционально) добавить кнопку для возврата или добавления нового параметра
-      buttons.Add(new[]
+      keyboard.Add(
+        new[]
       {
-        InlineKeyboardButton.WithCallbackData(
-            text: "↩️ Назад",
-            callbackData: $"select_cab_{cabinetId}"),
         InlineKeyboardButton.WithCallbackData(
             text: "➕ Добавить параметр",
             callbackData: $"add_cab_settings_{cabinetId}")
@@ -744,39 +867,43 @@ ILogger<TelegramBotController> logger)
           chatId: cb.Message.Chat.Id,
           messageId: cb.Message.MessageId,
           text: "Выберите параметр для редактирования:",
-          replyMarkup: new InlineKeyboardMarkup(buttons)
+          replyMarkup: new InlineKeyboardMarkup(keyboard)
       );
     }
 
     // 2) Запросить у пользователя новый ключ (callbackData: "edit_cab_settings_key_{paramId}")
-    private async Task PromptCabinetSettingsEditKeyAsync(CallbackQuery cb, int paramId)
+    private async Task PromptCabinetSettingsEditKeyAsync(CallbackQuery cb, int cabId = 0, int paramId = 0)
     {
       var param = await _db.ConnectionParameters.FindAsync(paramId);
-      if (param == null)
+      if (param == null && cabId != 0)
       {
+        var cabinet = _db.Cabinets
+           .Where(c => c.Id == cabId)
+           .Include(c => c.Settings)
+           .FirstOrDefault();
+
         param = new Models.ConnectionParameter()
         {
-          Id = paramId,
           Key = "",
-          Value = ""
+          Value = "",
+          CabinetSettingsId = cabinet.Settings.Id,
         };
 
         _db.ConnectionParameters.Add(param);
         await _db.SaveChangesAsync();
 
-        //await _botClient.AnswerCallbackQuery(cb.Id, "Параметр не найден.");
-        //return;
       }
 
-      // Отправляем ForceReply для ввода нового ключа
       await _botClient.SendMessage(
-          chatId: cb.Message.Chat.Id,
-          text: $"Введите новое имя параметра (текущее: «{param.Key}»):",
-          replyMarkup: new ForceReplyMarkup { Selective = true }
+        chatId: cb.Message.Chat.Id,
+        text: $"Введите новое значение параметра (текущее: «{param.Key}»):",
+        replyMarkup: new ForceReplyMarkup { Selective = true }
       );
 
-      // Регистрируем ожидание ответа пользователя
-      _waitingService.Register(cb.From.Id, "edit_cab_settings_key", paramId);
+      if (paramId != 0)
+        _waitingService.Register(cb.From.Id, "edit_cab_settings_key", paramId);
+      else
+        _waitingService.Register(cb.From.Id, "add_cab_settings", param.Id);
     }
 
     // 3) Запросить у пользователя новое значение (callbackData: "edit_cab_settings_value_{paramId}")
@@ -827,29 +954,36 @@ ILogger<TelegramBotController> logger)
       var buttons = new[]
       {
                 new[] {
+                    InlineKeyboardButton.WithCallbackData("↩️ Назад", $"list_cabs")
+                },
+                new[] {
                     InlineKeyboardButton.WithCallbackData("✏️ Название", $"edit_cab_name_{cabinet.Id}"),
                     InlineKeyboardButton.WithCallbackData("🛡 Настройки", $"edit_cab_settings_{cabinet.Id}")
                 },
                 new[] {
                     InlineKeyboardButton.WithCallbackData("❌ Удалить", $"delete_cab_{cabinet.Id}"),
                     InlineKeyboardButton.WithCallbackData("👤 Пользователи", $"get_cab_users_{cabinet.Id}")
-            },
-                new[] {
-                    InlineKeyboardButton.WithCallbackData("↩️ Назад", "cabinets")
-                }
+            }
       };
 
-      await _botClient.SendMessage(cb.Message.Chat.Id, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(buttons));
+      await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(buttons));
 
       //await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(buttons));
     }
 
-    private async Task DisplayUserDetailsAsync(CallbackQuery cb, int userId)
+    private async Task DisplayUserDetailsAsync(CallbackQuery cb, int userId, bool editPrev = false)
     {
       var user = await _db.Workers.FirstOrDefaultAsync(w => w.Id == userId);
       if (user == null)
       {
-        await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, "Пользователь не найден.");
+        var backButton = new[]
+        {
+                new[] {
+                    InlineKeyboardButton.WithCallbackData("↩️ Назад", $"list_workers")
+                }
+            };
+        await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, "Пользователь не найден.", replyMarkup: backButton);
+
         return;
       }
 
@@ -863,11 +997,17 @@ ILogger<TelegramBotController> logger)
 
       var sb = new StringBuilder();
       sb.AppendLine("✅ Пользователь:");
-      sb.AppendLine($"#{user.Id} [{user.TelegramId}] {user.Name}");
-      sb.AppendLine($"Роль: {user.Role}");
+      sb.AppendLine($"#{user.Id}");
+      sb.AppendLine($"Имя: {user.Name}");
+      sb.AppendLine($"Telegram ID: {user.TelegramId}");
+      sb.AppendLine($"Создан: {user.CreatedAt}");
+      sb.AppendLine($"Роль: {GetEnumDisplayName(user.Role)}");
 
       var buttons = new[]
       {
+                new[] {
+                    InlineKeyboardButton.WithCallbackData("↩️ Назад", $"list_workers")
+                },
                 new[] {
                     InlineKeyboardButton.WithCallbackData("✏️ Изменить имя", $"edit_user_name_{user.Id}"),
                     InlineKeyboardButton.WithCallbackData("🛡 Изменить роль", $"edit_user_role_{user.Id}")
@@ -876,6 +1016,16 @@ ILogger<TelegramBotController> logger)
                     InlineKeyboardButton.WithCallbackData("❌ Удалить пользователя", $"delete_user_{user.Id}")
                 }
             };
+
+      if (editPrev && cb.Message != null)
+      {
+        await _botClient.EditMessageText(
+            chatId: cb.Message.Chat.Id,
+            messageId: cb.Message.MessageId,
+            text: sb.ToString().TrimEnd(),
+            replyMarkup: new InlineKeyboardMarkup(buttons));
+        return;
+      }
 
       await _botClient.SendMessage(
           cb.Message.Chat.Id,
@@ -896,6 +1046,14 @@ ILogger<TelegramBotController> logger)
 
     private async Task EditUserRoleAsync(CallbackQuery cb, int userId)
     {
+      List<InlineKeyboardButton[]> buttons = new()
+      {
+          new[] {
+              InlineKeyboardButton.WithCallbackData("↩️ Назад", $"select_user_{userId}")
+          }
+      };
+
+
       //Получаем список ролей
       var roles = Enum.GetValues<RoleType>()
           .Select(r => InlineKeyboardButton.WithCallbackData(
@@ -904,6 +1062,8 @@ ILogger<TelegramBotController> logger)
           .Chunk(2)
           .Select(chunk => chunk.ToArray())
           .ToArray();
+
+      buttons.AddRange(roles);
 
       //получаем пользователя
       var user = await _db.Workers.FirstOrDefaultAsync(w => w.Id == userId);
@@ -920,7 +1080,7 @@ ILogger<TelegramBotController> logger)
             cb.Message.MessageId,
             $"Выберите новую роль для пользователя:\n" +
             $"#{user.Id} [{user.TelegramId}] {user.Name}",
-            replyMarkup: new InlineKeyboardMarkup(roles));
+            replyMarkup: new InlineKeyboardMarkup(buttons));
     }
 
     private async Task PromptUserRoleSelectionAsync(long chatId, int userId)
@@ -928,18 +1088,28 @@ ILogger<TelegramBotController> logger)
       var user = await _db.Workers.FirstOrDefaultAsync(w => w.Id == userId);
       if (user == null) return;
 
-      var buttons = Enum.GetValues<RoleType>()
+
+      var keyboard = new List<InlineKeyboardButton[]>
+      {
+           new[] {
+              InlineKeyboardButton.WithCallbackData("↩️ Назад", $"list_workers")
+          }
+      };
+
+      keyboard.AddRange(
+        Enum.GetValues<RoleType>()
           .Select(r => InlineKeyboardButton.WithCallbackData(
               text: GetEnumDisplayName(r),
               callbackData: $"set_user_role_{user.Id}_{(int)r}"))
           .Chunk(2)
           .Select(chunk => chunk.ToArray())
-          .ToArray();
+          .ToArray()
+        );
 
       await _botClient.SendMessage(
           chatId,
           $"Выберите новую роль для пользователя #{user.Id}:",
-          replyMarkup: new InlineKeyboardMarkup(buttons));
+          replyMarkup: new InlineKeyboardMarkup(keyboard));
     }
     private async Task PromptCabinetNameEditAsync(CallbackQuery cb, int id)
     {
@@ -951,8 +1121,9 @@ ILogger<TelegramBotController> logger)
       }
       await _botClient.SendMessage(
           cb.Message.Chat.Id,
-          $"Введите новое имя для кабинета #{cabinet.Id}:",
+          $"Введите новое имя для кабинета {cabinet.Marketplace} / {cabinet.Name} ({cabinet.Id}):",
           replyMarkup: new ForceReplyMarkup { Selective = true });
+
       _waitingService.Register(cb.From.Id, "edit_cab_name", cabinet.Id);
     }
     private async Task EditUserNameAsync(long chatId, string newName, int userId)
