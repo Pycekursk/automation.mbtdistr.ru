@@ -20,12 +20,14 @@ namespace automation.mbtdistr.ru
 {
   public class Program
   {
+    public static IServiceCollection Services { get; set; } = null!;
     public static IConfiguration Configuration { get; set; } = null!;
 
     public static void Main(string[] args)
     {
       var builder = WebApplication.CreateBuilder(args);
       Configuration = builder.Configuration;
+      Services = builder.Services;
 
       // Add services to the container.
 
@@ -49,7 +51,7 @@ namespace automation.mbtdistr.ru
           Title = "My API",
           Version = "v1",
           Description = "Максимальная функциональность Swagger UI",
-          Contact = new OpenApiContact { Name = "Руслан", Email = "boss@example.com" },
+          Contact = new OpenApiContact { Name = "Руслан", Email = "boss@it-wiki.site" },
           License = new OpenApiLicense { Name = "MIT" }
         });
 

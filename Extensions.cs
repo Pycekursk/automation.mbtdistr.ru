@@ -1,6 +1,8 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
 
+using Microsoft.EntityFrameworkCore;
+
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -153,6 +155,18 @@ namespace automation.mbtdistr.ru
 
     public static async Task SendDebugObject<T>(object obj, string? caption = null)
     {
+      //получаем дб контекст из сервиса
+      var db = Program.Services.BuildServiceProvider(true).GetService(typeof(ApplicationDbContext)) as ApplicationDbContext;
+      var admin = 
+        db?.Workers
+        .Include(w => w.NotificationOptions)
+        .FirstOrDefault(u => u.TelegramId == "1406950293");
+
+      if (admin == null ||
+          admin.NotificationOptions == null ||
+          !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.DeepDegugNotification))
+        return;
+
       //получаем обьект Enveronment
       var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
       if (env == "Development") return;
@@ -162,7 +176,7 @@ namespace automation.mbtdistr.ru
       var json = obj.ToJson();
       if (json.Length < 4000)
       {
-        await SendDebugMessage(@$"{json}\n\n\SendDebugObject:165", caption);
+        await SendDebugMessage(json, caption);
         return;
       }
       var chatId = 1406950293;
@@ -175,29 +189,39 @@ namespace automation.mbtdistr.ru
 
     public static async Task SendDebugMessage(string message, string? caption = null)
     {
+
+      var db = Program.Services.BuildServiceProvider(true).GetService(typeof(ApplicationDbContext)) as ApplicationDbContext;
+      var admin =
+        db?.Workers
+        .Include(w => w.NotificationOptions)
+        .FirstOrDefault(u => u.TelegramId == "1406950293");
+
+      if (admin == null ||
+          admin.NotificationOptions == null ||
+          !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.LogNotification))
+        return;
+
+
       var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
       if (env == "Development") return;
       var chatId = 1406950293;
-
-      var parseMode = ParseMode.MarkdownV2;
-
       if (CodeDetector.LooksLikeCode(message))
-      {
-        message = $"```\n{EscapeMarkdownV2(message)}\n\n\nCodeDetector.LooksLikeCode(message):186```";
-        parseMode = ParseMode.MarkdownV2;
-      }
+        message = $"```\n{EscapeMarkdownV2(message)}\n```";
       else
-        message += $"\n\n\nNot fixed, not a code";
-
+        message = EscapeMarkdownV2(message);
       BotClient.SendMessage(
            chatId: chatId,
            text: message,
-           parseMode);
+           ParseMode.MarkdownV2);
     }
 
     public static class CodeDetector
     {
-      // 1. Проверка на валидный JSON
+      private static readonly Regex TrailingParens = new Regex(
+          @"\s*\([A-Za-z0-9\s]*\)\s*$",
+          RegexOptions.Compiled
+      );
+
       public static bool IsJson(string s)
       {
         if (string.IsNullOrWhiteSpace(s)) return false;
@@ -210,7 +234,6 @@ namespace automation.mbtdistr.ru
         return false;
       }
 
-      // 2. Проверка на валидный XML/HTML
       public static bool IsXml(string s)
       {
         if (string.IsNullOrWhiteSpace(s)) return false;
@@ -223,46 +246,40 @@ namespace automation.mbtdistr.ru
         return false;
       }
 
-      // 3. Общие «кодовые» токены и ключевые слова
       private static readonly string[] CodeSignatures = new[]
       {
-        "{", "}", ";", "(", ")", "=>", "->",      // общий синтаксис
-        "class ", "interface ", "public ",        // C#/Java
-        "function ", "var ", "let ", "const ",    // JS/TS
-        "#include", "using ",                     // C/C++, C#
-        "SELECT ", "INSERT ", "UPDATE ", "DELETE ", // SQL
-        "<html", "<body", "<div", "</",           // HTML
+        "{", "}", ";", "=>", "->",
+        "class ", "interface ", "public ",
+        "function ", "var ", "let ", "const ",
+        "#include", "using ",
+        "SELECT ", "INSERT ", "UPDATE ", "DELETE ",
+        "<html", "<body", "<div", "</"
     };
 
-      // 4. Регекс для SQL-запросов
       private static readonly Regex SqlRegex =
-          new Regex(@"\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s", RegexOptions.IgnoreCase);
+          new Regex(@"\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-      /// <summary>
-      /// Основная функция: если что-либо «похоже на код», возвращает true.
-      /// </summary>
-      public static bool LooksLikeCode(string s)
+      public static bool LooksLikeCode(string input)
       {
+        if (string.IsNullOrWhiteSpace(input))
+          return false;
+
+        var s = TrailingParens.Replace(input, "").Trim();
         if (string.IsNullOrWhiteSpace(s))
           return false;
 
-        // —– 1. JSON или XML
         if (IsJson(s) || IsXml(s))
           return true;
 
-        // —– 2. SQL
         if (SqlRegex.IsMatch(s))
           return true;
 
-        // —– 3. Наличие характерных токенов
-        if (CodeSignatures.Any(token => s.Contains(token, StringComparison.OrdinalIgnoreCase)))
+        if (CodeSignatures.Any(token => s.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0))
           return true;
 
-        // —– 4. Многострочный текст с отступами
         if (s.Contains("\n"))
         {
           var lines = s.Split('\n');
-          // если хотя бы половина строк начинается с 2+ пробелов или таба
           var indentLines = lines.Count(l => l.StartsWith("  ") || l.StartsWith("\t"));
           if (indentLines >= lines.Length / 2)
             return true;

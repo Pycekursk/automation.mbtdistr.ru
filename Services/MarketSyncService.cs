@@ -173,7 +173,6 @@ namespace automation.mbtdistr.ru.Services
 
       foreach (var cab in cabinets)
       {
-        if (log) Extensions.SendDebugMessage($"Синхронизация кабинета {cab.Marketplace} / {cab.Name}")?.ConfigureAwait(false);
         try
         {
           if (cab.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("OZ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗОН", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗ", StringComparison.OrdinalIgnoreCase))
@@ -388,8 +387,8 @@ namespace automation.mbtdistr.ru.Services
           ? $"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>"
           : $"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
       sb.AppendLine("");
-      sb.AppendLine($"<b>Возврат</b>{x.Id}");
-      sb.AppendLine($"<b>Заказ</b>{x.OrderId}");
+      sb.AppendLine($"<b>Возврат</b> {x.Id}");
+      sb.AppendLine($"<b>Заказ</b> {x.OrderId}");
       if (oldStatus.HasValue)
       {
         sb.AppendLine($"<b>Старый статус:</b> {GetEnumDisplayName(oldStatus)}");
