@@ -12,6 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.69.0.3740" />
+    <PackageReference Include="Google.Apis.Sheets.v4" Version="1.69.0.3757" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="8.0.8" />
@@ -30,7 +33,6 @@
 
   <ItemGroup>
     <Folder Include="Services\OpenAI\Models\" />
-    <Folder Include="Services\YandexMarket\" />
     <Folder Include="Services\Megamarket\" />
     <Folder Include="wwwroot\data\" />
     <Folder Include="wwwroot\logs\tg\" />

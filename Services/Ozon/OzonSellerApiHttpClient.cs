@@ -38,26 +38,27 @@ namespace automation.mbtdistr.ru.Services.Ozon
       request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
       foreach (var param in cabinet.Settings.ConnectionParameters)
       {
-        //string headerKey = param.Key;
-        //if (request.Headers.GetType().GetProperty(headerKey) is var header && header != null)
-        //{
-
-
-        // // header.SetValue(request.Headers, param.Value);
-        //}
-
-        request.Headers.Add(param.Key, param.Value);
+        request.Headers.TryAddWithoutValidation(param.Key, param.Value);
       }
 
-    //  request.Headers.Add("Content-Type", "application/json");
+      //  request.Headers.Add("Content-Type", "application/json");
 
       if (body != null)
       {
-        var json = JsonSerializer.Serialize(body);
-        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        request.Content = new StringContent(body.ToJson(), Encoding.UTF8, "application/json");
+
       }
 
-      return await _httpClient.SendAsync(request);
+      try
+      {
+        var response = await _httpClient.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
+        return response;
+      }
+      catch (Exception)
+      {
+        throw;
+      }
     }
   }
 }

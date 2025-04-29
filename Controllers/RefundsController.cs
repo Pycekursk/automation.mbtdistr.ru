@@ -1,5 +1,7 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.Google.Drive;
+using automation.mbtdistr.ru.Services.Google.Sheets;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 
@@ -10,7 +12,7 @@ using System.Text.Json;
 
 namespace automation.mbtdistr.ru.Controllers
 {
-  [Route("api/[controller]")]
+  [Route("api/[controller]"), ApiExplorerSettings(IgnoreApi = true)]
   [ApiController]
   //[AuthorizeRole(RoleType.Admin, RoleType.ClaimsManager, RoleType.Director)]
   public class RefundsController : ControllerBase
@@ -19,12 +21,16 @@ namespace automation.mbtdistr.ru.Controllers
     private readonly WildberriesApiService _wb;
     private readonly OzonApiService _oz;
     private readonly ApplicationDbContext _db;
+    private readonly DriveApiService _driveApi;
+    private readonly SheetsApiService _sheetsApi;
 
-    public RefundsController(ApplicationDbContext db, WildberriesApiService wb, OzonApiService oz)
+    public RefundsController(ApplicationDbContext db, WildberriesApiService wb, OzonApiService oz, DriveApiService driveApi, SheetsApiService sheetsApi)
     {
       _db = db;
       _wb = wb;
       _oz = oz;
+      _driveApi = driveApi;
+      _sheetsApi = sheetsApi;
     }
 
     [HttpGet]
@@ -38,6 +44,20 @@ namespace automation.mbtdistr.ru.Controllers
       return Ok(JsonSerializer.Serialize(response));
     }
 
+    [HttpGet("createtable")]
+    public async Task<IActionResult> CreateAndShareAsync([FromQuery] string title)
+    {
+      var spreadsheet = await _sheetsApi.CreateAndShareAsync(title);
+
+      return Redirect(spreadsheet.SpreadsheetUrl);
+    }
+
+    [HttpGet("gettable")]
+    public async Task<IActionResult> GetTableAsync([FromQuery] string id)
+    {
+      var spreadsheet = await _sheetsApi.GetSpreadsheetByIdAsync(id);
+      return Redirect(spreadsheet.SpreadsheetUrl);
+    }
 
 
 

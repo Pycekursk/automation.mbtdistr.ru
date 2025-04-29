@@ -17,6 +17,10 @@ using System.Text.Encodings.Web;
 using System.Text.Unicode;
 using automation.mbtdistr.ru.Services.Wildberries.Models;
 using automation.mbtdistr.ru.Services.BarcodeService;
+using automation.mbtdistr.ru.Services.LLM;
+using automation.mbtdistr.ru.Services.YandexMarket;
+using ZXing;
+using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -31,6 +35,8 @@ namespace automation.mbtdistr.ru.Controllers
     private readonly UserInputWaitingService _waitingService;
     private readonly ILogger<TelegramBotController> _logger;
     private readonly BarcodeService _barcodeService;
+    private readonly OpenAiApiService _openAiApiService;
+    private readonly YMApiService _yMApiService;
 
     public TelegramBotController(
 UserInputWaitingService waitingService,
@@ -39,8 +45,12 @@ ApplicationDbContext db,
 WildberriesApiService wb,
 OzonApiService oz,
 BarcodeService barcodeService,
+OpenAiApiService openAiApiService,
+YMApiService yMApiService,
 ILogger<TelegramBotController> logger)
     {
+      _yMApiService = yMApiService;
+      _openAiApiService = openAiApiService;
       _waitingService = waitingService;
       _botClient = botClient;
       _db = db;
@@ -55,37 +65,135 @@ ILogger<TelegramBotController> logger)
     /// <param name="update">Обновление, полученное от Telegram Bot API.</param>  
     /// <returns>Объект IActionResult, указывающий результат операции.</returns>
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] Update update)
+    public async Task<IActionResult> Post([FromBody] Update data)
     {
-      if (update.Message?.Photo != null)
+      // проверяем тип сборки, если девелоп то пропускаем блок
+
+
+
+
+      if (!(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development"))
+        try
+        {
+          string directoryPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "logs", "tg");
+          // Проверяем, существует ли директория, если нет - создаем
+          if (!Directory.Exists(directoryPath))
+          {
+            Directory.CreateDirectory(directoryPath);
+          }
+          string filePath = Path.Combine(directoryPath, $"{DateTime.Now:yyyyMMddHHmmss}.json");
+          await System.IO.File.WriteAllTextAsync(filePath, data.ToJson());
+        }
+        catch (Exception ex)
+        {
+          await _botClient.SendMessage(1406950293, ex.ToJson());
+        }
+
+      Update? update = data;
+      //создаем текстовый файл
+
+      try
       {
-        _barcodeService.HandlePhotoAsync(update);
-        return Ok();
+
+        //обьявляем токен для отмены
+        var cts = new CancellationTokenSource();
+        var ct = cts.Token;
+
+        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        //if (env != "Development")
+        //{
+
+        string caption = $"Telegram Bot API\n" +
+           $"{DateTime.Now}\n" +
+           $"Тип обновления: {update.Type}\n" +
+           $"ID чата: {update.Message?.Chat.Id ?? update.CallbackQuery?.Message?.Chat.Id}\n" +
+           $"ID пользователя: {update.Message?.From?.Id ?? update.CallbackQuery?.From.Id}\n" +
+           $"Текст сообщения: {update.Message?.Text ?? update.CallbackQuery?.Data}";
+
+        await Extensions.SendDebugObject<Update>(update, caption);
+        //  }
+
+        var chatT = update.Message.Chat.Type;
+
+
+        string chatTypeString = update.Message?.Chat.Type.ToString() ?? update.CallbackQuery?.Message?.Chat.Type.ToString() ?? string.Empty;
+        ChatType? chatType = Enum.TryParse(chatTypeString, out ChatType result) ? result : null;
+        var temp = (ChatType)chatType.GetValueOrDefault();
+        //если чат не приватный, то игнорируем
+        if (!(chatType == ChatType.Private))
+        {
+          return Ok();
+        }
+
+        var userId = update.Message?.From?.Id ?? update.CallbackQuery?.From.Id;
+        var user = await _db.Workers.FirstOrDefaultAsync(w => w.TelegramId == userId.ToString());
+
+        if (user?.Role == RoleType.Admin)
+        {
+          if (update.Message?.Photo != null)
+          {
+            await _barcodeService.HandlePhotoAsync(update);
+            return Ok();
+          }
+
+          if (update.Message?.Voice != null)
+          {
+            // 1. Получаем файл у Telegram
+            var fileId = update.Message.Voice.FileId;
+            var file = await _botClient.GetFile(fileId, cancellationToken: ct);
+
+            // 2. Скачиваем содержимое в память
+            using var ms = new MemoryStream();
+            await _botClient.DownloadFile(file.FilePath, ms, cancellationToken: ct);
+            ms.Position = 0;
+
+            string? fileType = update?.Message?.Voice?.MimeType?.Split('/')[1];
+
+
+            // 3. Транскрибируем через Whisper
+            var transcription = await _openAiApiService.TranscribeAsync(ms, $"{fileId}.{fileType}", ct);
+
+            // 4. Отправляем результат обратно пользователю
+            await _botClient.SendMessage(
+                chatId: update.Message.Chat.Id,
+                text: transcription,
+                cancellationToken: ct
+            );
+            return Ok();
+          }
+
+          if (update.Message?.Audio != null)
+          {
+            var fileId = update.Message.Audio.FileId;
+            var file = await _botClient.GetFile(fileId, cancellationToken: ct);
+
+            using var ms = new MemoryStream();
+            await _botClient.DownloadFile(file.FilePath, ms, cancellationToken: ct);
+            ms.Position = 0;
+
+            string? fileType = update?.Message?.Audio?.MimeType?.Split('/')[1];
+
+            var transcription = await _openAiApiService.TranscribeAsync(ms, $"{fileId}.{fileType}", ct);
+
+            await _botClient.SendMessage(
+                chatId: update.Message.Chat.Id,
+                text: transcription,
+                cancellationToken: ct
+            );
+            return Ok();
+          }
+        }
+
+
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugObject<Exception>(ex);
       }
 
       try
       {
-        // Updated code to fix CS8072 by avoiding null propagation in the lambda expression.  
-        var admin = await _db.Workers
-           .Include(w => w.NotificationOptions)
-           .FirstOrDefaultAsync(w =>
-               (update.CallbackQuery != null && w.TelegramId == update.CallbackQuery.From.Id.ToString()) ||
-               (update.Message != null && w.TelegramId == update.Message.From.Id.ToString()));
-
-        // Check if the admin has the DeepDebugNotification option enabled
-        var deepDebug = admin?.NotificationOptions.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false;
-        var doLog = admin?.NotificationOptions.NotificationLevels.Any(l => l == NotificationLevel.LogNotification) ?? false;
-        if (deepDebug)
-        {
-          await Extensions.SendDebugObject<Update>(update, update?.Message?.Text);
-        }
-        //LogUpdate(update);
         var worker = await GetOrCreateWorkerAsync(update);
-
-        //if (update.Message.ReplyToMessage != null && update.Message.ReplyToMessage.From.Id == _botClient.BotId)
-        //{
-        //  Extensions.SendDebugMessage(new { ReplyToMessage = new { update.Message.ReplyToMessage.From.Id, _botClient.BotId } }.ToJson());
-        //}
 
         switch (update.Type)
         {
@@ -105,11 +213,11 @@ ILogger<TelegramBotController> logger)
             break;
         }
       }
-      catch (Exception ex)
+      catch (Exception)
       {
-        //if (doLog)
-        Extensions.SendDebugObject<Exception>(ex);
+        // Extensions.SendDebugMessage("Exception - public async Task<IActionResult> Post([FromBody] Update update)", ex);
       }
+
       return Ok();
     }
 
@@ -249,7 +357,7 @@ ILogger<TelegramBotController> logger)
         new[] { InlineKeyboardButton.WithCallbackData("↩️ Назад", $"select_cab_{cabinet.Id}") },
         new[] {
             InlineKeyboardButton.WithCallbackData("✏️ Название", $"edit_cab_name_{cabinet.Id}"),
-            InlineKeyboardButton.WithCallbackData(" Настройки", $"edit_cab_settings_{cabinet.Id}")
+            InlineKeyboardButton.WithCallbackData(" Настройки", $"edit_cab_settings_{cabinet.Id}"),
         },
         new[] {
             InlineKeyboardButton.WithCallbackData("❌ Удалить", $"delete_cab_{cabinet.Id}"),
@@ -271,10 +379,15 @@ ILogger<TelegramBotController> logger)
       if (parameter == null) return;
       parameter.Value = v;
       await _db.SaveChangesAsync();
-      //отправляем всплывающее сообщение
-      await _botClient.SendMessage(messageId.ToString(), $"Новое значение: {parameter.Value}");
 
+      //устанавливаем таймер на удаление сообщения
+      var message = await _botClient.SendMessage(id, $"Новое значение: {parameter.Value}");
+      var delay = TimeSpan.FromSeconds(2);
       _waitingService.Remove(id);
+      await Task.Delay(delay);
+      await _botClient.DeleteMessage(id, message.MessageId);
+
+      await _botClient.AnswerCallbackQuery(id.ToString(), $"Новое значение: {parameter.Value}");
     }
 
 
@@ -287,10 +400,16 @@ ILogger<TelegramBotController> logger)
       await _db.SaveChangesAsync();
 
       //отправляем сообщение с новым значением
-      await _botClient.SendMessage(messageId.ToString(), $"Новое имя: {parameter.Key}");
+      await _botClient.SendMessage(id, $"Новое имя: {parameter.Key}");
 
+      //устанавливаем таймер на удаление сообщения
+      var message = await _botClient.SendMessage(id, $"Новое имя: {parameter.Key}");
+      var delay = TimeSpan.FromSeconds(2);
       _waitingService.Remove(id);
-      // await _botClient.AnswerCallbackQuery(id.ToString(), $"Новое имя: {parameter.Key}");
+      await Task.Delay(delay);
+      await _botClient.DeleteMessage(id, message.MessageId);
+
+      await _botClient.AnswerCallbackQuery(id.ToString(), $"Новое имя: {parameter.Key}");
     }
 
     private async Task EditCabinetNameAsync(long id, string v, int entityId)
@@ -327,42 +446,87 @@ ILogger<TelegramBotController> logger)
           case "/workers":
             await HandleGetWorkersAsync(msg);
             break;
-          case "/debug":
-            //получаем обьект кабинета на вб
-            var cabinet = await _db.Cabinets
-                .Include(c => c.Settings)
-                    .ThenInclude(s => s.ConnectionParameters)
-                .FirstOrDefaultAsync(c => c.Marketplace.ToUpper() == "WB");
-            var json = await _wb.GetSellerInfoAsync(cabinet);
-            Extensions.SendDebugMessage(json);
-            //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {result}");
-            break;
-          case "/debug2":
+          case "/wb":
+            if (worker.Role != RoleType.Admin)
+            {
+              await _botClient.SendMessage(msg.Chat.Id, "У вас нет прав для просмотра кабинетов.");
+              return;
+            }
             //получаем обьект кабинета на вб
             var cabinets = await _db.Cabinets
+                   .Include(c => c.Settings)
+                    .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "WB").ToListAsync();
+
+            List<Services.Wildberries.Models.ReturnsListResponse> obj = new List<Services.Wildberries.Models.ReturnsListResponse>();
+            foreach (var cab in cabinets)
+            {
+              obj.Add(await _wb.GetReturnsListAsync(cab));
+            }
+            await Extensions.SendDebugObject<List<Services.Wildberries.Models.ReturnsListResponse>>(obj, $"{obj.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
+            break;
+          case "/ym":
+            if (worker.Role != RoleType.Admin)
+            {
+              await _botClient.SendMessage(msg.Chat.Id, "У вас нет прав для просмотра кабинетов.");
+              return;
+            }
+
+            List<Services.YandexMarket.Models.DTOs.ReturnsListResponse> returns = new List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>();
+
+            //получаем обьект кабинета на вб
+            cabinets = await _db.Cabinets
                  .Include(c => c.Settings)
-                     .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "WB").ToListAsync();
+                     .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET").ToListAsync();
+
+            List<CampaignsResponse> campaigns = new List<CampaignsResponse>();
 
             foreach (var cab in cabinets)
             {
-              var returns = await _wb.GetReturnsListAsync(cab);
-              string caption = $"Кабинет: {cab.Marketplace} / {cab.Name}";
+              var _campaigns = await _yMApiService.GetCampaignsAsync(cab);
+              campaigns.Add(_campaigns);
+              foreach (var camp in _campaigns.Campaigns)
+              {
+                var result = await _yMApiService.GetReturnsListAsync(cab, camp);
+                returns.Add(result);
+              }
 
-              // var result = JsonSerializer.Deserialize<dynamic>(json);
+              //string caption = $"Кабинет: {cab.Marketplace} / {cab.Name}";
 
-              Extensions.SendDebugObject<ReturnsListResponse>(returns);
             }
 
-            //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {result}");
+            await Extensions.SendDebugObject<List<CampaignsResponse>>(campaigns);
+            await Extensions.SendDebugObject<List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>>(returns, $"{returns.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
+            //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {returns.ToJson()}");
+            break;
+          case "/ozon":
+            if (worker.Role != RoleType.Admin)
+            {
+              await _botClient.SendMessage(msg.Chat.Id, "У вас нет прав для просмотра кабинетов.");
+              return;
+            }
+            //получаем обьект кабинета на вб
+            var cabinets2 = await _db.Cabinets
+                 .Include(c => c.Settings)
+                     .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "OZON").ToListAsync();
+
+            List<Services.Ozon.Models.ReturnsListResponse> obj2 = new List<Services.Ozon.Models.ReturnsListResponse>();
+
+            foreach (var cab in cabinets2)
+            {
+              obj2.Add(await _oz.GetReturnsListAsync(cab));
+            }
+
+            await Extensions.SendDebugObject<List<Services.Ozon.Models.ReturnsListResponse>>(obj2, $"{obj2.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
+
             break;
           default:
             await _botClient.SendMessage(msg.Chat.Id, "Команда не распознана или у вас нет прав. Напишите /help.");
             break;
         }
       }
-      catch (Exception ex)
+      catch (Exception)
       {
-        Extensions.SendDebugObject<Exception>(ex);
+        throw;
       }
     }
 
@@ -611,6 +775,10 @@ ILogger<TelegramBotController> logger)
           await PromptCabinetSettingsEditValueAsync(cb, id);
           break;
 
+        case "delete_cab_settings":
+          await DeleteCabinetSettingsAsync(cb, id);
+          break;
+
         case "set_cab_settings":
           await SetCabinetSettingsAsync(cb, data);
           break;
@@ -850,7 +1018,10 @@ ILogger<TelegramBotController> logger)
                 callbackData: $"edit_cab_settings_key_{param.Id}"),
             InlineKeyboardButton.WithCallbackData(
                 text: $"✏️ {param.Value}",
-                callbackData: $"edit_cab_settings_value_{param.Id}")
+                callbackData: $"edit_cab_settings_value_{param.Id}"),
+             InlineKeyboardButton.WithCallbackData(
+                text: "❌",
+                callbackData: $"delete_cab_settings_{param.Id}")
           }));
 
       // (Опционально) добавить кнопку для возврата или добавления нового параметра
@@ -866,7 +1037,7 @@ ILogger<TelegramBotController> logger)
       await _botClient.EditMessageText(
           chatId: cb.Message.Chat.Id,
           messageId: cb.Message.MessageId,
-          text: "Выберите параметр для редактирования:",
+          text: $"Кабинет {cabinet.Id}\n{cabinet.Marketplace} / {cabinet.Name}\nВыберите параметр для редактирования:",
           replyMarkup: new InlineKeyboardMarkup(keyboard)
       );
     }
@@ -925,6 +1096,21 @@ ILogger<TelegramBotController> logger)
 
       // Регистрируем ожидание ответа пользователя
       _waitingService.Register(cb.From.Id, "edit_cab_settings_value", paramId);
+    }
+
+    // 4) Удалить параметр (callbackData: "delete_cab_settings_{paramId}")
+    private async Task DeleteCabinetSettingsAsync(CallbackQuery cb, int paramId)
+    {
+      var parameter = await _db.ConnectionParameters.FindAsync(paramId);
+      if (parameter == null)
+      {
+        await _botClient.AnswerCallbackQuery(cb.Id, "Параметр не найден.");
+        return;
+      }
+      _db.ConnectionParameters.Remove(parameter);
+      await _db.SaveChangesAsync();
+      await _botClient.AnswerCallbackQuery(cb.Id, "Параметр успешно удалён.");
+      await SetCabinetSettingsAsync(cb, new[] { $"edit_cab_settings_{parameter.CabinetSettingsId}" });
     }
 
     #endregion

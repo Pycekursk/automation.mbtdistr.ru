@@ -39,17 +39,17 @@ namespace automation.mbtdistr.ru.Models
 
   public enum NotificationLevel
   {
-    [Display(Name = "Уведомления о возвратах")]
+    [Display(Name = "Возвраты")]
     ReturnNotification = 0,
-    [Display(Name = "Уведомления о новых заказах")]
+    [Display(Name = "Заказы")]
     OrderNotification = 1,
-    [Display(Name = "Уведомления о новых сообщениях")]
+    [Display(Name = "Сообщения")]
     MessageNotification = 2,
     [Display(Name = "Логи")]
-    LogNotification = 3,
-    [Display(Name = "Глубокая отладка")]
-    DeepDegugNotification = 4,
-    [Display(Name = "Все уведомления")]
+    Log = 3,
+    [Display(Name = "Отладка")]
+    Debug = 4,
+    [Display(Name = "Все")]
     AllCabinetNotifications = 5
   }
 }

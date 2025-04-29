@@ -9,6 +9,7 @@
     ReturnsList,
     SellerInfo,
     Ping,
+    Campaigns
     // и так далее...
   }
 }

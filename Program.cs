@@ -1,9 +1,14 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.BarcodeService;
+using automation.mbtdistr.ru.Services.Google.Drive;
+using automation.mbtdistr.ru.Services.Google.Sheets;
 using automation.mbtdistr.ru.Services.LLM;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
+using automation.mbtdistr.ru.Services.YandexMarket;
+
+using Google.Apis.Sheets.v4;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,9 +17,16 @@ using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
+using System;
 using System.Reflection;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Unicode;
 
 using Telegram.Bot;
+
+using static automation.mbtdistr.ru.Extensions;
 
 namespace automation.mbtdistr.ru
 {
@@ -37,6 +49,18 @@ namespace automation.mbtdistr.ru
 
 
       builder.Services.AddControllersWithViews();
+
+
+      //    builder.Services
+      //.AddControllersWithViews().AddJsonOptions(o =>
+      //{
+      //  o.JsonSerializerOptions.WriteIndented = true;
+      //  o.JsonSerializerOptions.Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic);
+      //  o.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+      //  o.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
+      //  o.JsonSerializerOptions.Converters.Add(new JsonStringEnumMemberConverterFactory());
+      //});
+
 
       // 2. Генерация XML-комментариев
       var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -116,6 +140,9 @@ namespace automation.mbtdistr.ru
       builder.Services.AddScoped<WBApiHttpClient>();
       builder.Services.AddScoped<WildberriesApiService>();
 
+      builder.Services.AddScoped<YMApiService>();
+      builder.Services.AddScoped<YMApiHttpClient>();
+
 
 
       builder.Services.AddScoped<OzonSellerApiHttpClient>();
@@ -124,6 +151,8 @@ namespace automation.mbtdistr.ru
 
       builder.Services.AddScoped<BarcodeService>();
 
+      builder.Services.AddScoped<DriveApiService>();
+      builder.Services.AddSingleton<SheetsApiService>();
 
       var app = builder.Build();
 
@@ -153,15 +182,16 @@ namespace automation.mbtdistr.ru
 
       }
 
-      // Configure the HTTP request pipeline.
-      if (!app.Environment.IsDevelopment())
+
+
+      if (app.Environment.IsDevelopment())
       {
-        app.UseExceptionHandler("/Home/Error");
-        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-        app.UseHsts();
-      }
-      else
-      {
+        //// 5. Swagger middleware
+        //app.UseSwagger(c =>
+        //{
+        //  c.RouteTemplate = "docs/{documentName}/swagger.json";
+        //  // при необходимости пишем PreSerializeFilters, чтобы динамически менять host, schemes и т.д.
+        //});
         app.UseDeveloperExceptionPage();
         app.UseSwagger();
         app.UseSwaggerUI(c =>
@@ -169,49 +199,46 @@ namespace automation.mbtdistr.ru
           c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
           c.RoutePrefix = string.Empty; // Открывать Swagger по корню сайта
         });
-      }
-
-      if (app.Environment.IsDevelopment())
-      {
-        // 5. Swagger middleware
-        app.UseSwagger(c =>
-        {
-          c.RouteTemplate = "docs/{documentName}/swagger.json";
-          // при необходимости пишем PreSerializeFilters, чтобы динамически менять host, schemes и т.д.
-        });
-
         // 6. Swagger UI
-        app.UseSwaggerUI(c =>
-        {
-          // несколько версий
-          c.SwaggerEndpoint("/docs/v1/swagger.json", "My API V1");
-          // c.SwaggerEndpoint("/docs/v2/swagger.json", "My API V2");
+        //app.UseSwaggerUI(c =>
+        //{
 
-          // UI-параметры
-          c.RoutePrefix = "docs";                   // UI будет доступен по /docs
-          c.DocumentTitle = "Документация My API";    // <title> страницы
-          c.DocExpansion(DocExpansion.None);        // минимальное раскрытие разделов
-          c.DefaultModelsExpandDepth(-1);                    // скрыть модели по умолчанию
-          c.DisplayOperationId();                            // показывать operationId
-          c.DisplayRequestDuration();                        // время выполнения запроса
-          c.EnableDeepLinking();                             // прямые ссылки
-          c.ShowExtensions();                                // показывать custom-расширения
-          c.EnableFilter();                                  // фильтр по тегам и путям
-          c.MaxDisplayedTags(10);                            // максимум тегов в фильтре
-          c.SupportedSubmitMethods(new[] { SubmitMethod.Get, SubmitMethod.Post, SubmitMethod.Put, SubmitMethod.Delete, SubmitMethod.Patch });
-          c.OAuthClientId("swagger-ui-client");
-          c.OAuthClientSecret("secret-if-needed");
-          c.OAuthAppName("Swagger UI for My API");
-          c.OAuthUsePkce();                                  // для Authorization Code Flow
-          c.InjectStylesheet("/swagger-ui/styles.css");      // свой CSS
-          c.InjectJavascript("/swagger-ui/scripts.js");       // свой JS
-          c.InjectJavascript("console.log('Swagger UI Loaded');");
-          c.HeadContent = "<link rel=\"icon\" href=\"/swagger-ui/favicon.ico\" />";
-          c.IndexStream = () => File.OpenRead("wwwroot/swagger-ui/index.html");
-          // чтобы полностью заменить index.html
-        });
+        //  // несколько версий
+        //  c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
+        //  c.RoutePrefix = string.Empty; // Открывать Swagger по корню сайта
+
+        //  // UI-параметры
+        //  c.RoutePrefix = "docs";                   // UI будет доступен по /docs
+        //  c.DocumentTitle = "Документация My API";    // <title> страницы
+        //  c.DocExpansion(DocExpansion.None);        // минимальное раскрытие разделов
+        //  c.DefaultModelsExpandDepth(-1);                    // скрыть модели по умолчанию
+        //  c.DisplayOperationId();                            // показывать operationId
+        //  c.DisplayRequestDuration();                        // время выполнения запроса
+        //  c.EnableDeepLinking();                             // прямые ссылки
+        //  c.ShowExtensions();                                // показывать custom-расширения
+        //  c.EnableFilter();                                  // фильтр по тегам и путям
+        //  c.MaxDisplayedTags(10);                            // максимум тегов в фильтре
+        //  c.SupportedSubmitMethods(new[] { SubmitMethod.Get, SubmitMethod.Post, SubmitMethod.Put, SubmitMethod.Delete, SubmitMethod.Patch });
+        //  c.OAuthClientId("swagger-ui-client");
+        //  c.OAuthClientSecret("secret-if-needed");
+        //  c.OAuthAppName("Swagger UI for My API");
+        //  c.OAuthUsePkce();                                  // для Authorization Code Flow
+        //  c.InjectStylesheet("/swagger-ui/styles.css");      // свой CSS
+        //  c.InjectJavascript("/swagger-ui/scripts.js");       // свой JS
+        //  c.InjectJavascript("console.log('Swagger UI Loaded');");
+        //  c.HeadContent = "<link rel=\"icon\" href=\"/swagger-ui/favicon.ico\" />";
+        //  c.IndexStream = () => File.OpenRead("wwwroot/swagger-ui/index.html");
+        //  // чтобы полностью заменить index.html
+        //});
       }
+      else
+      {
 
+        app.UseExceptionHandler("/Home/Error");
+        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+        app.UseHsts();
+
+      }
       app.UseHttpsRedirection();
       app.UseRouting();
 

@@ -3,6 +3,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 using System;
 using System.Text.Json;
@@ -83,6 +84,14 @@ namespace automation.mbtdistr.ru.Data
             wc.ToTable("WorkerCabinets");
           }
         );
+    }
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+      if (!optionsBuilder.IsConfigured)
+      {
+        optionsBuilder.UseMySql(Program.Configuration.GetConnectionString("DefaultConnection"),
+        new MySqlServerVersion(new Version(8, 0, 21)));
+      }
     }
 
   }

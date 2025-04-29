@@ -364,3 +364,6 @@ FodyWeavers.xsd
 
 appsettings.json
 appsettings.Development.json
+
+gdrive.json
+gsheets.json

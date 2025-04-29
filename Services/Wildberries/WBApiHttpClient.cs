@@ -54,11 +54,13 @@ namespace automation.mbtdistr.ru.Services.Wildberries
         var request = new HttpRequestMessage(endpoint.method, endpoint.url);
         foreach (var param in cabinet.Settings.ConnectionParameters)
         {
-          request.Headers.Add(param.Key, param.Value);
+          //request.Headers.Add(param.Key, param.Value);
+          request.Headers.TryAddWithoutValidation(param.Key, param.Value);
         }
         if (body != null)
         {
-          var json = JsonSerializer.Serialize(body);
+          //var json = JsonSerializer.Serialize(body);
+          var json = body.ToJson();
           request.Content = new StringContent(json, Encoding.UTF8, "application/json");
         }
         var response = await _httpClient.SendAsync(request);

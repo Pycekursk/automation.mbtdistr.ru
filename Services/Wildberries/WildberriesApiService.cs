@@ -57,15 +57,13 @@ namespace automation.mbtdistr.ru.Services.Wildberries
          }
         );
         response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
-        Extensions.SendDebugMessage(json);
 
-        var result = json.FromJson<ReturnsListResponse>();
-        return result;
+        var json = await response.Content.ReadAsStringAsync();
+        var obj = json.FromJson<ReturnsListResponse>();
+        return obj;
       }
-      catch (Exception ex)
+      catch (Exception)
       {
-        Extensions.SendDebugObject<Exception>(ex);
         throw;
       }
     }

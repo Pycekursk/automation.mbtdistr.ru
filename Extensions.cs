@@ -1,6 +1,7 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using System.Collections.Concurrent;
@@ -22,17 +23,16 @@ namespace automation.mbtdistr.ru
 {
   public static class Extensions
   {
-
     public class JsonStringEnumMemberConverterFactory : JsonConverterFactory
     {
       public override bool CanConvert(Type typeToConvert) =>
-           typeToConvert.IsEnum;
+          typeToConvert.IsEnum;
 
       public override JsonConverter CreateConverter(Type type, JsonSerializerOptions options)
       {
         var converterType = typeof(JsonEnumMemberAndNumberConverterInner<>)
             .MakeGenericType(type);
-        return (JsonConverter)Activator.CreateInstance(converterType);
+        return (JsonConverter)Activator.CreateInstance(converterType)!;
       }
 
       private class JsonEnumMemberAndNumberConverterInner<T> : JsonConverter<T>
@@ -49,17 +49,20 @@ namespace automation.mbtdistr.ru
           var enumType = typeof(T);
           foreach (var fi in enumType.GetFields(BindingFlags.Public | BindingFlags.Static))
           {
-            var enumVal = (T)fi.GetValue(null);
+            var enumVal = (T)fi.GetValue(null)!;
             var em = fi.GetCustomAttribute<EnumMemberAttribute>();
             var name = em?.Value ?? fi.Name;
-            _fromString[name] = enumVal;
+
+            // Всегда приводим к нижнему регистру для ключа
+            var key = name.ToLowerInvariant();
+
+            _fromString[key] = enumVal;
             _toString[enumVal] = name;
           }
         }
 
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-          // 1) если в JSON приходит число — просто приводим
           if (reader.TokenType == JsonTokenType.Number)
           {
             if (reader.TryGetInt64(out long longVal))
@@ -69,14 +72,22 @@ namespace automation.mbtdistr.ru
             throw new JsonException($"Не удалось прочитать числовое значение для enum {typeof(T).Name}");
           }
 
-          // 2) если строка — смотрим в наш словарь из EnumMember.Value
           if (reader.TokenType == JsonTokenType.String)
           {
             string? str = reader.GetString();
-            if (str is not null && _fromString.TryGetValue(str, out var enumVal))
-              return enumVal;
+            if (str is not null)
+            {
+              var key = str.ToLowerInvariant();
 
-            throw new JsonException($"Невозможно преобразовать \"{str}\" в {typeof(T).Name}");
+              if (_fromString.TryGetValue(key, out var enumVal))
+                return enumVal;
+
+#if DEBUG
+              System.Diagnostics.Debug.WriteLine($"[Enum Parse Warning] Невозможно преобразовать \"{str}\" в {typeof(T).Name}");
+#endif
+
+              throw new JsonException($"Невозможно преобразовать \"{str}\" в {typeof(T).Name}");
+            }
           }
 
           throw new JsonException($"Ожидался токен String или Number, а пришёл {reader.TokenType}");
@@ -84,7 +95,6 @@ namespace automation.mbtdistr.ru
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
         {
-          // при сериализации всегда пишем строку из EnumMember (или имя, если атрибута нет)
           if (_toString.TryGetValue(value, out var name))
             writer.WriteStringValue(name);
           else
@@ -93,27 +103,24 @@ namespace automation.mbtdistr.ru
       }
     }
 
-
     public static string ToJson(this object obj)
     {
       var result = JsonSerializer.Serialize(obj, Options);
-      byte[] bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetPreamble();  // EF BB BF
-      byte[] body = Encoding.UTF8.GetBytes(result);
-      byte[] all = new byte[bom.Length + body.Length];
-      Buffer.BlockCopy(bom, 0, all, 0, bom.Length);
-      Buffer.BlockCopy(body, 0, all, bom.Length, body.Length);
-      return Encoding.UTF8.GetString(all);
+      //byte[] bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetPreamble();  // EF BB BF
+      //byte[] body = Encoding.UTF8.GetBytes(result);
+      //byte[] all = new byte[bom.Length + body.Length];
+      //Buffer.BlockCopy(bom, 0, all, 0, bom.Length);
+      //Buffer.BlockCopy(body, 0, all, bom.Length, body.Length);
+      return result;
+      //return Encoding.UTF8.GetString(all);
     }
 
-    static readonly JsonSerializerOptions Options = new JsonSerializerOptions
+   public static readonly JsonSerializerOptions Options = new JsonSerializerOptions
     {
       WriteIndented = true,
       Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
       ReferenceHandler = ReferenceHandler.IgnoreCycles,
-      Converters =
-      {
-       new  JsonStringEnumMemberConverterFactory(),
-      }
+      DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
     public static T FromJson<T>(this string json)
@@ -153,66 +160,91 @@ namespace automation.mbtdistr.ru
             '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
         };
 
-    public static async Task SendDebugObject<T>(object obj, string? caption = null)
+    public static async Task SendDebugObject<T>(T obj, string? caption = null)
     {
-      //получаем дб контекст из сервиса
-      var db = Program.Services.BuildServiceProvider(true).GetService(typeof(ApplicationDbContext)) as ApplicationDbContext;
-      var admin = 
-        db?.Workers
-        .Include(w => w.NotificationOptions)
-        .FirstOrDefault(u => u.TelegramId == "1406950293");
-
-      if (admin == null ||
-          admin.NotificationOptions == null ||
-          !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.DeepDegugNotification))
-        return;
-
-      //получаем обьект Enveronment
-      var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-      if (env == "Development") return;
-
-
-      //проверяем размер сообщения
-      var json = obj.ToJson();
-      if (json.Length < 4000)
+      try
       {
-        await SendDebugMessage(json, caption);
-        return;
+        using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+        var admin =
+          db?.Workers
+          .Include(w => w.NotificationOptions)
+          .FirstOrDefault(u => u.TelegramId == "1406950293");
+
+        if (admin == null ||
+            admin.NotificationOptions == null ||
+            !admin.NotificationOptions.IsReceiveNotification ||
+            !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.Debug))
+          return;
+
+        var chatId = 1406950293;
+
+        string? json = obj?.ToJson();
+
+        if (json?.Length > 3000)
+        {
+          await BotClient.SendDocument(
+               chatId: chatId,
+               caption: caption?.EscapeMarkdownV2(),
+               document: new InputFileStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)), $"{typeof(T)?.FullName?.Replace("automation.mbtdistr.ru", "").Replace('.', '_')}.json"),
+               parseMode: ParseMode.MarkdownV2);
+        }
+        else
+        {
+          json = $"{caption?.EscapeMarkdownV2()}\n```json\n{json?.EscapeMarkdownV2()}\n```";
+          await BotClient.SendMessage(
+              chatId: chatId,
+              text: json,
+              ParseMode.MarkdownV2);
+        }
       }
-      var chatId = 1406950293;
-      BotClient.SendDocument(
-           chatId: chatId,
-           caption: caption?.EscapeMarkdownV2(),
-           document: new InputFileStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(obj.ToJson())), $"{typeof(T)?.FullName?.Replace('.', '_')}.json"),
-           parseMode: ParseMode.MarkdownV2);
+      catch (Exception)
+      {
+
+      }
+
     }
 
-    public static async Task SendDebugMessage(string message, string? caption = null)
+    public static async Task SendDebugMessage(string message = "", object? data = null)
     {
+      try
+      {
+        using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+        var admin =
+          db?.Workers
+          .Include(w => w.NotificationOptions)
+          .FirstOrDefault(u => u.TelegramId == "1406950293");
 
-      var db = Program.Services.BuildServiceProvider(true).GetService(typeof(ApplicationDbContext)) as ApplicationDbContext;
-      var admin =
-        db?.Workers
-        .Include(w => w.NotificationOptions)
-        .FirstOrDefault(u => u.TelegramId == "1406950293");
+        if (admin == null ||
+            admin.NotificationOptions == null ||
+            !admin.NotificationOptions.IsReceiveNotification ||
+            !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.Debug))
+          return;
 
-      if (admin == null ||
-          admin.NotificationOptions == null ||
-          !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.LogNotification))
-        return;
+        ParseMode parseMode = ParseMode.Html;
 
-
-      var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-      if (env == "Development") return;
-      var chatId = 1406950293;
-      if (CodeDetector.LooksLikeCode(message))
-        message = $"```\n{EscapeMarkdownV2(message)}\n```";
-      else
-        message = EscapeMarkdownV2(message);
-      BotClient.SendMessage(
-           chatId: chatId,
-           text: message,
-           ParseMode.MarkdownV2);
+        if (CodeDetector.LooksLikeCode(message))
+        {
+          parseMode = ParseMode.MarkdownV2;
+          message = $"```json\n{message.EscapeMarkdownV2()}\n```";
+        }
+        else if (data != null)
+        {
+          await BotClient.SendDocument(
+               chatId: 1406950293,
+               caption: message.EscapeMarkdownV2(),
+               document: new InputFileStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(data.ToJson())), $"{data.GetType()?.FullName?.Replace('.', '_')}.json"),
+               parseMode: ParseMode.MarkdownV2);
+          return;
+        }
+        await BotClient.SendMessage(
+        chatId: 1406950293,
+        text: message,
+        parseMode);
+      }
+      catch (Exception)
+      {
+        throw;
+      }
     }
 
     public static class CodeDetector
