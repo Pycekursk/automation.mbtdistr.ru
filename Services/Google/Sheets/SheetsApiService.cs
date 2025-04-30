@@ -34,8 +34,6 @@ namespace automation.mbtdistr.ru.Services.Google.Sheets
         HttpClientInitializer = credential,
         ApplicationName = config["GoogleApi:Drive:ApplicationName"]
       });
-
-      var sheet = GetSpreadsheetByUrlAsync("https://docs.google.com/spreadsheets/d/1svpB1WVkrRW2ZsQwJiDzIzUIUT1K8ornGIshVE-gNnY/edit?usp=sharing").ConfigureAwait(true);
     }
 
     public async Task<Spreadsheet> GetSpreadsheetByIdAsync(string spreadsheetId)

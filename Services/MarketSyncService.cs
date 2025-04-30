@@ -71,6 +71,27 @@ namespace automation.mbtdistr.ru.Services
       if (admin?.NotificationOptions?.IsReceiveNotification == true && admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.Log))
         log = true;
 
+      //var scope = scopeFactory.CreateScope();
+      //var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
+
+      ////получаем кабинет с айди 6 и всеми вложенными данными
+      //var cabinet = _db.Cabinets
+      //    .Include(c => c.Settings)
+      //    .ThenInclude(s => s.ConnectionParameters)
+      //    .Include(c => c.AssignedWorkers)
+      //    .FirstOrDefault(c => c.Id == 6);
+
+      //wbSvc.GetReturnsListAsync(cabinet, true).ContinueWith(t =>
+      //{
+      //  var returns = t.Result;
+      //  ProcessWbReturnsAsync(returns.Claims, cabinet, _db, CancellationToken.None).ContinueWith(t =>
+      //  {
+      //    var result = t.Result;
+      //    // Обработка результата
+      //  });
+      //});
+
+
       //  SyncAllAsync(CancellationToken.None);
     }
 
@@ -231,7 +252,11 @@ namespace automation.mbtdistr.ru.Services
 
             await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response);
 
-            allReturns.AddRange(await ProcessWbReturnsAsync(response.Claims, cab, _db, ct));
+            var claims = response.Claims;
+
+            var ret = await ProcessWbReturnsAsync(response.Claims, cab, _db, ct);
+
+            allReturns.AddRange(ret);
           }
 
 
@@ -273,7 +298,7 @@ namespace automation.mbtdistr.ru.Services
         }
         catch (Exception ex)
         {
-          await Extensions.SendDebugObject<Exception>(ex, $"Ошибка при синхронизации кабинета\n{cab.Marketplace} / {cab.Name}");
+          await Extensions.SendDebugMessage($"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Name} ({cab.Marketplace})\n\n{ex.Message}\n{ex.StackTrace}\n\n{ex.InnerException?.Message}");
         }
 
 
@@ -291,8 +316,9 @@ namespace automation.mbtdistr.ru.Services
             text = "Нет изменений для сохранения в БД";
         }
       }
-      catch (Exception)
+      catch (Exception ex)
       {
+        await Extensions.SendDebugMessage($"Ошибка при сохранении изменений в БД\n{ex.Message}");
         throw;
       }
     }
@@ -433,11 +459,12 @@ namespace automation.mbtdistr.ru.Services
         foreach (var claim in claims)
         {
           var existingReturn = db.Returns
-            .Include(r => r.Info)
-            .Include(r => r.Compensation)
-            .Include(r => r.Cabinet)
-            .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefault(r => r.Info.ToString() == claim.Id && r.CabinetId == cab.Id);
+       .Include(r => r.Info)
+       .Include(r => r.Compensation)
+       .Include(r => r.Cabinet)
+           .ThenInclude(c => c.AssignedWorkers)
+       .FirstOrDefault(r => r.Info.ClaimId == claim.Id && r.CabinetId == cab.Id);
+
           if (existingReturn != null)
           {
             var oldChangedAt = existingReturn.ChangedAt;

@@ -1,6 +1,48 @@
-﻿@{
-  ViewData["Title"] = "Сервис автоматизации mbtdistr.ru";
+﻿@* @{ *@
+@*   ViewData["Title"] = "Сервис автоматизации mbtdistr.ru"; *@
+@* } *@
+
+@* <h1 class="display-4 text-center">Сервис автоматизации mbtdistr.ru</h1> *@
+
+@model automation.mbtdistr.ru.Controllers.MainMenuViewModel
+@{
+  ViewData["Title"] = "Главное меню";
 }
+<h2>@Model.GreetingMessage</h2>
 
-<h1 class="display-4 text-center">Сервис автоматизации mbtdistr.ru</h1>
+<form>
+  <div class="menu-buttons">
+    @foreach (var butt in Model.Menu)
+    {
+            <button type="button" onclick="onMenu('@butt.Action')">@butt.Icon @butt.Title</button>
+    }
+  </div>
+</form>
 
+<script>
+
+    window.Telegram.WebApp.ready(); // сообщает Telegram, что WebApp готов
+
+    const initData = window.Telegram.WebApp.initData;
+    const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+
+    fetch('/api/telegrambot/open', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        event: 'open',
+        initData: initData,
+        user: initDataUnsafe.user
+      })
+    });
+
+  function onMenu(action) {
+      // здесь можно отправить callback в бота через WebApp.telemetry или Bot API
+      Telegram.WebApp.sendData(JSON.stringify({ action }));
+  }
+  function onSelect(userId) {
+      Telegram.WebApp.sendData(JSON.stringify({ selectUser: userId }));
+  }
+</script>

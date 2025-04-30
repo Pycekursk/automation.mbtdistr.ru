@@ -1,6 +1,4 @@
-﻿using automation.mbtdistr.ru.temp;
-
-namespace automation.mbtdistr.ru.Services.Ozon
+﻿namespace automation.mbtdistr.ru.Services.Ozon
 {
   using automation.mbtdistr.ru.Models;
   using automation.mbtdistr.ru.Data;
@@ -8,17 +6,19 @@ namespace automation.mbtdistr.ru.Services.Ozon
   using System.Text.Json;
   using System.Text;
   using System.Net.Http.Headers;
+  using automation.mbtdistr.ru.Services.YandexMarket;
+  using automation.mbtdistr.ru.Services;
 
   public class OzonSellerApiHttpClient
   {
+    internal record EndpointDefinition(string Template, HttpMethod Method);
     private readonly HttpClient _httpClient;
-
-    private readonly Dictionary<MarketApiRequestType, (string url, HttpMethod method)> _apiEndpoints =
-      new Dictionary<MarketApiRequestType, (string url, HttpMethod method)>
+    private const string BaseUrl = "https://api-seller.ozon.ru";
+    private readonly Dictionary<MarketApiRequestType, EndpointDefinition> _apiEndpoints =
+      new()
       {
-
-        { MarketApiRequestType.ReturnsList, ("https://api-seller.ozon.ru/v1/returns/list", HttpMethod.Post) }
-        // можно добавлять дальше
+                { MarketApiRequestType.ReturnsList,
+                  new EndpointDefinition("/v1/returns/list", HttpMethod.Post) }
       };
 
     public OzonSellerApiHttpClient()
@@ -26,7 +26,20 @@ namespace automation.mbtdistr.ru.Services.Ozon
       _httpClient = new HttpClient();
     }
 
-    public async Task<HttpResponseMessage> SendRequestAsync(MarketApiRequestType requestType, object body, Cabinet cabinet)
+    private string BuildUrl(EndpointDefinition def, IDictionary<string, object>? pathParams)
+    {
+      var relative = def.Template;
+      if (pathParams != null)
+      {
+        foreach (var kv in pathParams)
+        {
+          relative = relative.Replace($"{{{kv.Key}}}", kv.Value.ToString());
+        }
+      }
+      return $"{BaseUrl.TrimEnd('/')}/{relative}";
+    }
+
+    public async Task<HttpResponseMessage> SendRequestAsync(MarketApiRequestType requestType, Cabinet cabinet, object? body = null, Dictionary<string, object>? queryParams = null, Dictionary<string, object>? pathParams = null)
     {
       if (!_apiEndpoints.TryGetValue(requestType, out var endpoint))
         throw new Exception($"API endpoint for {requestType} not configured.");
@@ -34,7 +47,9 @@ namespace automation.mbtdistr.ru.Services.Ozon
       if (cabinet?.Settings == null)
         throw new Exception("Cabinet not found");
 
-      var request = new HttpRequestMessage(endpoint.method, endpoint.url);
+      var url = BuildUrl(endpoint, pathParams);
+
+      var request = new HttpRequestMessage(endpoint.Method, url);
       request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
       foreach (var param in cabinet.Settings.ConnectionParameters)
       {

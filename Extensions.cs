@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
@@ -52,11 +53,8 @@ namespace automation.mbtdistr.ru
             var enumVal = (T)fi.GetValue(null)!;
             var em = fi.GetCustomAttribute<EnumMemberAttribute>();
             var name = em?.Value ?? fi.Name;
-
             // Всегда приводим к нижнему регистру для ключа
-            var key = name.ToLowerInvariant();
-
-            _fromString[key] = enumVal;
+            _fromString[name] = enumVal;
             _toString[enumVal] = name;
           }
         }
@@ -77,9 +75,7 @@ namespace automation.mbtdistr.ru
             string? str = reader.GetString();
             if (str is not null)
             {
-              var key = str.ToLowerInvariant();
-
-              if (_fromString.TryGetValue(key, out var enumVal))
+              if (_fromString.TryGetValue(str, out var enumVal))
                 return enumVal;
 
 #if DEBUG
@@ -103,33 +99,50 @@ namespace automation.mbtdistr.ru
       }
     }
 
-    public static string ToJson(this object obj)
+    public static string ToJson(this object obj, JsonSerializerOptions? options = null)
     {
-      var result = JsonSerializer.Serialize(obj, Options);
-      //byte[] bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetPreamble();  // EF BB BF
-      //byte[] body = Encoding.UTF8.GetBytes(result);
-      //byte[] all = new byte[bom.Length + body.Length];
-      //Buffer.BlockCopy(bom, 0, all, 0, bom.Length);
-      //Buffer.BlockCopy(body, 0, all, bom.Length, body.Length);
+      var result = JsonSerializer.Serialize(obj, options ?? Options);
       return result;
-      //return Encoding.UTF8.GetString(all);
     }
 
-   public static readonly JsonSerializerOptions Options = new JsonSerializerOptions
+    public static readonly JsonSerializerOptions Options = new JsonSerializerOptions
     {
       WriteIndented = true,
       Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
       ReferenceHandler = ReferenceHandler.IgnoreCycles,
       DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+      Converters =
+      {
+        new JsonStringEnumMemberConverterFactory(),
+        new DateTimeJsonConverter()
+      }
     };
 
-    public static T FromJson<T>(this string json)
+    public static T? FromJson<T>(this string json, JsonSerializerOptions? options = null)
     {
-      var result = JsonSerializer.Deserialize<T>(json, Options);
+      var result = JsonSerializer.Deserialize<T>(json, options ?? Options);
       return result;
     }
 
+    public class DateTimeJsonConverter : JsonConverter<DateTime>
+    {
+      private const string Format = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
+      public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+      {
+        var str = reader.GetString();
+        if (DateTime.TryParseExact(str, Format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt))
+          return dt.ToUniversalTime();
+
+        return DateTime.Parse(str ?? "", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+      }
+
+      public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+      {
+        var utc = value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
+        writer.WriteStringValue(utc.ToString(Format, CultureInfo.InvariantCulture));
+      }
+    }
 
     private static string? altronToken;
     public static string AltronToken
@@ -178,9 +191,18 @@ namespace automation.mbtdistr.ru
 
         var chatId = 1406950293;
 
-        string? json = obj?.ToJson();
+        string? json = obj?.ToJson(new JsonSerializerOptions(){
+          Converters =
+          {
+            new JsonStringEnumMemberConverterFactory(),
+            new DateTimeJsonConverter()
+          },
+          WriteIndented = true,
+          Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
+          DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
 
-        if (json?.Length > 3000)
+        if (json?.Length > 3500)
         {
           await BotClient.SendDocument(
                chatId: chatId,
@@ -190,18 +212,17 @@ namespace automation.mbtdistr.ru
         }
         else
         {
-          json = $"{caption?.EscapeMarkdownV2()}\n```json\n{json?.EscapeMarkdownV2()}\n```";
+          json = $"{caption?.EscapeMarkdownV2()}\n\n```\n{json?.EscapeMarkdownV2()}\n```";
           await BotClient.SendMessage(
               chatId: chatId,
               text: json,
               ParseMode.MarkdownV2);
         }
       }
-      catch (Exception)
+      catch (Exception ex)
       {
-
+        await BotClient.SendMessage(chatId: 1406950293, text: ex.Message);
       }
-
     }
 
     public static async Task SendDebugMessage(string message = "", object? data = null)

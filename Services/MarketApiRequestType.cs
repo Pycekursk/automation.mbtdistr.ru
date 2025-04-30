@@ -1,4 +1,4 @@
-﻿namespace automation.mbtdistr.ru.temp
+﻿namespace automation.mbtdistr.ru.Services
 {
   public enum MarketApiRequestType
   {

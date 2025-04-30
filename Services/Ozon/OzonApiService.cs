@@ -1,8 +1,8 @@
 ﻿namespace automation.mbtdistr.ru.Services.Ozon
 {
   using automation.mbtdistr.ru.Models;
+  using automation.mbtdistr.ru.Services;
   using automation.mbtdistr.ru.Services.Ozon.Models;
-  using automation.mbtdistr.ru.temp;
 
   using System.Text.Json;
 
@@ -40,8 +40,8 @@
       {
         var response = await _ozonSellerApiHttpClient.SendRequestAsync(
             MarketApiRequestType.ReturnsList,
-            requestBody,
-            cabinet
+            cabinet,
+            requestBody
         );
 
         response.EnsureSuccessStatusCode();

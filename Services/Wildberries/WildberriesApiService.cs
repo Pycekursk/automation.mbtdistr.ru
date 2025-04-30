@@ -1,7 +1,6 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Wildberries.Models;
-using automation.mbtdistr.ru.temp;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -62,8 +61,9 @@ namespace automation.mbtdistr.ru.Services.Wildberries
         var obj = json.FromJson<ReturnsListResponse>();
         return obj;
       }
-      catch (Exception)
+      catch (Exception ex)
       {
+        await Extensions.SendDebugMessage($"internal async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, bool archive = false)\n\n{ex.Message}\n\n{ex.InnerException?.Message}");
         throw;
       }
     }

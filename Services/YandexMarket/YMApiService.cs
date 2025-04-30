@@ -1,6 +1,5 @@
 ﻿using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Ozon;
-using automation.mbtdistr.ru.temp;
 
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 

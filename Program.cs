@@ -32,6 +32,8 @@ namespace automation.mbtdistr.ru
 {
   public class Program
   {
+    public static IWebHostEnvironment Environment { get; set; } = null!;
+
     public static IServiceCollection Services { get; set; } = null!;
     public static IConfiguration Configuration { get; set; } = null!;
 
@@ -72,7 +74,7 @@ namespace automation.mbtdistr.ru
         // Основная документация
         c.SwaggerDoc("v1", new OpenApiInfo
         {
-          Title = "My API",
+          Title = "MBT API",
           Version = "v1",
           Description = "Максимальная функциональность Swagger UI",
           Contact = new OpenApiContact { Name = "Руслан", Email = "boss@it-wiki.site" },
@@ -155,7 +157,7 @@ namespace automation.mbtdistr.ru
       builder.Services.AddSingleton<SheetsApiService>();
 
       var app = builder.Build();
-
+      Environment = app.Environment;
       app.UseStaticFiles();
 
       // После сборки app
@@ -182,7 +184,7 @@ namespace automation.mbtdistr.ru
 
       }
 
-
+     
 
       if (app.Environment.IsDevelopment())
       {
@@ -197,43 +199,15 @@ namespace automation.mbtdistr.ru
         app.UseSwaggerUI(c =>
         {
           c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
+          c.InjectStylesheet("/swagger-ui/styles.css"); // свой CSS
+          c.InjectJavascript("https://code.jquery.com/jquery-3.7.1.js");
+          c.InjectJavascript("/swagger-ui/scripts.js"); // свой JS
           c.RoutePrefix = string.Empty; // Открывать Swagger по корню сайта
+                                        // c.IndexStream = () => File.OpenRead("wwwroot/swagger-ui/index.html");
         });
-        // 6. Swagger UI
-        //app.UseSwaggerUI(c =>
-        //{
-
-        //  // несколько версий
-        //  c.SwaggerEndpoint("/swagger/v1/swagger.json", "API V1");
-        //  c.RoutePrefix = string.Empty; // Открывать Swagger по корню сайта
-
-        //  // UI-параметры
-        //  c.RoutePrefix = "docs";                   // UI будет доступен по /docs
-        //  c.DocumentTitle = "Документация My API";    // <title> страницы
-        //  c.DocExpansion(DocExpansion.None);        // минимальное раскрытие разделов
-        //  c.DefaultModelsExpandDepth(-1);                    // скрыть модели по умолчанию
-        //  c.DisplayOperationId();                            // показывать operationId
-        //  c.DisplayRequestDuration();                        // время выполнения запроса
-        //  c.EnableDeepLinking();                             // прямые ссылки
-        //  c.ShowExtensions();                                // показывать custom-расширения
-        //  c.EnableFilter();                                  // фильтр по тегам и путям
-        //  c.MaxDisplayedTags(10);                            // максимум тегов в фильтре
-        //  c.SupportedSubmitMethods(new[] { SubmitMethod.Get, SubmitMethod.Post, SubmitMethod.Put, SubmitMethod.Delete, SubmitMethod.Patch });
-        //  c.OAuthClientId("swagger-ui-client");
-        //  c.OAuthClientSecret("secret-if-needed");
-        //  c.OAuthAppName("Swagger UI for My API");
-        //  c.OAuthUsePkce();                                  // для Authorization Code Flow
-        //  c.InjectStylesheet("/swagger-ui/styles.css");      // свой CSS
-        //  c.InjectJavascript("/swagger-ui/scripts.js");       // свой JS
-        //  c.InjectJavascript("console.log('Swagger UI Loaded');");
-        //  c.HeadContent = "<link rel=\"icon\" href=\"/swagger-ui/favicon.ico\" />";
-        //  c.IndexStream = () => File.OpenRead("wwwroot/swagger-ui/index.html");
-        //  // чтобы полностью заменить index.html
-        //});
       }
       else
       {
-
         app.UseExceptionHandler("/Home/Error");
         // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
         app.UseHsts();

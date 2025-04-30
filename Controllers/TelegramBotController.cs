@@ -67,11 +67,7 @@ ILogger<TelegramBotController> logger)
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] Update data)
     {
-      // проверяем тип сборки, если девелоп то пропускаем блок
-
-
-
-
+      
       if (!(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development"))
         try
         {
@@ -188,7 +184,7 @@ ILogger<TelegramBotController> logger)
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugObject<Exception>(ex);
+        await Extensions.SendDebugMessage($"public async Task<IActionResult> Post([FromBody] Update data)\n{ex.Message}");
       }
 
       try
@@ -219,6 +215,15 @@ ILogger<TelegramBotController> logger)
       }
 
       return Ok();
+    }
+
+
+    [HttpGet("open")]
+    public async Task<IActionResult> Open()
+    {
+      var chatId = 1406950293;
+      var message = await _botClient.SendMessage(chatId, "Тестовое сообщение");
+      return Ok(message);
     }
 
     private async Task<Worker> GetOrCreateWorkerAsync(Update update)
@@ -389,8 +394,6 @@ ILogger<TelegramBotController> logger)
 
       await _botClient.AnswerCallbackQuery(id.ToString(), $"Новое значение: {parameter.Value}");
     }
-
-
 
     private async Task UpdateCabinetParameterKeyAsync(long id, string v, int entityId, long messageId)
     {

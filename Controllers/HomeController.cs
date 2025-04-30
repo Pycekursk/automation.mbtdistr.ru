@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 
 using automation.mbtdistr.ru.Data;
@@ -8,77 +10,37 @@ using Microsoft.EntityFrameworkCore;
 
 namespace automation.mbtdistr.ru.Controllers
 {
+  [ApiExplorerSettings(IgnoreApi = true)]
   public class HomeController : Controller
   {
     private readonly ILogger<HomeController> _logger;
+    private readonly ApplicationDbContext _db;
 
-    public HomeController(ILogger<HomeController> logger)
+    public HomeController(ILogger<HomeController> logger, ApplicationDbContext db)
     {
+      _db = db;
       _logger = logger;
     }
 
-    public IActionResult Index()
+    // Controllers/HomeController.cs
+    public IActionResult Index([FromRoute(Name = "id")] int? userId)
     {
-      //if (Debugger.IsAttached)
-      //{
-      //  var db = HttpContext.RequestServices.GetService<ApplicationDbContext>();
-      //  //получаем работника с айди телеграмм 1406950293
-      //  var user = db.Workers
-      //    .Where(u => u.TelegramId == "1406950293")
-      //    .Include(w => w.NotificationOptions)
-      //    .FirstOrDefault();
+      if (userId == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
 
-      //  if (user != null)
-      //  {
-      //    user.NotificationOptions = new NotificationOptions
-      //    {
-      //      WorkerId = user.Id,
-      //      NotificationLevels = new List<NotificationLevel>
-      //      {
-      //        NotificationLevel.DeepDegugNotification,
-      //        NotificationLevel.LogNotification
-      //      }
-      //    };
-      //    user.NotificationOptions.IsReceiveNotification = true;
-      //    //db.Entry(user.NotificationOptions).State = EntityState.Modified;
+      // 1) собираем модель дл€ меню
+      var user = _db.Workers.Find(userId);
 
-      //    //db.Entry(user).State = EntityState.Modified;
+      var mainMenu = new List<MenuItem>();
 
-      //    var changes = db.SaveChanges();
-
-
-
-
-      //    ////получаем настройки уведомлений
-      //    //var notificationOptions = user.NotificationOptions;
-      //    ////получаем уровень уведомлений
-      //    //if (!notificationOptions.NotificationLevels.Contains(NotificationLevel.DeepDegugNotification))
-      //    //{
-      //    //  //если уровень уведомлений не содержит DeepDegugNotification, то добавл€ем его
-      //    //  notificationOptions.NotificationLevels.Add(NotificationLevel.DeepDegugNotification);
-      //    //  //сохран€ем изменени€ в Ѕƒ
-      //    //}
-      //    //if (!notificationOptions.NotificationLevels.Contains(NotificationLevel.LogNotification))
-      //    //{
-      //    //  //если уровень уведомлений не содержит LogNotification, то добавл€ем его
-      //    //  notificationOptions.NotificationLevels.Add(NotificationLevel.LogNotification);
-      //    //}
-
-      //    //notificationOptions.WorkerId = user.Id;
-
-      //    //db.Entry(notificationOptions).State = EntityState.Modified;
-      //    ////db.Entry(notificationOptions).State = EntityState.Modified;
-
-
-      //    //user.NotificationOptions = notificationOptions;
-      //    //var changes = db.SaveChanges();
-      //  }
-      //}
-      //иначе переходим на метод Index
-
-
-
-      return View();
+      var model = new MainMenuViewModel
+      {
+        GreetingMessage = $"ѕривет, {user?.Name}! ¬ы {Internal.GetEnumDisplayName(user.Role)}",
+        Menu = mainMenu
+      };
+      return View(model);
     }
 
     public IActionResult Privacy()
@@ -91,5 +53,24 @@ namespace automation.mbtdistr.ru.Controllers
     {
       return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
+  }
+
+  public class MainMenuViewModel
+  {
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+    public string GreetingMessage { get; set; }
+    public Worker Worker { get; set; }
+    public List<MenuItem> Menu { get; set; }
+  }
+
+  public class MenuItem
+  {
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+    public Worker Worker { get; set; }
+    public string Icon { get; set; }
+    public string Action { get; set; }
+    public string Title { get; set; }
   }
 }
