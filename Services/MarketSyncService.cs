@@ -351,9 +351,9 @@ namespace automation.mbtdistr.ru.Services
               existingReturn.Info = new ReturnMainInfo { ClaimId = existingReturn.Id.ToString() };
 
             var newStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-            var newStatusStr = GetEnumDisplayName(newStatus);
+            var newStatusStr = newStatus.GetDisplayName();
             var currentStatus = existingReturn.Info.ReturnStatus;
-            var currentStatusStr = GetEnumDisplayName(currentStatus);
+            var currentStatusStr = currentStatus.GetDisplayName();
             var newChangedAt = x.Visual?.ChangeMoment;
             if (currentStatus != newStatus)
             {
@@ -537,8 +537,8 @@ namespace automation.mbtdistr.ru.Services
       sb.AppendLine($"<b>Заказ</b> {x.OrderId}");
       if (oldStatus.HasValue)
       {
-        sb.AppendLine($"<b>Старый статус:</b> {GetEnumDisplayName(oldStatus)}");
-        var newStatus = GetEnumDisplayName(Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown);
+        sb.AppendLine($"<b>Старый статус:</b> {oldStatus.GetDisplayName()}");
+        var newStatus = (Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown).GetDisplayName();
         sb.AppendLine($"<b>Новый статус:</b> {newStatus}");
       }
       //sb.AppendLine($"<b>Статус возврата:</b> {GetEnumDisplayName(x.Visual.Status.SysName)}");

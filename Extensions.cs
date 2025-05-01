@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -24,18 +25,50 @@ namespace automation.mbtdistr.ru
 {
   public static class Extensions
   {
+    /// <summary>  
+    /// Получает отображаемое имя для значения перечисления, используя атрибут Display.  
+    /// </summary>  
+    /// <param name="enumValue">Значение перечисления.</param>  
+    /// <returns>Отображаемое имя или строковое представление значения перечисления, если атрибут Display отсутствует.</returns>  
+    public static string GetDisplayName(this Enum enumValue)
+    {
+      var display = enumValue.GetType()
+          .GetField(enumValue.ToString())
+          ?.GetCustomAttributes(typeof(DisplayAttribute), false)
+          .FirstOrDefault() as DisplayAttribute;
+
+      return display?.Name ?? enumValue.ToString();
+    }
+
+    /// <summary>  
+    /// Фабрика конвертеров JSON для перечислений, поддерживающая атрибут EnumMember и числовые значения.  
+    /// </summary>  
     public class JsonStringEnumMemberConverterFactory : JsonConverterFactory
     {
+      /// <summary>  
+      /// Определяет, может ли данный тип быть преобразован этим конвертером.  
+      /// </summary>  
+      /// <param name="typeToConvert">Тип для проверки.</param>  
+      /// <returns>True, если тип является перечислением, иначе False.</returns>  
       public override bool CanConvert(Type typeToConvert) =>
           typeToConvert.IsEnum;
 
+      /// <summary>  
+      /// Создаёт экземпляр конвертера для указанного типа.  
+      /// </summary>  
+      /// <param name="type">Тип, для которого создаётся конвертер.</param>  
+      /// <param name="options">Опции сериализации JSON.</param>  
+      /// <returns>Экземпляр JsonConverter для указанного типа.</returns>  
       public override JsonConverter CreateConverter(Type type, JsonSerializerOptions options)
       {
-        var converterType = typeof(JsonEnumMemberAndNumberConverterInner<>)
-            .MakeGenericType(type);
+        var converterType = typeof(JsonEnumMemberAndNumberConverterInner<>).MakeGenericType(type);
         return (JsonConverter)Activator.CreateInstance(converterType)!;
       }
 
+      /// <summary>  
+      /// Внутренний класс конвертера для работы с перечислениями.  
+      /// </summary>  
+      /// <typeparam name="T">Тип перечисления.</typeparam>  
       private class JsonEnumMemberAndNumberConverterInner<T> : JsonConverter<T>
           where T : struct, Enum
       {
@@ -53,12 +86,18 @@ namespace automation.mbtdistr.ru
             var enumVal = (T)fi.GetValue(null)!;
             var em = fi.GetCustomAttribute<EnumMemberAttribute>();
             var name = em?.Value ?? fi.Name;
-            // Всегда приводим к нижнему регистру для ключа
             _fromString[name] = enumVal;
             _toString[enumVal] = name;
           }
         }
 
+        /// <summary>  
+        /// Читает значение перечисления из JSON.  
+        /// </summary>  
+        /// <param name="reader">Читатель JSON.</param>  
+        /// <param name="typeToConvert">Тип, который нужно преобразовать.</param>  
+        /// <param name="options">Опции JSON.</param>  
+        /// <returns>Значение перечисления.</returns>  
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
           if (reader.TokenType == JsonTokenType.Number)
@@ -89,6 +128,12 @@ namespace automation.mbtdistr.ru
           throw new JsonException($"Ожидался токен String или Number, а пришёл {reader.TokenType}");
         }
 
+        /// <summary>  
+        /// Записывает значение перечисления в JSON.  
+        /// </summary>  
+        /// <param name="writer">Писатель JSON.</param>  
+        /// <param name="value">Значение перечисления для записи.</param>  
+        /// <param name="options">Опции JSON.</param>  
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
         {
           if (_toString.TryGetValue(value, out var name))
@@ -98,18 +143,12 @@ namespace automation.mbtdistr.ru
         }
       }
     }
-
-    public static string ToJson(this object obj, JsonSerializerOptions? options = null)
-    {
-      var result = JsonSerializer.Serialize(obj, options ?? Options);
-      return result;
-    }
-
     public static readonly JsonSerializerOptions Options = new JsonSerializerOptions
     {
       WriteIndented = true,
       Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
       ReferenceHandler = ReferenceHandler.IgnoreCycles,
+      PropertyNameCaseInsensitive = true,
       DefaultIgnoreCondition = JsonIgnoreCondition.Never,
       Converters =
       {
@@ -118,16 +157,45 @@ namespace automation.mbtdistr.ru
       }
     };
 
+    /// <summary>  
+    /// Расширение для сериализации объекта в JSON.  
+    /// </summary>  
+    /// <param name="obj">Объект для сериализации.</param>  
+    /// <param name="options">Опции сериализации JSON (необязательно).</param>  
+    /// <returns>Строка JSON, представляющая объект.</returns>  
+    public static string ToJson(this object obj, JsonSerializerOptions? options = null)
+    {
+      var result = JsonSerializer.Serialize(obj, options ?? Options);
+      return result;
+    }
+
+    /// <summary>  
+    /// Расширение для десериализации строки JSON в объект.  
+    /// </summary>  
+    /// <typeparam name="T">Тип объекта, в который нужно десериализовать.</typeparam>  
+    /// <param name="json">Строка JSON для десериализации.</param>  
+    /// <param name="options">Опции десериализации JSON (необязательно).</param>  
+    /// <returns>Объект типа T, полученный из JSON, или null, если десериализация не удалась.</returns>  
     public static T? FromJson<T>(this string json, JsonSerializerOptions? options = null)
     {
       var result = JsonSerializer.Deserialize<T>(json, options ?? Options);
       return result;
     }
 
+    /// <summary>  
+    /// Конвертер JSON для работы с объектами DateTime в формате "yyyy-MM-ddTHH:mm:ss.fffZ".  
+    /// </summary>  
     public class DateTimeJsonConverter : JsonConverter<DateTime>
     {
       private const string Format = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
+      /// <summary>  
+      /// Читает значение DateTime из JSON.  
+      /// </summary>  
+      /// <param name="reader">Читатель JSON.</param>  
+      /// <param name="typeToConvert">Тип, который нужно преобразовать.</param>  
+      /// <param name="options">Опции JSON.</param>  
+      /// <returns>Объект DateTime.</returns>  
       public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
       {
         var str = reader.GetString();
@@ -137,6 +205,12 @@ namespace automation.mbtdistr.ru
         return DateTime.Parse(str ?? "", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
       }
 
+      /// <summary>  
+      /// Записывает значение DateTime в JSON.  
+      /// </summary>  
+      /// <param name="writer">Писатель JSON.</param>  
+      /// <param name="value">Значение DateTime для записи.</param>  
+      /// <param name="options">Опции JSON.</param>  
       public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
       {
         var utc = value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime();
@@ -156,7 +230,15 @@ namespace automation.mbtdistr.ru
         return altronToken;
       }
     }
+
+    ///<summary>  
+    /// Свойство для получения экземпляра TelegramBotClient.  
+    /// Если экземпляр ещё не создан, он создаётся с использованием токена Altron.  
+    /// </summary>  
     private static TelegramBotClient _botClient;
+    /// <summary>
+    /// Получает экземпляр TelegramBotClient.
+    /// </summary>
     public static TelegramBotClient BotClient
     {
       get
@@ -168,6 +250,7 @@ namespace automation.mbtdistr.ru
         return _botClient;
       }
     }
+
     private static readonly char[] MarkdownV2ReservedChars = new[]
         {
             '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
@@ -191,7 +274,8 @@ namespace automation.mbtdistr.ru
 
         var chatId = 1406950293;
 
-        string? json = obj?.ToJson(new JsonSerializerOptions(){
+        string? json = obj?.ToJson(new JsonSerializerOptions()
+        {
           Converters =
           {
             new JsonStringEnumMemberConverterFactory(),
@@ -268,6 +352,10 @@ namespace automation.mbtdistr.ru
       }
     }
 
+    /// <summary>  
+    /// Класс CodeDetector предоставляет методы для определения,  
+    /// является ли строка JSON, XML или выглядит как код.  
+    /// </summary>  
     public static class CodeDetector
     {
       private static readonly Regex TrailingParens = new Regex(
@@ -275,6 +363,11 @@ namespace automation.mbtdistr.ru
           RegexOptions.Compiled
       );
 
+      /// <summary>  
+      /// Проверяет, является ли строка JSON.  
+      /// </summary>  
+      /// <param name="s">Строка для проверки.</param>  
+      /// <returns>True, если строка является JSON, иначе False.</returns>  
       public static bool IsJson(string s)
       {
         if (string.IsNullOrWhiteSpace(s)) return false;
@@ -287,6 +380,11 @@ namespace automation.mbtdistr.ru
         return false;
       }
 
+      /// <summary>  
+      /// Проверяет, является ли строка XML.  
+      /// </summary>  
+      /// <param name="s">Строка для проверки.</param>  
+      /// <returns>True, если строка является XML, иначе False.</returns>  
       public static bool IsXml(string s)
       {
         if (string.IsNullOrWhiteSpace(s)) return false;
@@ -301,17 +399,22 @@ namespace automation.mbtdistr.ru
 
       private static readonly string[] CodeSignatures = new[]
       {
-        "{", "}", ";", "=>", "->",
-        "class ", "interface ", "public ",
-        "function ", "var ", "let ", "const ",
-        "#include", "using ",
-        "SELECT ", "INSERT ", "UPDATE ", "DELETE ",
-        "<html", "<body", "<div", "</"
-    };
+           "{", "}", ";", "=>", "->",
+           "class ", "interface ", "public ",
+           "function ", "var ", "let ", "const ",
+           "#include", "using ",
+           "SELECT ", "INSERT ", "UPDATE ", "DELETE ",
+           "<html", "<body", "<div", "</"
+       };
 
       private static readonly Regex SqlRegex =
           new Regex(@"\b(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP)\s", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+      /// <summary>  
+      /// Проверяет, выглядит ли строка как код.  
+      /// </summary>  
+      /// <param name="input">Строка для проверки.</param>  
+      /// <returns>True, если строка выглядит как код, иначе False.</returns>  
       public static bool LooksLikeCode(string input)
       {
         if (string.IsNullOrWhiteSpace(input))
@@ -341,7 +444,6 @@ namespace automation.mbtdistr.ru
         return false;
       }
     }
-
 
     /// <summary>
     /// Экранирует зарезервированные символы для MarkdownV2.

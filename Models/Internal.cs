@@ -5,16 +5,7 @@ namespace automation.mbtdistr.ru.Models
 {
   public static class Internal
   {
-    public static string GetEnumDisplayName(Enum enumValue)
-    {
-      var display = enumValue.GetType()
-          .GetField(enumValue.ToString())
-          ?.GetCustomAttributes(typeof(DisplayAttribute), false)
-          .FirstOrDefault() as DisplayAttribute;
-
-      return display?.Name ?? enumValue.ToString();
-    }
-
+   
     public static string EscapeHtml(this string input) =>
      input.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 

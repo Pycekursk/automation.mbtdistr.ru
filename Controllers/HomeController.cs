@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 
@@ -30,14 +30,14 @@ namespace automation.mbtdistr.ru.Controllers
         return Redirect("https://t.me/MbtdistrBot");
       }
 
-      // 1) �������� ������ ��� ����
+      // 1) собираем модель для меню
       var user = _db.Workers.Find(userId);
 
       var mainMenu = new List<MenuItem>();
 
       var model = new MainMenuViewModel
       {
-        GreetingMessage = $"������, {user?.Name}! �� {Internal.GetEnumDisplayName(user.Role)}",
+        GreetingMessage = $"Привет, {user?.Name}! Вы {user.Role.GetDisplayName()}",
         Menu = mainMenu
       };
       return View(model);
@@ -52,6 +52,45 @@ namespace automation.mbtdistr.ru.Controllers
     public IActionResult Error()
     {
       return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+    }
+
+    [HttpGet("botmenu/{id?}")]
+    public IActionResult BotMenu([FromQuery] long? id)
+    {
+      var user = _db.Workers.FirstOrDefault(w => w.TelegramId == id.ToString());
+      MainMenuViewModel mainMenu = new MainMenuViewModel();
+      if (user != null)
+      {
+        mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
+        mainMenu.Worker = user;
+        mainMenu.Menu = new List<MenuItem>
+        {
+          new MenuItem
+          {
+            Icon = "📦",
+            Action = "orders",
+            Title = "Заказы"
+          },
+          new MenuItem
+          {
+            Icon = "📦",
+            Action = "returns",
+            Title = "Возвраты"
+          },
+          new MenuItem
+          {
+            Icon = "⚙️",
+            Action = "settings",
+            Title = "Настройки"
+          }
+        };
+      }
+      else
+      {
+        mainMenu.GreetingMessage = "Вы не зарегистрированы в системе. Пожалуйста, свяжитесь с администратором.";
+        mainMenu.Menu = new List<MenuItem>();
+      }
+      return View(mainMenu);
     }
   }
 

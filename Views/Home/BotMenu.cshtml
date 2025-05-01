@@ -1,0 +1,77 @@
+﻿@{
+  ViewData["Title"] = "Bot Menu";
+  Layout = "/Views/Shared/_BotMenuLayout.cshtml";
+}
+@model automation.mbtdistr.ru.Controllers.MainMenuViewModel?
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+@if (Model?.Worker == null)
+{
+                <script>
+                  const tg = window.Telegram.WebApp;
+                  tg.ready();
+                  // Получаем ID пользователя
+                  const userId = tg.initDataUnsafe?.user?.id;
+                  if (userId) {
+                    // Переход на ASP.NET-роут с передачей ID
+                    let url = `botmenu?id=${userId}`;
+                    window.location.href = url;
+                  } else {
+                    alert("Ошибка: не удалось получить ID пользователя Telegram.");
+                  }
+                </script>
+}
+else
+{
+
+
+                <h2>@Model?.GreetingMessage</h2>
+                <form>
+                  <div class="menu-buttons">
+      @foreach (var butt in Model?.Menu)
+      {
+                                    <button action="@butt.Action" type="button">@butt.Icon @butt.Title</button>
+      }
+                  </div>
+                </form>
+                  <script>
+
+                        var workerId = @Model?.Worker.Id;
+
+          const tg = window.Telegram.WebApp;
+            tg.ready();
+              document.addEventListener("DOMContentLoaded", function () {
+                  document.querySelectorAll('.menu-buttons button').forEach(button => {
+                      button.addEventListener('click', function () {
+                          const action = this.getAttribute('action');
+                          var data = {
+                              action: action,
+                              tgId: tg.initDataUnsafe.user.id,
+                              workerId: workerId
+                          };
+                              sendData(data);
+                      });
+                  });
+               function sendData(data) {
+                     const endpoint = '/api/telegrambot/webappdata';
+                        fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(data)
+                          }).then(response => {
+                              if (response.ok) {
+                                  console.log('Данные успешно отправлены на сервер');
+                              } else {
+                                  console.error('Ошибка при отправке данных на сервер');
+                              }
+                          }).catch(error => {
+                              console.error('Ошибка:', error);
+                          });
+                }
+          });
+        </script>
+
+}
+
+

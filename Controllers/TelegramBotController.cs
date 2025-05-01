@@ -64,10 +64,18 @@ ILogger<TelegramBotController> logger)
     /// </summary>  
     /// <param name="update">Обновление, полученное от Telegram Bot API.</param>  
     /// <returns>Объект IActionResult, указывающий результат операции.</returns>
-    [HttpPost]
-    public async Task<IActionResult> Post([FromBody] Update data)
+    [HttpPost, IgnoreAntiforgeryToken]
+    public async Task<IActionResult> Post([FromBody] object obj)
     {
-      
+      await Extensions.SendDebugMessage(obj.ToString());
+      string objString = obj.ToString() ?? string.Empty;
+      JsonSerializerOptions options = new JsonSerializerOptions
+      {
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+      };
+      Update? update = objString?.FromJson<Update>(options);
       if (!(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development"))
         try
         {
@@ -78,14 +86,13 @@ ILogger<TelegramBotController> logger)
             Directory.CreateDirectory(directoryPath);
           }
           string filePath = Path.Combine(directoryPath, $"{DateTime.Now:yyyyMMddHHmmss}.json");
-          await System.IO.File.WriteAllTextAsync(filePath, data.ToJson());
+          await System.IO.File.WriteAllTextAsync(filePath, update.ToJson());
         }
         catch (Exception ex)
         {
-          await _botClient.SendMessage(1406950293, ex.ToJson());
+          await Extensions.SendDebugMessage($"public async Task<IActionResult> Post([FromBody] object obj)\n{ex.Message}");
         }
 
-      Update? update = data;
       //создаем текстовый файл
 
       try
@@ -216,6 +223,14 @@ ILogger<TelegramBotController> logger)
 
       return Ok();
     }
+
+    [HttpPost("webappdata")]
+    public async Task<IActionResult> WebAppData([FromBody] object obj)
+    {
+      await Extensions.SendDebugObject<object>(obj, "public async Task<IActionResult> WebAppData([FromBody] object obj)");
+      return Ok();
+    }
+
 
 
     [HttpGet("open")]
@@ -434,14 +449,14 @@ ILogger<TelegramBotController> logger)
         switch (text)
         {
           case "/start":
-            await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {GetEnumDisplayName(worker.Role)}");
+            await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {worker.Role.GetDisplayName()}");
             break;
 
           case "/help":
             await HandleGetHelpAsync(msg, worker);
             break;
           case "/myrole":
-            await _botClient.SendMessage(msg.Chat.Id, $"Вы {GetEnumDisplayName(worker.Role)}");
+            await _botClient.SendMessage(msg.Chat.Id, $"Вы {worker.Role.GetDisplayName()}");
             break;
           case "/cabinets":
             await HandleGetCabinetsAsync(msg, worker);
@@ -546,7 +561,7 @@ ILogger<TelegramBotController> logger)
 
         var buttons = workers
             .Select(w => InlineKeyboardButton.WithCallbackData(
-                text: $"{w.Name} ({GetEnumDisplayName(w.Role)})",
+                text: $"{w.Name} ({w.Role.GetDisplayName()})",
                 callbackData: $"select_user_{w.Id}"))
             .Chunk(1)
             .Select(chunk => chunk.ToArray())
@@ -865,7 +880,7 @@ ILogger<TelegramBotController> logger)
           .Select(w => new[]
           {
             InlineKeyboardButton.WithCallbackData(
-                text: $"{w.Name} ({GetEnumDisplayName(w.Role)})",
+                text: $"{w.Name} ({w.Role.GetDisplayName()})",
                 callbackData: $"add_cub_user_{cabinetId}_{w.Id}")
           })
           .ToList();
@@ -945,7 +960,7 @@ ILogger<TelegramBotController> logger)
       var sb = new StringBuilder();
       sb.AppendLine($"✅ Сотрудники {cabinet.Marketplace} / {cabinet.Name}");
       foreach (var user in cabinet.AssignedWorkers)
-        sb.AppendLine($"{user.Name} ({GetEnumDisplayName(user.Role)})");
+        sb.AppendLine($"{user.Name} ({(user.Role)})");
 
       //другой вариант клавиатуры где на каждого сотрдуника в строку будет по две кнопки одна для перехода в профиль другая для удаления
 
@@ -960,7 +975,7 @@ ILogger<TelegramBotController> logger)
           .Select(u => new[]
           {
               InlineKeyboardButton.WithCallbackData(
-                  text: $"{u.Name} ({Models.Internal.GetEnumDisplayName(u.Role)})",
+                  text: $"{u.Name} ({u.Role.GetDisplayName()})",
                   callbackData: $"select_user_{u.Id}"),
               InlineKeyboardButton.WithCallbackData(
                   text: "❌ Удалить",
@@ -1190,7 +1205,7 @@ ILogger<TelegramBotController> logger)
       sb.AppendLine($"Имя: {user.Name}");
       sb.AppendLine($"Telegram ID: {user.TelegramId}");
       sb.AppendLine($"Создан: {user.CreatedAt}");
-      sb.AppendLine($"Роль: {GetEnumDisplayName(user.Role)}");
+      sb.AppendLine($"Роль: {user.Role.GetDisplayName()}");
 
       var buttons = new[]
       {
@@ -1246,7 +1261,7 @@ ILogger<TelegramBotController> logger)
       //Получаем список ролей
       var roles = Enum.GetValues<RoleType>()
           .Select(r => InlineKeyboardButton.WithCallbackData(
-              text: GetEnumDisplayName(r),
+              text: r.GetDisplayName(),
               callbackData: $"set_user_role_{(int)r}_{userId}"))
           .Chunk(2)
           .Select(chunk => chunk.ToArray())
@@ -1288,7 +1303,7 @@ ILogger<TelegramBotController> logger)
       keyboard.AddRange(
         Enum.GetValues<RoleType>()
           .Select(r => InlineKeyboardButton.WithCallbackData(
-              text: GetEnumDisplayName(r),
+              text: r.GetDisplayName(),
               callbackData: $"set_user_role_{user.Id}_{(int)r}"))
           .Chunk(2)
           .Select(chunk => chunk.ToArray())
@@ -1351,12 +1366,12 @@ ILogger<TelegramBotController> logger)
       await _botClient.EditMessageText(
           chatId: cb.Message.Chat.Id,
           messageId: cb.Message.MessageId,
-          text: $"✅ Роль пользователя обновлена на: {GetEnumDisplayName(user.Role)}");
+          text: $"✅ Роль пользователя обновлена на: {user.Role.GetDisplayName()}");
 
       // Отправляем уведомление пользователю о новой роли и сообщением о команде /help для получения списка доступных команд
       await _botClient.SendMessage(
           chatId: user.TelegramId,
-          text: $"Ваша роль была изменена на: {GetEnumDisplayName(user.Role)}\n" +
+          text: $"Ваша роль была изменена на: {user.Role.GetDisplayName()}\n" +
           "/help, чтобы получить список доступных команд.");
     }
 
