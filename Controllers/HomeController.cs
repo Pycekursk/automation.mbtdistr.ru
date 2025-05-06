@@ -171,8 +171,8 @@ namespace automation.mbtdistr.ru.Controllers
           Action = "cabinet",
           EntityId = $"{cabinet.Id}",
           Title = $"{cabinet.Marketplace} / {cabinet.Name}",
-          Icon = "bi bi-building",
-          CSS = "btn btn-outline-primary"
+          Icon = "bi bi-building me-2",
+          CSS = "list-group-item bg-transparent text-primary border-primary"
         });
       }
       return View(mainMenu);

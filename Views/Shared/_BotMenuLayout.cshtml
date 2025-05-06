@@ -234,17 +234,18 @@
         /* Применяется к тексту ссылок */
       }
 
-      .menu-buttons {
-    display: inline-flex;
-    gap: 0.5rem;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-.menu-buttons > * {
-    flex: 1 0 40%;
-    width: 100%;
-}
+    .menu-buttons {
+      display: inline-flex;
+      gap: 0.5rem;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+      .menu-buttons > * {
+        flex: 1 0 40%;
+        width: 100%;
+      }
   </style>
 
   <script>
@@ -264,6 +265,19 @@
   <div class="container-fluid">
     <main role="main" class="pb-3">
       @RenderBody()
+      <div class="container">
+        <button class="d-none btn btn-link text-decoration-none text-light" id="goback"><i class="bi bi-arrow-left"></i> Назад</button>
+        <script>
+            const currentUrl = window.location.href;
+            if (!currentUrl.includes("/botmenu?id")) {
+              document.getElementById("goback").classList.remove("d-none");
+            }
+          document.getElementById("goback").addEventListener("click", function () {
+            window.history.back();
+          });
+        </script>
+      </div>
+
     </main>
   </div>
   <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
