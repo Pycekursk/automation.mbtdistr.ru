@@ -363,7 +363,13 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
     /// Не принят на сортировочном центре.  
     /// </summary>  
     [Display(Name = "Не принят на сортировочном центре")]
-    posting_not_in_sort_center
+    posting_not_in_sort_center,
+
+    /// <summary>
+    /// Доставлено.
+    /// </summary>
+    [Display(Name = "Доставлено")]
+    posting_delivered
   }
 
   /// <summary>  

@@ -106,6 +106,8 @@ namespace automation.mbtdistr.ru.Controllers
       return Ok(new { result = true });
     }
 
+
+  
   }
 
 }

@@ -21,6 +21,8 @@ using automation.mbtdistr.ru.Services.LLM;
 using automation.mbtdistr.ru.Services.YandexMarket;
 using ZXing;
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
+using automation.mbtdistr.ru.Services;
+using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -86,14 +88,12 @@ ILogger<TelegramBotController> logger)
             Directory.CreateDirectory(directoryPath);
           }
           string filePath = Path.Combine(directoryPath, $"{DateTime.Now:yyyyMMddHHmmss}.json");
-          await System.IO.File.WriteAllTextAsync(filePath, update.ToJson());
+          await System.IO.File.WriteAllTextAsync(filePath, update?.ToJson(options));
         }
         catch (Exception ex)
         {
           await Extensions.SendDebugMessage($"public async Task<IActionResult> Post([FromBody] object obj)\n{ex.Message}");
         }
-
-      //создаем текстовый файл
 
       try
       {
@@ -115,10 +115,7 @@ ILogger<TelegramBotController> logger)
 
         await Extensions.SendDebugObject<Update>(update, caption);
         //  }
-
         var chatT = update.Message.Chat.Type;
-
-
         string chatTypeString = update.Message?.Chat.Type.ToString() ?? update.CallbackQuery?.Message?.Chat.Type.ToString() ?? string.Empty;
         ChatType? chatType = Enum.TryParse(chatTypeString, out ChatType result) ? result : null;
         var temp = (ChatType)chatType.GetValueOrDefault();
@@ -191,7 +188,7 @@ ILogger<TelegramBotController> logger)
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"public async Task<IActionResult> Post([FromBody] Update data)\n{ex.Message}");
+        await Extensions.SendDebugMessage($"Exception - public async Task<IActionResult> Post([FromBody] Update update)\n{ex.Message}\n{ex.InnerException?.Message}");
       }
 
       try
@@ -216,9 +213,9 @@ ILogger<TelegramBotController> logger)
             break;
         }
       }
-      catch (Exception)
+      catch (Exception ex)
       {
-        // Extensions.SendDebugMessage("Exception - public async Task<IActionResult> Post([FromBody] Update update)", ex);
+        await Extensions.SendDebugMessage($"Exception - public async Task<IActionResult> Post([FromBody] Update update)\n{ex.Message}\n{ex.InnerException?.Message}");
       }
 
       return Ok();
@@ -509,8 +506,10 @@ ILogger<TelegramBotController> logger)
               }
 
               //string caption = $"Кабинет: {cab.Marketplace} / {cab.Name}";
-
+              await MarketSyncService.ProcessYMReturnsAsync(returns, cab, _db, CancellationToken.None);
             }
+
+
 
             await Extensions.SendDebugObject<List<CampaignsResponse>>(campaigns);
             await Extensions.SendDebugObject<List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>>(returns, $"{returns.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");

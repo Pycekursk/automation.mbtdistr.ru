@@ -268,8 +268,6 @@ namespace automation.mbtdistr.ru.Services
 
           else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
           {
-
-
             List<Services.YandexMarket.Models.DTOs.ReturnsListResponse> _ymReturns = new List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>();
 
             //получаем обьект кабинета на вб
@@ -277,12 +275,11 @@ namespace automation.mbtdistr.ru.Services
                  .Include(c => c.Settings)
                      .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET").ToListAsync();
 
-            List<CampaignsResponse> campaigns = new List<CampaignsResponse>();
+
 
             foreach (var c in cabinets)
             {
               var _campaigns = await _yMApiService.GetCampaignsAsync(c);
-              campaigns.Add(_campaigns);
               foreach (var camp in _campaigns.Campaigns)
               {
                 var result = await _yMApiService.GetReturnsListAsync(c, camp);
@@ -519,9 +516,62 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-    private async Task<List<Models.Return>> ProcessYMReturnsAsync()
+    public static async Task<List<Models.Return>> ProcessYMReturnsAsync(
+        List<Services.YandexMarket.Models.DTOs.ReturnsListResponse> returns,
+        Cabinet cab,
+        ApplicationDbContext db,
+        CancellationToken ct
+      )
     {
       var returnsList = new List<Models.Return>();
+
+      try
+      {
+
+        foreach (var yaRetun in returns)
+        {
+          foreach (var r in yaRetun.Result.Returns)
+          {
+            var existingReturn = await db.Returns
+              .Include(r => r.Info)
+              .Include(r => r.Compensation)
+              .Include(r => r.Cabinet)
+              .ThenInclude(c => c.AssignedWorkers)
+              .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.Id == r.Id, ct);
+            if (existingReturn != null)
+            {
+              if (existingReturn.ChangedAt != r.UpdateDate)
+              {
+
+              }
+              existingReturn.ChangedAt = r.UpdateDate;
+              db.Returns.Update(existingReturn);
+              returnsList.Add(existingReturn);
+            }
+            else
+            {
+              Models.Return @return = new Models.Return();
+              @return.CreatedAt = r.CreationDate;
+              @return.CabinetId = cab.Id;
+              @return.Info.ProductsSku = r.Items.Select(i => i.MarketSku).ToList();
+              @return.Info.ReturnInfoId = (int)r.Id;
+              @return.ChangedAt = r.UpdateDate;
+              @return.Info.OrderId = r.OrderId;
+
+              db.Returns.Add(@return);
+              returnsList.Add(@return);
+            }
+          }
+        }
+
+        await db.SaveChangesAsync();
+
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
+      }
+
 
       return returnsList;
     }

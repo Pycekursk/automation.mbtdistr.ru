@@ -39,4 +39,11 @@
     <Folder Include="wwwroot\logs\ozon\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="Views\Home\BotMenuCabinetsList.cshtml">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

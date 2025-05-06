@@ -63,27 +63,79 @@ namespace automation.mbtdistr.ru.Controllers
       {
         mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
         mainMenu.Worker = user;
-        mainMenu.Menu = new List<MenuItem>
+
+        if (user.Role == RoleType.Guest)
         {
-          new MenuItem
+          mainMenu.GreetingMessage = "Вы не зарегистрированы в системе. Пожалуйста, свяжитесь с администратором.";
+          mainMenu.Menu = new List<MenuItem>();
+        }
+        else if (user.Role == RoleType.Admin)
+        {
+          mainMenu.Menu = new List<MenuItem>
           {
-            Icon = "📦",
-            Action = "orders",
-            Title = "Заказы"
-          },
-          new MenuItem
+            new MenuItem
+            {
+              Icon = "bi bi-gear-fill",
+              Action = "orderslist",
+              Title = "Заказы",
+              CSS = "btn btn-outline-success"
+            },
+            new MenuItem
+            {
+              Icon = "bi bi-building",
+              Action = "cabinetslist",
+              Title = "Кабинеты",
+              CSS = "btn btn-outline-primary"
+            },
+            new MenuItem
+            {
+              Icon = "bi bi-box-seam",
+              Action = "returnslist",
+              Title = "Возвраты",
+              CSS = "btn btn-outline-danger"
+            },
+            new MenuItem
+            {
+              Icon = "bi bi-gear-fill",
+              Action = "workersettings",
+              Title = "Настройки",
+              CSS = "btn btn-outline-light"
+            }
+          };
+        }
+        else if (user.Role == RoleType.ClaimsManager || user.Role == RoleType.CabinetManager)
+        {
+          mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
+
+          //меню с кнопками: Кабинеты, Возвраты, Настройки
+          mainMenu.Menu = new List<MenuItem>
           {
-            Icon = "📦",
-            Action = "returns",
-            Title = "Возвраты"
-          },
-          new MenuItem
-          {
-            Icon = "⚙️",
-            Action = "settings",
-            Title = "Настройки"
-          }
-        };
+            new MenuItem
+            {
+
+              Action = "cabinetslist",
+              Title = "Кабинеты",
+              CSS = "btn btn-outline-primary",
+              Icon = "bi bi-building"
+            },
+            new MenuItem
+            {
+
+              Action = "returnslist",
+              Title = "Возвраты",
+              CSS = "btn btn-outline-danger",
+              Icon = "bi bi-box-seam"
+            },
+            new MenuItem
+            {
+
+              Action = "workersettings",
+              Title = "Настройки",
+              CSS = "btn btn-outline-light",
+              Icon = "bi bi-gear-fill"
+            }
+          };
+        }
       }
       else
       {
@@ -91,6 +143,98 @@ namespace automation.mbtdistr.ru.Controllers
         mainMenu.Menu = new List<MenuItem>();
       }
       return View(mainMenu);
+    }
+
+    [HttpGet("botmenu/{id?}/cabinetslist")]
+    public IActionResult BotMenuCabinetsList([FromRoute] long id)
+    {
+      var user = _db.Workers
+        .Include(w => w.AssignedCabinets)
+        .FirstOrDefault(w => w.Id == id);
+
+      if (user.Role == RoleType.Admin)
+      {
+        user.AssignedCabinets = _db.Cabinets.ToList();
+      }
+
+      MainMenuViewModel mainMenu = new MainMenuViewModel()
+      {
+        Worker = user
+      };
+
+
+      foreach (var cabinet in user?.AssignedCabinets!)
+      {
+        mainMenu.Menu.Add(new MenuItem
+        {
+          Worker = user,
+          Action = "cabinet",
+          EntityId = $"{cabinet.Id}",
+          Title = $"{cabinet.Marketplace} / {cabinet.Name}",
+          Icon = "bi bi-building",
+          CSS = "btn btn-outline-primary"
+        });
+      }
+      return View(mainMenu);
+    }
+
+
+
+    [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}")]
+    public IActionResult BotMenuCabinet([FromRoute] long id, [FromRoute] int? cabinetId)
+    {
+      var user = _db.Workers
+        .Include(w => w.AssignedCabinets)
+        .First(w => w.Id == id);
+      if (user == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
+      MainMenuViewModel mainMenu = new MainMenuViewModel() { Worker = user };
+
+      var cabinet = _db?.Cabinets?.FirstOrDefault(c => c.Id == cabinetId);
+
+      if (cabinet != null)
+      {
+        mainMenu.GreetingMessage = $"Вы находитесь в кабинете {cabinet.Name} ({cabinet.Marketplace})";
+        //mainMenu.Menu.Add(new MenuItem
+        //{
+        //  Worker = user,
+        //  Icon = "📦",
+        //  Action = "orderslist",
+        //  EntityId = $"{cabinet.Id}",
+        //  Title = "Заказы"
+        //});
+        mainMenu.Menu.Add(new MenuItem
+        {
+          Worker = user,
+          Action = "returnslist",
+          EntityId = $"{cabinet.Id}",
+          Title = "Возвраты",
+          CSS = "btn btn-outline-danger",
+          Icon = "bi bi-box-seam"
+        });
+      }
+
+      return View(mainMenu);
+    }
+
+    [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/orderslist")]
+    public IActionResult OrdersList([FromRoute] long id, [FromRoute] int? cabinetId)
+    {
+      return NoContent();
+    }
+
+    [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/returnslist")]
+    public IActionResult ReturnsList([FromRoute] long id, [FromRoute] int? cabinetId)
+    {
+      return NoContent();
+    }
+
+    [HttpPost("botmenu/{id?}/cabinet/{cabinetId?}/workersettings")]
+    public IActionResult WorkerSettings([FromRoute] long id, [FromBody] NotificationOptions notificationOptions)
+    {
+      return Ok();
     }
   }
 
@@ -100,7 +244,7 @@ namespace automation.mbtdistr.ru.Controllers
     public int Id { get; set; }
     public string GreetingMessage { get; set; }
     public Worker Worker { get; set; }
-    public List<MenuItem> Menu { get; set; }
+    public List<MenuItem> Menu { get; set; } = new List<MenuItem>();
   }
 
   public class MenuItem
@@ -109,7 +253,11 @@ namespace automation.mbtdistr.ru.Controllers
     public int Id { get; set; }
     public Worker Worker { get; set; }
     public string Icon { get; set; }
+
+    public string CSS { get; set; } = "btn btn-primary";
+
     public string Action { get; set; }
     public string Title { get; set; }
+    public string EntityId { get; set; } = string.Empty;
   }
 }

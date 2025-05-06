@@ -27,25 +27,6 @@ namespace automation.mbtdistr.ru.Models
     public DateTime OrderedAt { get; internal set; }
   }
 
-  public class ReturnMainInfo
-  {
-    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
-
-    public int ReturnId { get; set; }
-    public Return Return { get; set; }
-
-    public ReturnStatus ReturnStatus { get; set; } = ReturnStatus.Unknown; // статус возврата
-
-    public string? ReturnReasonName { get; set; } // причина возврата
-
-    public long ReturnInfoId { get; set; } // ID возврата в системе
-
-    public long OrderId { get; set; } // ID заказа в системе
-
-    public string? ClaimId { get; set; } // ID обращения в системе
-  }
-
   public enum ReturnStatus
   {
     [Display(Name = "Открыт спор с покупателем")]

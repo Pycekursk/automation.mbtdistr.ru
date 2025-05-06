@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>@ViewData["Title"] - automation.mbtdistr.ru</title>
   <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-icons.css" />
   <script src="~/lib/jquery/dist/jquery.min.js"></script>
 
   <style>
@@ -232,6 +233,18 @@
         text-align: right;
         /* Применяется к тексту ссылок */
       }
+
+      .menu-buttons {
+    display: inline-flex;
+    gap: 0.5rem;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.menu-buttons > * {
+    flex: 1 0 40%;
+    width: 100%;
+}
   </style>
 
   <script>
@@ -248,7 +261,7 @@
   </script>
 </head>
 <body>
-  <div class="container">
+  <div class="container-fluid">
     <main role="main" class="pb-3">
       @RenderBody()
     </main>

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250505155952_appendReturnMappers")]
+    partial class appendReturnMappers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -247,8 +250,8 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<decimal?>("Price")
                         .HasColumnType("decimal(65,30)");
 
-                    b.Property<string>("ProductsSku")
-                        .HasColumnType("longtext");
+                    b.Property<long?>("ProductSku")
+                        .HasColumnType("bigint");
 
                     b.Property<int>("ReturnId")
                         .HasColumnType("int");
