@@ -4,58 +4,58 @@
 }
 @model automation.mbtdistr.ru.Controllers.MainMenuViewModel?
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-@if (Model?.Worker == null)
+@if (Model?.WorkerId == null)
 {
-        <script>
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            const userId = tg.initDataUnsafe?.user?.id;
-            if (userId) {
-                window.location.href = `botmenu?id=${userId}`;
-            } else {
-                alert("Ошибка: не удалось получить ID пользователя Telegram.");
-            }
-        </script>
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    const userId = tg.initDataUnsafe?.user?.id;
+    if (userId) {
+        window.location.href = `botmenu?id=${userId}`;
+    } else {
+        alert("Ошибка: не удалось получить ID пользователя Telegram.");
+    }
+  </script>
 }
 else
 {
-        <div class="container text-center mt-4">
-            <h5 class="text-secondary">@Model?.GreetingMessage</h5>
-            <form>
-                <div class="menu-buttons mt-4">
+  <div class="container text-center mt-4">
+    <h5 class="text-secondary">@Model?.GreetingMessage</h5>
+    <form>
+      <div class="menu-buttons mt-4">
         @foreach (var butt in Model?.Menu)
         {
-                            <button action="@butt.Action" type="button" class="@butt.CSS">
-                                <i class="@butt.Icon me-2"></i> @butt.Title
-                            </button>
+          <button action="@butt.Action" type="button" class="@butt.CSS">
+            <i class="@butt.Icon me-2"></i> @butt.Title
+          </button>
         }
-                </div>
-            </form>
-        </div>
+      </div>
+    </form>
+  </div>
 
-        <script>
-            var workerId = @Model?.Worker.Id;
-            const tg = window.Telegram.WebApp;
-            tg.ready();
+  <script>
+    var workerId = @Model?.WorkerId
+    const tg = window.Telegram.WebApp;
+    tg.ready();
 
-            document.addEventListener("DOMContentLoaded", function () {
-                document.querySelectorAll('.menu-buttons button').forEach(button => {
-                    button.addEventListener('click', function () {
-                        const action = this.getAttribute('action');
-                        var data = {
-                            action: action,
-                            workerId: workerId
-                        };
-                        sendData(data);
-                    });
-                });
-
-                function sendData(data) {
-                    let url = `/botmenu/${data.workerId}/${data.action}`;
-                    window.location.href = url;
-                }
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll('.menu-buttons button').forEach(button => {
+            button.addEventListener('click', function () {
+                const action = this.getAttribute('action');
+                var data = {
+                    action: action,
+                    workerId: workerId
+                };
+                sendData(data);
             });
-        </script>
+        });
+
+        function sendData(data) {
+            let url = `/botmenu/${data.workerId}/${data.action}`;
+            window.location.href = url;
+        }
+    });
+  </script>
+
 }

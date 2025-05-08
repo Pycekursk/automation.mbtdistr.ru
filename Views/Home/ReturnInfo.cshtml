@@ -1,0 +1,61 @@
+﻿@using Microsoft.AspNetCore.Html
+@{
+  ViewData["Title"] = "Все возвраты";
+  Layout = "/Views/Shared/_BotMenuLayout.cshtml";
+}
+@model automation.mbtdistr.ru.Controllers.MainMenuViewModel?
+
+
+
+@if (Model?.WorkerId == null)
+{
+          <script>
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            const userId = tg.initDataUnsafe?.user?.id;
+            if (userId) {
+            window.location.href = `botmenu?id=${userId}`;
+            } else {
+            alert("Ошибка: не удалось получить ID пользователя Telegram.");
+            }
+          </script>
+}
+else
+{
+          <div class="container text-center mt-4">
+            <h5 class="text-secondary">@Model?.GreetingMessage</h5>
+            <div id="content-wrapper"></div>
+          </div>
+
+          <script>
+              document.getElementById("content-wrapper").innerHTML = `@(new HtmlString(Model?.HtmlContent))`
+          </script>
+
+
+  @* <script> *@
+  @*   var workerId = @Model?.WorkerId *@
+  @*   const tg = window.Telegram.WebApp; *@
+  @*   tg.ready(); *@
+
+  @*   document.addEventListener("DOMContentLoaded", function () { *@
+  @*       document.querySelectorAll('.menu-buttons button').forEach(button => { *@
+  @*           button.addEventListener('click', function () { *@
+  @*               const action = this.getAttribute('action'); *@
+  @*               const entityId = this.getAttribute('entity-id'); *@
+  @*               var data = { *@
+  @*                   action: action, *@
+  @*                   workerId: workerId, *@
+  @*                   entityId : entityId *@
+  @*               }; *@
+  @*               sendData(data); *@
+  @*           }); *@
+  @*       }); *@
+
+  @*       function sendData(data) { *@
+  @*           let url = `/botmenu/${data.action}/${data.entityId}`; *@
+  @*           window.location.href = url; *@
+  @*       } *@
+  @*   }); *@
+  @* </script> *@
+
+}

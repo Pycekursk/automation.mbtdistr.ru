@@ -19,8 +19,6 @@ namespace automation.mbtdistr.ru.Models
 
     public ICollection<Cabinet> AssignedCabinets { get; set; }
            = new List<Cabinet>();
-
-    public int CurrentCabinetId { get; internal set; }
   }
 
   public class NotificationOptions

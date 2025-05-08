@@ -3,84 +3,53 @@
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
 }
 @model automation.mbtdistr.ru.Controllers.MainMenuViewModel?
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-@if (Model?.Worker == null)
-{
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    // Получаем ID пользователя
-    const userId = tg.initDataUnsafe?.user?.id;
-    if (userId) {
-      // Переход на ASP.NET-роут с передачей ID
-      let url = `botmenu?id=${userId}`;
-      window.location.href = url;
-    } else {
-      alert("Ошибка: не удалось получить ID пользователя Telegram.");
-    }
-  </script>
-}
-else
-{
 
-
-  <h5 class="text-secondary">@Model?.GreetingMessage</h5>
-
-  <form>
-
-    <div class="">
-      @if (Model?.Menu == null || Model?.Menu.Count == 0)
+<h5 class="text-secondary">@Model?.GreetingMessage</h5>
+<div class="">
+  @if (Model?.Menu == null || Model?.Menu.Count == 0)
+  {
+      <p class="text-muted">Нет доступных действий.</p>
+  }
+  else
+  {
+      <div class="list-group">
+      @foreach (var butt in Model?.Menu)
       {
-        <p class="text-muted">Нет доступных действий.</p>
-      }
-      else
-      {
-        <div class="list-group">
-          @foreach (var butt in Model?.Menu)
-          {
             <button entity-id="@butt.EntityId" action="@butt.Action" type="button" class="@butt.CSS">
               <i class="@butt.Icon"></i> @butt.Title
             </button>
-          }
-        </div>
       }
-    </div>
-
-  </form>
-  <script>
-
-                         var workerId = @Model?.Worker.Id
-           const tg = window.Telegram.WebApp;
-             tg.ready();
-
-             tg.BackButton.show();
-             tg.BackButton.onClick(function() {
-               window.history.back();
-
-             });
-
-
-               document.addEventListener("DOMContentLoaded", function () {
-                   document.querySelectorAll('.menu-buttons button').forEach(button => {
-                       button.addEventListener('click', function () {
-                           const action = this.getAttribute('action');
-                           const entityId = this.getAttribute('entity-id')
-                           var data = {
-                               action: action,
-                               workerId: workerId,
-                               entityId : entityId
-                           };
-                               sendData(data);
-                       });
-                   });
-                function sendData(data) {
-     let url = `/botmenu/${data.workerId}/cabinet/${data.entityId}`;
-    // alert(url);
-                     window.location.href = url;
-                 }
+      </div>
+  }
+</div>
+<script>
+         var workerId = @Model?.WorkerId
+         const tg = window.Telegram.WebApp;
+           tg.ready();
+           tg.BackButton.show();
+           tg.BackButton.onClick(function() {
+             window.history.back();
            });
-  </script>
+             document.addEventListener("DOMContentLoaded", function () {
+                 document.querySelectorAll('.menu-buttons button').forEach(button => {
+                     button.addEventListener('click', function () {
+                         const action = this.getAttribute('action');
+                         const entityId = this.getAttribute('entity-id')
+                         var data = {
+                             action: action,
+                             workerId: workerId,
+                             entityId : entityId
+                         };
+                             sendData(data);
+                     });
+                 });
+              function sendData(data) {
+                let url = `/botmenu/${data.workerId}/return/${data.entityId}`;
+  // alert(url);
+                   window.location.href = url;
+              }
+         });
+</script>
 
-}
 
 

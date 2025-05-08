@@ -3,8 +3,8 @@
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
 }
 @model automation.mbtdistr.ru.Controllers.MainMenuViewModel?
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-@if (Model?.Worker == null)
+
+@if (Model?.WorkerId == null)
 {
   <script>
     const tg = window.Telegram.WebApp;
@@ -44,7 +44,7 @@ else
   </form>
   <script>
 
-                         var workerId = @Model?.Worker.Id
+                         var workerId = @Model?.WorkerId
            const tg = window.Telegram.WebApp;
              tg.ready();
 

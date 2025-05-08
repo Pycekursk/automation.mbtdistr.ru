@@ -22,7 +22,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                 { MarketApiRequestType.Campaigns,
                   new EndpointDefinition("campaigns", HttpMethod.Get) },
                 { MarketApiRequestType.ReturnsList,
-                  new EndpointDefinition("campaigns/{campaignId}/returns", HttpMethod.Get) }
+                  new EndpointDefinition("campaigns/{campaignId}/returns", HttpMethod.Get) },
+                { MarketApiRequestType.Orders,
+                  new EndpointDefinition("campaigns/{campaignId}/orders", HttpMethod.Get) }
         };
 
     public YMApiHttpClient(IConfiguration config)

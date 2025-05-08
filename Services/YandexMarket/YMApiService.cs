@@ -1,5 +1,9 @@
 ﻿using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Ozon;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 
@@ -34,14 +38,23 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
 
 
-    public async Task<ReturnsListResponse> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, Filter? filter = null, int limit = 500, long? lastId = null)
+    public async Task<ReturnsListResponse> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 500, long? lastId = null)
     {
-      var queryParams = new Dictionary<string, object>
+      if (filter == null)
       {
-        { "limit", limit.ToString() },
-        { "fromDate", DateTime.Now.AddDays(-40).ToString("yyyy-MM-dd")},
-        { "toDate", DateTime.Now.AddDays(-40).ToString("yyyy-MM-dd") }
-      };
+        filter = new YMFilter
+        {
+          FromDate = DateTime.Now.AddDays(-20).ToString("yyyy-MM-dd"),
+          ToDate = DateTime.Now.ToString("yyyy-MM-dd"),
+          //Statuses = new List<YMRefundStatusType>
+          //{
+          //  YMRefundStatusType.WaitingForDecision,
+          //  YMRefundStatusType.CompleteWithoutRefund,
+          //  YMRefundStatusType.RefundInProgress,
+          //  YMRefundStatusType.StartedByUser
+          //},
+        };
+      }
 
       try
       {
@@ -49,7 +62,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
             MarketApiRequestType.ReturnsList,
             cabinet,
             null,
-            query: queryParams,
+            query: filter.ToQueryParams(),
             pathParams: new Dictionary<string, object>
             {
               { "campaignId", campaign.Id }
@@ -57,7 +70,14 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = json.FromJson<ReturnsListResponse>();
+        await Extensions.SendDebugMessage(json);
+        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<ReturnsListResponse>(json, new JsonSerializerSettings()
+        {
+          Converters = new List<JsonConverter>
+          {
+            new StringEnumConverter()
+          }
+        });
         return obj;
       }
       catch (Exception)

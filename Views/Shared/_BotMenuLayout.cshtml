@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>@ViewData["Title"] - automation.mbtdistr.ru</title>
-  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.css" />
   <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-icons.css" />
   <script src="~/lib/jquery/dist/jquery.min.js"></script>
-
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
       background-color: #000000;
@@ -247,7 +247,6 @@
         width: 100%;
       }
   </style>
-
   <script>
           // Синхронные ошибки
     window.onerror = function (message, source, lineno, colno, error) {
@@ -263,24 +262,25 @@
 </head>
 <body>
   <div class="container-fluid">
-    <main role="main" class="pb-3">
-      @RenderBody()
-      <div class="container">
-        <button class="d-none btn btn-link text-decoration-none text-light" id="goback"><i class="bi bi-arrow-left"></i> Назад</button>
+    <div class="row row-cols-2">
+      <div class="mt-3 d-none" id="goback-wrapper">
+        <button class="btn btn-link text-decoration-none text-light" id="goback"><i class="bi bi-arrow-left"></i> Назад</button>
         <script>
-            const currentUrl = window.location.href;
-            if (!currentUrl.includes("/botmenu?id")) {
-              document.getElementById("goback").classList.remove("d-none");
+            if (!window.location.href.includes("/botmenu?id")) {
+              document.getElementById("goback-wrapper").classList.remove("d-none");
             }
-          document.getElementById("goback").addEventListener("click", function () {
+            document.getElementById("goback").addEventListener("click", function () {
             window.history.back();
           });
         </script>
       </div>
-
+    </div>
+    <main role="main" class="pb-3">
+      @RenderBody()
     </main>
   </div>
   <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="~/js/tgwebapp.js"></script>
   @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -1,10 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services;
 
+using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -62,7 +65,7 @@ namespace automation.mbtdistr.ru.Controllers
       if (user != null)
       {
         mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
-        mainMenu.Worker = user;
+        mainMenu.WorkerId = user.Id;
 
         if (user.Role == RoleType.Guest)
         {
@@ -159,7 +162,7 @@ namespace automation.mbtdistr.ru.Controllers
 
       MainMenuViewModel mainMenu = new MainMenuViewModel()
       {
-        Worker = user
+        WorkerId = user.Id
       };
 
 
@@ -167,7 +170,6 @@ namespace automation.mbtdistr.ru.Controllers
       {
         mainMenu.Menu.Add(new MenuItem
         {
-          Worker = user,
           Action = "cabinet",
           EntityId = $"{cabinet.Id}",
           Title = $"{cabinet.Marketplace} / {cabinet.Name}",
@@ -177,8 +179,6 @@ namespace automation.mbtdistr.ru.Controllers
       }
       return View(mainMenu);
     }
-
-
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}")]
     public IActionResult BotMenuCabinet([FromRoute] long id, [FromRoute] int? cabinetId)
@@ -190,7 +190,7 @@ namespace automation.mbtdistr.ru.Controllers
       {
         return Redirect("https://t.me/MbtdistrBot");
       }
-      MainMenuViewModel mainMenu = new MainMenuViewModel() { Worker = user };
+      MainMenuViewModel mainMenu = new MainMenuViewModel() { WorkerId = user.Id };
 
       var cabinet = _db?.Cabinets?.FirstOrDefault(c => c.Id == cabinetId);
 
@@ -207,7 +207,6 @@ namespace automation.mbtdistr.ru.Controllers
         //});
         mainMenu.Menu.Add(new MenuItem
         {
-          Worker = user,
           Action = "returnslist",
           EntityId = $"{cabinet.Id}",
           Title = "Возвраты",
@@ -219,16 +218,86 @@ namespace automation.mbtdistr.ru.Controllers
       return View(mainMenu);
     }
 
+
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/orderslist")]
     public IActionResult OrdersList([FromRoute] long id, [FromRoute] int? cabinetId)
     {
       return NoContent();
     }
 
+    [HttpGet("botmenu/{id?}/returnslist")]
+    public async Task<IActionResult> ReturnsList([FromRoute] long id)
+    {
+      var worker = await _db.Workers.Include(w => w.AssignedCabinets).FirstOrDefaultAsync(w => w.Id == id);
+      if (worker == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
+      MainMenuViewModel mainMenu = new MainMenuViewModel
+      {
+        WorkerId = worker.Id,
+
+      };
+      string greetingMessage = $"Вы находитесь в разделе Возвраты. Здесь отображаются возвраты по всем закрепленным кабинетам ({worker.AssignedCabinets.Count})";
+
+      if (worker.AssignedCabinets?.Count == 0)
+      {
+        greetingMessage = "У вас нет закрепленных кабинетов. Пожалуйста, свяжитесь с администратором.";
+        mainMenu.GreetingMessage = greetingMessage;
+        return View(mainMenu);
+      }
+      List<MenuItem> menuItems = new List<MenuItem>();
+      foreach (var cab in worker?.AssignedCabinets!)
+      {
+        var _returns = _db.Returns.Include(r => r.Info).Where(r => r.CabinetId == cab.Id).ToList();
+        if (_returns.Count > 0)
+        {
+          foreach (var r in _returns)
+          {
+            menuItems.Add(new MenuItem
+            {
+              Action = "returninfo",
+              EntityId = $"{r.Id}",
+              Title = $"{cab.Marketplace} / {cab.Name} от {r.CreatedAt}",
+              Icon = "bi bi-box-seam me-2",
+              CSS = "list-group-item bg-transparent text-primary"
+            });
+          }
+        }
+      }
+      if (menuItems.Count == 0)
+      {
+        greetingMessage = "У закрепленных за Вами кабинетов нет активных возвратов.";
+        mainMenu.GreetingMessage = greetingMessage;
+        return View(mainMenu);
+      }
+      mainMenu.Menu = menuItems;
+      return View(mainMenu);
+    }
+
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/returnslist")]
     public IActionResult ReturnsList([FromRoute] long id, [FromRoute] int? cabinetId)
     {
       return NoContent();
+    }
+
+    [HttpGet("botmenu/{workerId?}/returninfo/{returnId?}")]
+    public IActionResult ReturnInfo([FromRoute] int workerId, [FromRoute] long returnId)
+    {
+      var _return = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).FirstOrDefault(r => r.Id == returnId);
+      if (_return == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
+      MainMenuViewModel mainMenu = new MainMenuViewModel
+      {
+        WorkerId = workerId,
+        GreetingMessage = $"Возврат {_return.Info.ReturnInfoId}\n{_return.CreatedAt}"
+      };
+
+      mainMenu.HtmlContent = MarketSyncService.FormatReturnHtml(_return, _return.Cabinet, null);
+
+      return View(mainMenu);
     }
 
     [HttpPost("botmenu/{id?}/cabinet/{cabinetId?}/workersettings")]
@@ -243,8 +312,9 @@ namespace automation.mbtdistr.ru.Controllers
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     public string GreetingMessage { get; set; }
-    public Worker Worker { get; set; }
+    public int? WorkerId { get; set; }
     public List<MenuItem> Menu { get; set; } = new List<MenuItem>();
+    public string HtmlContent { get; set; } = string.Empty; //HtmlContent для отображения на странице
   }
 
   public class MenuItem

@@ -272,7 +272,7 @@ namespace automation.mbtdistr.ru
             !admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.Debug))
           return;
 
-        var chatId = 1406950293;
+        var chatId = admin.TelegramId;
 
         string? json = obj?.ToJson(new JsonSerializerOptions()
         {
@@ -283,7 +283,8 @@ namespace automation.mbtdistr.ru
           },
           WriteIndented = true,
           Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
-          DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+          DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+          ReferenceHandler = ReferenceHandler.IgnoreCycles
         });
 
         if (json?.Length > 3500)
@@ -329,22 +330,36 @@ namespace automation.mbtdistr.ru
 
         if (CodeDetector.LooksLikeCode(message))
         {
-          parseMode = ParseMode.MarkdownV2;
-          message = $"```json\n{message.EscapeMarkdownV2()}\n```";
+          if (message.Length > 3500)
+          {
+            await BotClient.SendDocument(
+                chatId: 1406950293,
+                document: new InputFileStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(message)), $"{message.GetType()?.FullName?.Replace('.', '_')}.txt"),
+                parseMode: ParseMode.Html);
+          }
+          else
+          {
+            message = $"```\n{message}\n```";
+            await BotClient.SendMessage(
+            chatId: 1406950293,
+            text: message,
+            parseMode: ParseMode.MarkdownV2);
+          }
         }
-        else if (data != null)
+        else if (message.Length > 3500)
         {
-          await BotClient.SendDocument(
-               chatId: 1406950293,
-               caption: message.EscapeMarkdownV2(),
-               document: new InputFileStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(data.ToJson())), $"{data.GetType()?.FullName?.Replace('.', '_')}.json"),
-               parseMode: ParseMode.MarkdownV2);
+          await BotClient.SendLongMessageAsync(long.Parse(admin.TelegramId), message, CancellationToken.None);
           return;
         }
-        await BotClient.SendMessage(
-        chatId: 1406950293,
-        text: message,
-        parseMode);
+        //else if (data != null)
+        //{
+        //  await BotClient.SendDocument(
+        //       chatId: 1406950293,
+        //       caption: message,
+        //       document: new InputFileStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(data.ToJson())), $"{data.GetType()?.FullName?.Replace('.', '_')}.json"),
+        //       parseMode: ParseMode.MarkdownV2);
+        //  return;
+        //}
       }
       catch (Exception)
       {
@@ -459,6 +474,72 @@ namespace automation.mbtdistr.ru
           sb.Append(ch);
       }
       return sb.ToString();
+    }
+
+    /// <summary>
+    /// Делит текст на «умные» фрагменты и отправляет их по очереди.
+    /// </summary>
+    public static async Task SendLongMessageAsync(this TelegramBotClient botClient, long chatId, string text, CancellationToken cancellationToken, ParseMode parseMode = ParseMode.Html)
+    {
+      if (string.IsNullOrEmpty(text))
+        return;
+
+      foreach (var chunk in SplitMessage(text))
+      {
+        await botClient.SendMessage(
+            chatId: chatId,
+            text: chunk,
+            parseMode: parseMode,
+            cancellationToken: cancellationToken);
+      }
+    }
+
+    /// <summary>
+    /// Делит текст на фрагменты <= TelegramMaxMessageLength,
+    /// стараясь рвать по двойным/одинарным переносам или границам предложений.
+    /// </summary>
+    private static IEnumerable<string> SplitMessage(string text)
+    {
+      int pos = 0, length = text.Length;
+      while (pos < length)
+      {
+        int maxLen = Math.Min(3750, length - pos);
+        string window = text.Substring(pos, maxLen);
+
+        int split;
+        // 1) двойной перенос строки
+        split = window.LastIndexOf("\n\n", StringComparison.Ordinal);
+        if (split >= 0)
+        {
+          split += 2;
+        }
+        else
+        {
+          // 2) одинарный перенос
+          split = window.LastIndexOf('\n');
+          if (split >= 0)
+            split += 1;
+          else
+          {
+            // 3) граница предложения: .!? плюс пробел
+            var matches = Regex.Matches(window, @"[\.\!\?]\s+");
+            if (matches.Count > 0)
+            {
+              var m = matches[matches.Count - 1];
+              split = m.Index + m.Length;
+            }
+            else
+            {
+              // 4) жёсткий лимит
+              split = maxLen;
+            }
+          }
+        }
+
+        var part = text.Substring(pos, split).TrimEnd();
+        yield return part;
+        pos += split;
+      }
     }
   }
 }

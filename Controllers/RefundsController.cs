@@ -70,7 +70,7 @@ namespace automation.mbtdistr.ru.Controllers
           //string logFilePath = Path.Combine("wwwroot", "logs", "ozon", $"{DateTime.UtcNow:yyyy-MM-dd}.log");
           //Directory.CreateDirectory(Path.GetDirectoryName(logFilePath) ?? string.Empty);
           //await System.IO.File.WriteAllTextAsync(logFilePath, data.ToString());
-          await Extensions.SendDebugObject<object>(data, "public async Task<IActionResult> OzonWh(object data)");
+          //await Extensions.SendDebugObject<object>(data, "public async Task<IActionResult> OzonWh(object data)");
         }
         catch (Exception ex)
         {
@@ -107,7 +107,7 @@ namespace automation.mbtdistr.ru.Controllers
     }
 
 
-  
+
   }
 
 }

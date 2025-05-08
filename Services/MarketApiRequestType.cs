@@ -9,7 +9,8 @@
     ReturnsList,
     SellerInfo,
     Ping,
-    Campaigns
+    Campaigns,
+    Orders
     // и так далее...
   }
 }

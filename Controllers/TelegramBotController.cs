@@ -23,6 +23,8 @@ using ZXing;
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 using automation.mbtdistr.ru.Services;
 using System.Text.Json.Serialization;
+using static automation.mbtdistr.ru.Services.MarketSyncService;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -215,7 +217,7 @@ ILogger<TelegramBotController> logger)
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Exception - public async Task<IActionResult> Post([FromBody] Update update)\n{ex.Message}\n{ex.InnerException?.Message}");
+        await Extensions.SendDebugMessage($"Exception - public async Task<IActionResult> Post([FromBody] Update update)\n{ex.Message}\n{ex.StackTrace}\n{ex.InnerException?.Message}");
       }
 
       return Ok();
@@ -475,9 +477,9 @@ ILogger<TelegramBotController> logger)
             List<Services.Wildberries.Models.ReturnsListResponse> obj = new List<Services.Wildberries.Models.ReturnsListResponse>();
             foreach (var cab in cabinets)
             {
-              obj.Add(await _wb.GetReturnsListAsync(cab));
+              obj.Add(await _wb.GetReturnsListAsync(cab, true));
             }
-            await Extensions.SendDebugObject<List<Services.Wildberries.Models.ReturnsListResponse>>(obj, $"{obj.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
+            await Extensions.SendDebugObject<List<Services.Wildberries.Models.ReturnsListResponse>>(obj, $"{obj.GetType().AssemblyQualifiedName?.Replace("automation_mbtdistr_ru_", "")}");
             break;
           case "/ym":
             if (worker.Role != RoleType.Admin)
@@ -486,7 +488,7 @@ ILogger<TelegramBotController> logger)
               return;
             }
 
-            List<Services.YandexMarket.Models.DTOs.ReturnsListResponse> returns = new List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>();
+            List<Services.YandexMarket.Models.ReturnsListResponse> returns = new List<Services.YandexMarket.Models.ReturnsListResponse>();
 
             //получаем обьект кабинета на вб
             cabinets = await _db.Cabinets
@@ -504,15 +506,11 @@ ILogger<TelegramBotController> logger)
                 var result = await _yMApiService.GetReturnsListAsync(cab, camp);
                 returns.Add(result);
               }
-
-              //string caption = $"Кабинет: {cab.Marketplace} / {cab.Name}";
-              await MarketSyncService.ProcessYMReturnsAsync(returns, cab, _db, CancellationToken.None);
             }
 
+            // await Extensions.SendDebugObject<List<CampaignsResponse>>(campaigns);
+            //await Extensions.SendDebugObject<List<Services.YandexMarket.Models.ReturnsListResponse>>(returns, $"{returns.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
 
-
-            await Extensions.SendDebugObject<List<CampaignsResponse>>(campaigns);
-            await Extensions.SendDebugObject<List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>>(returns, $"{returns.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
             //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {returns.ToJson()}");
             break;
           case "/ozon":
@@ -530,22 +528,36 @@ ILogger<TelegramBotController> logger)
 
             foreach (var cab in cabinets2)
             {
-              obj2.Add(await _oz.GetReturnsListAsync(cab));
+              //выбираем те возвраты у которых вижуал статус айди не равен 34
+              var response = await _oz.GetReturnsListAsync(cab);
+              response.Returns = response.Returns.Where(r => r.Visual.Status.Id != 34 && r.Schema == "Fbo").ToList();
+              obj2.Add(response);
+              //obj2.Add(await _oz.GetReturnsListAsync(cab));
             }
 
             await Extensions.SendDebugObject<List<Services.Ozon.Models.ReturnsListResponse>>(obj2, $"{obj2.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
 
             break;
+          //case "/subscribe":
+          //  MarketSyncService.ReturnStatusChanged += OnReturnStatusChanged;
+          //  await _botClient.SendMessage(msg.Chat.Id, "Вы подписаны на уведомления о статусах возвратов.");
+          //  break;
+          //case "/unsubscribe":
+          //  MarketSyncService.ReturnStatusChanged -= OnReturnStatusChanged;
+          //  await _botClient.SendMessage(msg.Chat.Id, "Вы отписаны от уведомлений о статусах возвратов.");
+          //  break;
           default:
             await _botClient.SendMessage(msg.Chat.Id, "Команда не распознана или у вас нет прав. Напишите /help.");
             break;
         }
       }
-      catch (Exception)
+      catch (Exception ex)
       {
+        Extensions.SendDebugMessage($"Exception - private async Task HandleTextMessageAsync(Message msg, Worker worker)\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.InnerException?.StackTrace}");
         throw;
       }
     }
+
 
     private async Task HandleGetWorkersAsync(Message msg, bool editPrev = false)
     {
@@ -698,10 +710,6 @@ ILogger<TelegramBotController> logger)
         await _botClient.SendMessage(msg.Chat.Id, $"Ошибка: {ex.Message}");
       }
     }
-
-
-
-
 
     private async Task HandleCallbackQueryAsync(CallbackQuery cb, Worker worker)
     {

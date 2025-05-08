@@ -25,6 +25,8 @@ using automation.mbtdistr.ru.Services.Wildberries.Models;
 using System.Collections.Generic;
 using automation.mbtdistr.ru.Services.YandexMarket;
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
+using Return = automation.mbtdistr.ru.Models.Return;
+using ZXing;
 
 namespace automation.mbtdistr.ru.Services
 {
@@ -44,6 +46,25 @@ namespace automation.mbtdistr.ru.Services
 
     private bool debug = false;
     private bool log = false;
+
+    //Добавляем делегат события изменения статуса возврата или создания нового возврата
+    public delegate void ReturnStatusChangedEventHandler(ReturnStatusChangedEventArgs e);
+    public static event ReturnStatusChangedEventHandler? ReturnStatusChanged;
+
+    //класс для передачи данных события
+    public class ReturnStatusChangedEventArgs : EventArgs
+    {
+      public Models.Return Return { get; set; }
+      public string Message { get; set; }
+      public int CabinetId { get; set; }
+      public ReturnStatusChangedEventArgs(int cabinetId, Models.Return @return, string message)
+      {
+        CabinetId = cabinetId;
+        Return = @return;
+        Message = message;
+      }
+    }
+
 
     public MarketSyncService(
 
@@ -71,32 +92,29 @@ namespace automation.mbtdistr.ru.Services
       if (admin?.NotificationOptions?.IsReceiveNotification == true && admin.NotificationOptions.NotificationLevels.Contains(NotificationLevel.Log))
         log = true;
 
-      //var scope = scopeFactory.CreateScope();
-      //var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
+      MarketSyncService.ReturnStatusChanged += OnReturnStatusChanged;
+    }
 
-      ////получаем кабинет с айди 6 и всеми вложенными данными
-      //var cabinet = _db.Cabinets
-      //    .Include(c => c.Settings)
-      //    .ThenInclude(s => s.ConnectionParameters)
-      //    .Include(c => c.AssignedWorkers)
-      //    .FirstOrDefault(c => c.Id == 6);
-
-      //wbSvc.GetReturnsListAsync(cabinet, true).ContinueWith(t =>
-      //{
-      //  var returns = t.Result;
-      //  ProcessWbReturnsAsync(returns.Claims, cabinet, _db, CancellationToken.None).ContinueWith(t =>
-      //  {
-      //    var result = t.Result;
-      //    // Обработка результата
-      //  });
-      //});
-
-
-      //  SyncAllAsync(CancellationToken.None);
+    private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
+    {
+      // Null-check для cab и связанных работников
+      var workers = _db.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
+      if (workers == null)
+        return;
+      // Отправляем сообщение всем рабочим
+      foreach (var worker in workers)
+      {
+        if (worker.NotificationOptions.IsReceiveNotification)
+          await _botClient.SendMessage(worker.TelegramId, e.Message, ParseMode.Html);
+      }
+      if (debug)
+        await Extensions.SendDebugObject<Return>(e.Return, $"Обьект уведомления: \n{e.Message}");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+      if (Program.Environment.IsDevelopment()) return;
+
       if (log) Extensions.SendDebugMessage($"Синхронизация площадок запущена\n{DateTime.Now}")?.ConfigureAwait(false);
 
       //await SyncAllAsync(stoppingToken);
@@ -121,70 +139,6 @@ namespace automation.mbtdistr.ru.Services
       if (log) Extensions.SendDebugMessage($"Синхронизация площадок завершена\n{DateTime.Now}")?.ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Делит текст на «умные» фрагменты и отправляет их по очереди.
-    /// </summary>
-    private async Task SendLongMessageAsync(long chatId, string text, CancellationToken cancellationToken)
-    {
-      if (string.IsNullOrEmpty(text))
-        return;
-
-      foreach (var chunk in SplitMessage(text))
-      {
-        await _botClient.SendMessage(
-            chatId: chatId,
-            text: chunk,
-            cancellationToken: cancellationToken);
-      }
-    }
-
-    /// <summary>
-    /// Делит текст на фрагменты <= TelegramMaxMessageLength,
-    /// стараясь рвать по двойным/одинарным переносам или границам предложений.
-    /// </summary>
-    private IEnumerable<string> SplitMessage(string text)
-    {
-      int pos = 0, length = text.Length;
-      while (pos < length)
-      {
-        int maxLen = Math.Min(_telegramMaxMessageLength, length - pos);
-        string window = text.Substring(pos, maxLen);
-
-        int split;
-        // 1) двойной перенос строки
-        split = window.LastIndexOf("\n\n", StringComparison.Ordinal);
-        if (split >= 0)
-        {
-          split += 2;
-        }
-        else
-        {
-          // 2) одинарный перенос
-          split = window.LastIndexOf('\n');
-          if (split >= 0)
-            split += 1;
-          else
-          {
-            // 3) граница предложения: .!? плюс пробел
-            var matches = Regex.Matches(window, @"[\.\!\?]\s+");
-            if (matches.Count > 0)
-            {
-              var m = matches[matches.Count - 1];
-              split = m.Index + m.Length;
-            }
-            else
-            {
-              // 4) жёсткий лимит
-              split = maxLen;
-            }
-          }
-        }
-
-        var part = text.Substring(pos, split).TrimEnd();
-        yield return part;
-        pos += split;
-      }
-    }
 
 
     private async Task SyncAllAsync(CancellationToken ct)
@@ -216,6 +170,8 @@ namespace automation.mbtdistr.ru.Services
               To = DateTime.UtcNow
             };
 
+
+
             List<Ozon.Models.ReturnInfo> returns = new List<Ozon.Models.ReturnInfo>();
             long lastId = 0;
             do
@@ -231,7 +187,9 @@ namespace automation.mbtdistr.ru.Services
               }
               if (response.Returns != null && response.Returns.Count > 0)
               {
-                returns.AddRange(response.Returns);
+                //выбираем те возвраты у которых вижуал статус айди не равен 34
+                returns.AddRange(response.Returns.Where(r => r.Visual?.Status.Id != 34));
+                //returns.AddRange(response.Returns);
               }
               if (!response.HasNext)
               {
@@ -249,42 +207,41 @@ namespace automation.mbtdistr.ru.Services
           else if (cab.Marketplace.Equals("WILDBERRIES", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("WB", StringComparison.OrdinalIgnoreCase))
           {
             var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
-
-            await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response);
-
-            var claims = response.Claims;
-
-            var ret = await ProcessWbReturnsAsync(response.Claims, cab, _db, ct);
-
-            allReturns.AddRange(ret);
+            if (response?.Claims.Count > 0)
+            {
+              await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response);
+              var ret = await ProcessWbReturnsAsync(response.Claims, cab, _db, ct);
+              allReturns.AddRange(ret);
+            }
           }
 
+          //else if (cab.Marketplace.Equals("МЕГАМАРКЕТ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ММ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("MEGAMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("MM", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("МЕГА", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("МЕГ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("СБЕР", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("СБЕР", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("SBER", StringComparison.OrdinalIgnoreCase))
+          //{
 
-          else if (cab.Marketplace.Equals("МЕГАМАРКЕТ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ММ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("MEGAMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("MM", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("МЕГА", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("МЕГ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("СБЕР", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("СБЕР", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("SBER", StringComparison.OrdinalIgnoreCase))
-          {
-
-          }
+          //}
 
 
           else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
           {
-            List<Services.YandexMarket.Models.DTOs.ReturnsListResponse> _ymReturns = new List<Services.YandexMarket.Models.DTOs.ReturnsListResponse>();
-
-            //получаем обьект кабинета на вб
-            cabinets = await _db.Cabinets
-                 .Include(c => c.Settings)
-                     .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET").ToListAsync();
-
-
-
-            foreach (var c in cabinets)
+            List<Services.YandexMarket.Models.ReturnsListResponse> _ymReturns = new List<Services.YandexMarket.Models.ReturnsListResponse>();
+            var _campaigns = await _yMApiService.GetCampaignsAsync(cab);
+            foreach (var camp in _campaigns.Campaigns)
             {
-              var _campaigns = await _yMApiService.GetCampaignsAsync(c);
-              foreach (var camp in _campaigns.Campaigns)
+
+
+
+              var result = await _yMApiService.GetReturnsListAsync(cab, camp);
+
+
+
+              if (result.Result.Returns.Count > 0)
               {
-                var result = await _yMApiService.GetReturnsListAsync(c, camp);
                 _ymReturns.Add(result);
               }
+            }
+            if (_ymReturns.Count > 0)
+            {
+              await ProcessYMReturnsAsync(_ymReturns, cab, _db, ct);
             }
           }
 
@@ -297,9 +254,6 @@ namespace automation.mbtdistr.ru.Services
         {
           await Extensions.SendDebugMessage($"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Name} ({cab.Marketplace})\n\n{ex.Message}\n{ex.StackTrace}\n\n{ex.InnerException?.Message}");
         }
-
-
-
       }
       try
       {
@@ -352,42 +306,8 @@ namespace automation.mbtdistr.ru.Services
             var currentStatus = existingReturn.Info.ReturnStatus;
             var currentStatusStr = currentStatus.GetDisplayName();
             var newChangedAt = x.Visual?.ChangeMoment;
-            if (currentStatus != newStatus)
-            {
-              message = FormatReturnHtml(x, cab, false, currentStatus);
-              //отправляем всем участникам кабинета
-              foreach (var worker in cab.AssignedWorkers)
-              {
-                if (worker.NotificationOptions.IsReceiveNotification && worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.ReturnNotification))
-                {
-                  await _botClient.SendMessage(
-                      chatId: worker.TelegramId,
-                      text: message,
-                      parseMode: ParseMode.Html,
-                      cancellationToken: ct);
-                }
-              }
-            }
+            var oldChangedAt = existingReturn.ChangedAt;
 
-            if (existingReturn.ChangedAt != newChangedAt)
-            {
-              message = FormatReturnHtml(x, cab, false);
-              foreach (var worker in cab.AssignedWorkers)
-              {
-                if (worker.NotificationOptions.IsReceiveNotification && (worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.ReturnNotification) || worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.AllCabinetNotifications)))
-                {
-                  await _botClient.SendMessage(
-                      chatId: worker.TelegramId,
-                      text: message,
-                      parseMode: ParseMode.Html,
-                      cancellationToken: ct);
-                }
-              }
-            }
-
-            var newIsOpened = x.AdditionalInfo?.IsOpened ?? false;
-            existingReturn.IsOpened = newIsOpened;
-            existingReturn.IsSuperEconom = x.AdditionalInfo?.IsSuperEconom ?? false;
             existingReturn.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out status) ? (ReturnStatus)status : ReturnStatus.Unknown;
             existingReturn.Info.ReturnInfoId = x.Id;
             existingReturn.Info.ReturnReasonName = x.ReturnReasonName;
@@ -395,6 +315,14 @@ namespace automation.mbtdistr.ru.Services
             existingReturn.Info.OrderId = x.OrderId;
             db.Returns.Update(existingReturn);
             returnList.Add(existingReturn);
+
+            await db.SaveChangesAsync();
+
+            if (currentStatus != newStatus || oldChangedAt != newChangedAt)
+            {
+              message = FormatReturnHtml(existingReturn, cab, false, currentStatus);
+              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
+            }
           }
           else
           {
@@ -404,43 +332,39 @@ namespace automation.mbtdistr.ru.Services
               @return.CabinetId = cab.Id;
               @return.ChangedAt = x.Visual?.ChangeMoment;
               @return.Info.ReturnInfoId = x.Id;
-              @return.IsOpened = x.AdditionalInfo?.IsOpened ?? false;
-              @return.IsSuperEconom = x.AdditionalInfo?.IsSuperEconom ?? false;
+              //if (x.Logistic.ReturnDate.HasValue)
+              //  @return.OrderedAt = x.Logistic.ReturnDate.Value;
+              // Updated line to handle potential null reference
+              @return.CreatedAt = x.Logistic?.ReturnDate.GetValueOrDefault() ?? DateTime.MinValue;
+
+
+
+
               @return.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
               @return.Info.ReturnReasonName = x.ReturnReasonName;
               @return.Info.OrderId = x.OrderId;
               db.Returns.Add(@return);
-              message = FormatReturnHtml(x, cab, true);
-              foreach (var worker in cab.AssignedWorkers)
-              {
-                if (worker.NotificationOptions.IsReceiveNotification && (worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.ReturnNotification) || worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.AllCabinetNotifications)))
-                {
-                  await _botClient.SendMessage(
-                      chatId: worker.TelegramId,
-                      text: message,
-                      parseMode: ParseMode.Html,
-                      cancellationToken: ct);
-                }
-              }
               returnList.Add(@return);
+
+              await db.SaveChangesAsync();
+
+              message = FormatReturnHtml(@return, cab, true);
+              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-              throw;
+              await Extensions.SendDebugMessage($"Ошибка при обработке возврата Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
             }
           }
-
-          await db.SaveChangesAsync();
         }
-
         return returnList;
       }
-      catch (Exception)
+      catch (Exception ex)
       {
-
+        //ошибка при сохранении изменений в БД
+        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
         throw;
       }
-
     }
 
 
@@ -466,25 +390,6 @@ namespace automation.mbtdistr.ru.Services
           {
             var oldChangedAt = existingReturn.ChangedAt;
             var newChangedAt = claim.DtUpdate;
-
-            if (oldChangedAt != newChangedAt)
-            {
-              var message = $"<b>Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>\n\nОбновление возврата {claim.NmId}\n\n{newChangedAt:dd.MM.yyyy HH:mm:ss}";
-              //отправляем всем участникам кабинета
-              foreach (var worker in cab.AssignedWorkers)
-              {
-                if (worker.NotificationOptions.IsReceiveNotification && worker.NotificationOptions.NotificationLevels.Contains(NotificationLevel.ReturnNotification))
-                {
-                  _botClient.SendMessage(
-                      chatId: worker.TelegramId,
-                      text: message,
-                      parseMode: ParseMode.Html,
-                      cancellationToken: ct);
-                }
-              }
-            }
-
-
             // Обновляем существующий возврат
             existingReturn.Info.ClaimId = claim.Id;
             existingReturn.ChangedAt = claim.DtUpdate;
@@ -492,6 +397,13 @@ namespace automation.mbtdistr.ru.Services
             existingReturn.CreatedAt = claim.Dt;
             db.Returns.Update(existingReturn);
             returnsList.Add(existingReturn);
+
+            await db.SaveChangesAsync();
+            if (oldChangedAt != newChangedAt)
+            {
+              var message = $"<b>Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>\n\nОбновление возврата {claim.NmId}\n\n{newChangedAt:dd.MM.yyyy HH:mm:ss}";
+              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
+            }
           }
           else
           {
@@ -503,21 +415,25 @@ namespace automation.mbtdistr.ru.Services
             @return.OrderedAt = claim.OrderDt;
             db.Returns.Add(@return);
             returnsList.Add(@return);
-          }
 
-          var changes = await db.SaveChangesAsync();
+            await db.SaveChangesAsync();
+
+            var message = $"<b>Новый возврат в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>\n\nВозврат {claim.NmId}\n\n{claim.DtUpdate:dd.MM.yyyy HH:mm:ss}";
+            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
+          }
         }
         return returnsList;
       }
 
-      catch (Exception)
+      catch (Exception ex)
       {
+        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов Wildberries\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
         throw;
       }
     }
 
-    public static async Task<List<Models.Return>> ProcessYMReturnsAsync(
-        List<Services.YandexMarket.Models.DTOs.ReturnsListResponse> returns,
+    public async Task<List<Models.Return>> ProcessYMReturnsAsync(
+        List<Services.YandexMarket.Models.ReturnsListResponse> returns,
         Cabinet cab,
         ApplicationDbContext db,
         CancellationToken ct
@@ -537,29 +453,41 @@ namespace automation.mbtdistr.ru.Services
               .Include(r => r.Compensation)
               .Include(r => r.Cabinet)
               .ThenInclude(c => c.AssignedWorkers)
-              .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.Id == r.Id, ct);
+              .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.ReturnInfoId == r.Id, ct);
             if (existingReturn != null)
             {
-              if (existingReturn.ChangedAt != r.UpdateDate)
-              {
+              var oldChangedAt = existingReturn.ChangedAt;
+              var newChangedAt = r.UpdateDate;
 
+              if (newChangedAt != oldChangedAt)
+              {
+                existingReturn.ChangedAt = newChangedAt;
+                db.Returns.Update(existingReturn);
+                returnsList.Add(existingReturn);
+                var message = FormatReturnHtml(existingReturn, cab, false);
+                ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
               }
-              existingReturn.ChangedAt = r.UpdateDate;
-              db.Returns.Update(existingReturn);
-              returnsList.Add(existingReturn);
             }
             else
             {
               Models.Return @return = new Models.Return();
               @return.CreatedAt = r.CreationDate;
-              @return.CabinetId = cab.Id;
-              @return.Info.ProductsSku = r.Items.Select(i => i.MarketSku).ToList();
-              @return.Info.ReturnInfoId = (int)r.Id;
               @return.ChangedAt = r.UpdateDate;
+              @return.CabinetId = cab.Id;
+              @return.Info.ReturnReasonName = $"{(string.IsNullOrEmpty(r.Comment) ? "" : $"{r.Comment}. ")}{r.DecisionReason.GetDisplayName()}. {r.DecisionSubreason.GetDisplayName()}";
+
+
+              @return.Info.ProductsSku = r.Items.Select(i => i.MarketSku).ToList();
+              @return.Info.ReturnInfoId = r.Id;
               @return.Info.OrderId = r.OrderId;
+
+              //@return.Info.ReturnStatus = r.ShipmentStatus;
 
               db.Returns.Add(@return);
               returnsList.Add(@return);
+
+              var message = FormatReturnHtml(@return, cab, true);
+              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
             }
           }
         }
@@ -572,44 +500,33 @@ namespace automation.mbtdistr.ru.Services
         await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
       }
 
-
       return returnsList;
     }
 
-    string FormatReturnHtml(ReturnInfo x, Cabinet cab, bool isNew, ReturnStatus? oldStatus = null)
+    public static string FormatReturnHtml(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
     {
       var sb = new StringBuilder();
-      sb.AppendLine(isNew
-          ? $"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>"
-          : $"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
-      sb.AppendLine("");
-      sb.AppendLine($"<b>Возврат</b> {x.Id}");
-      sb.AppendLine($"<b>Заказ</b> {x.OrderId}");
-      if (oldStatus.HasValue)
+
+      if (isNew.HasValue && isNew.Value)
       {
-        sb.AppendLine($"<b>Старый статус:</b> {oldStatus.GetDisplayName()}");
-        var newStatus = (Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown).GetDisplayName();
-        sb.AppendLine($"<b>Новый статус:</b> {newStatus}");
+        sb.AppendLine($"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine("");
       }
-      //sb.AppendLine($"<b>Статус возврата:</b> {GetEnumDisplayName(x.Visual.Status.SysName)}");
-      sb.AppendLine($"<b>Причина возврата:</b> {x.ReturnReasonName}");
-      sb.AppendLine("");
-      sb.AppendLine($"<b>Дата изменения:</b> {x?.Visual?.ChangeMoment:dd.MM.yyyy HH:mm:ss}");
+      else if (isNew.HasValue && !isNew.Value)
+      {
+        sb.AppendLine($"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine("<br>");
+      }
 
-
-
-      //if ((admin?.NotificationOptions?.IsReceiveNotification ?? false) && (admin?.NotificationOptions?.NotificationLevels.Any(l => l == NotificationLevel.DeepDegugNotification) ?? false))
-      //{
-      //  var obj = new
-      //  {
-      //    x,
-      //    cab,
-      //    isNew,
-      //    oldStatus
-      //  };
-      //  string caption = $"FormatReturnHtml return\n\n{cab.Marketplace.ToUpper()} / {cab.Name}\nВозврат{x.Id}\nЗаказ №{x.OrderNumber} (#{x.OrderId})";
-      //  Extensions.SendDebugObject<dynamic>(obj, caption).ConfigureAwait(false);
-      //}
+      sb.AppendLine($"<b>ID возврата:</b> {x.Info.ReturnInfoId}");
+      sb.AppendLine($"<b>ID заказа:</b> {x.Info.OrderId}");
+      sb.AppendLine("<br>");
+      sb.AppendLine("<br>");
+      sb.AppendLine($"<b>Причина возврата:</b> {x.Info.ReturnReasonName}");
+      sb.AppendLine("<br>");
+      sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
+      sb.AppendLine("<br>");
+      sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
       return sb.ToString();
     }
 
