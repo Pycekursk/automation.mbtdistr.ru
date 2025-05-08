@@ -113,8 +113,6 @@ namespace automation.mbtdistr.ru.Services
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-      if (Program.Environment.IsDevelopment()) return;
-
       if (log) Extensions.SendDebugMessage($"Синхронизация площадок запущена\n{DateTime.Now}")?.ConfigureAwait(false);
 
       //await SyncAllAsync(stoppingToken);
@@ -143,6 +141,8 @@ namespace automation.mbtdistr.ru.Services
 
     private async Task SyncAllAsync(CancellationToken ct)
     {
+      if (Program.Environment.IsDevelopment()) return;
+
       using var scope = _scopeFactory.CreateScope();
 
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
@@ -320,7 +320,7 @@ namespace automation.mbtdistr.ru.Services
 
             if (currentStatus != newStatus || oldChangedAt != newChangedAt)
             {
-              message = FormatReturnHtml(existingReturn, cab, false, currentStatus);
+              message = FormatReturnHtmlParse(existingReturn, cab, false, currentStatus);
               ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
             }
           }
@@ -348,7 +348,7 @@ namespace automation.mbtdistr.ru.Services
 
               await db.SaveChangesAsync();
 
-              message = FormatReturnHtml(@return, cab, true);
+              message = FormatReturnHtmlParse(@return, cab, true);
               ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
             }
             catch (Exception ex)
@@ -464,7 +464,7 @@ namespace automation.mbtdistr.ru.Services
                 existingReturn.ChangedAt = newChangedAt;
                 db.Returns.Update(existingReturn);
                 returnsList.Add(existingReturn);
-                var message = FormatReturnHtml(existingReturn, cab, false);
+                var message = FormatReturnHtmlParse(existingReturn, cab, false);
                 ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
               }
             }
@@ -486,7 +486,7 @@ namespace automation.mbtdistr.ru.Services
               db.Returns.Add(@return);
               returnsList.Add(@return);
 
-              var message = FormatReturnHtml(@return, cab, true);
+              var message = FormatReturnHtmlParse(@return, cab, true);
               ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
             }
           }
@@ -501,6 +501,31 @@ namespace automation.mbtdistr.ru.Services
       }
 
       return returnsList;
+    }
+
+    public static string FormatReturnHtmlParse(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
+    {
+      var sb = new StringBuilder();
+
+      if (isNew.HasValue && isNew.Value)
+      {
+        sb.AppendLine($"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine("");
+      }
+      else if (isNew.HasValue && !isNew.Value)
+      {
+        sb.AppendLine($"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine("");
+      }
+
+      sb.AppendLine($"<b>ID возврата:</b> {x.Info.ReturnInfoId}");
+      sb.AppendLine($"<b>ID заказа:</b> {x.Info.OrderId}");
+      sb.AppendLine("");
+      sb.AppendLine($"<b>Причина возврата:</b> {x.Info.ReturnReasonName}");
+      sb.AppendLine("");
+      sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
+      sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
+      return sb.ToString();
     }
 
     public static string FormatReturnHtml(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)

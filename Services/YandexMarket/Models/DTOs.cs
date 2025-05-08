@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 
 using System.ComponentModel.DataAnnotations;
+using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
@@ -179,7 +180,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     public YMReturnDecisionSubreasonType DecisionSubreason { get; set; }
   }
 
-  
+
 
 
   /// <summary>
@@ -396,7 +397,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     /// </summary>
     [JsonPropertyName("type")]
     [JsonProperty("type")]
-    public YMReturnType? ReturnType { get; set; }
+    public YMReturnType? Type { get; set; }
 
     /// <summary>  
     /// Статусы невыкупов или возвратов — для фильтрации результатов.  
@@ -423,11 +424,15 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     /// </summary>
     public Dictionary<string, object> ToQueryParams()
     {
+      //получаем значение аттрибута enummember
+
+
+
       var queryParams = new Dictionary<string, object>();
       if (FromDate != null) queryParams.Add("fromDate", FromDate);
       if (ToDate != null) queryParams.Add("toDate", ToDate);
-      if (ReturnType != null) queryParams.Add("type", ReturnType.ToString());
-      if (Statuses != null) queryParams.Add("statuses", string.Join(",", Statuses));
+      if (Type != null) queryParams.Add("type", Type.GetEnumMemberValue());
+      if (Statuses != null) queryParams.Add("statuses", string.Join(",", Statuses.Select(x => x.GetEnumMemberValue())));
       if (OrderIds != null) queryParams.Add("orderIds", string.Join(",", OrderIds));
       return queryParams;
     }

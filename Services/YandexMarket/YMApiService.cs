@@ -38,7 +38,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
 
 
-    public async Task<ReturnsListResponse> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 500, long? lastId = null)
+    public async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 500, long? lastId = null)
     {
       if (filter == null)
       {
@@ -46,13 +46,8 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         {
           FromDate = DateTime.Now.AddDays(-20).ToString("yyyy-MM-dd"),
           ToDate = DateTime.Now.ToString("yyyy-MM-dd"),
-          //Statuses = new List<YMRefundStatusType>
-          //{
-          //  YMRefundStatusType.WaitingForDecision,
-          //  YMRefundStatusType.CompleteWithoutRefund,
-          //  YMRefundStatusType.RefundInProgress,
-          //  YMRefundStatusType.StartedByUser
-          //},
+          //Type = YMReturnType.Unredeemed,
+          //Statuses = new List<YMRefundStatusType> { YMRefundStatusType.StartedByUser, YMRefundStatusType.RefundInProgress, YMRefundStatusType.RefundedWithBonuses, YMRefundStatusType.DecisionMade, YMRefundStatusType.RefundedByShop, YMRefundStatusType.WaitingForDecision }
         };
       }
 
@@ -80,9 +75,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         });
         return obj;
       }
-      catch (Exception)
+      catch (Exception ex)
       {
-        throw;
+        await Extensions.SendDebugMessage($"Ошибка получения списка возвратов: {ex.Message}");
+        return default;
       }
     }
   }

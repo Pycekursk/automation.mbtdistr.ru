@@ -104,10 +104,7 @@ ILogger<TelegramBotController> logger)
         var cts = new CancellationTokenSource();
         var ct = cts.Token;
 
-        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        //if (env != "Development")
-        //{
-
+ 
         string caption = $"Telegram Bot API\n" +
            $"{DateTime.Now}\n" +
            $"Тип обновления: {update.Type}\n" +
@@ -115,8 +112,10 @@ ILogger<TelegramBotController> logger)
            $"ID пользователя: {update.Message?.From?.Id ?? update.CallbackQuery?.From.Id}\n" +
            $"Текст сообщения: {update.Message?.Text ?? update.CallbackQuery?.Data}";
 
+
         await Extensions.SendDebugObject<Update>(update, caption);
-        //  }
+
+        
         var chatT = update.Message.Chat.Type;
         string chatTypeString = update.Message?.Chat.Type.ToString() ?? update.CallbackQuery?.Message?.Chat.Type.ToString() ?? string.Empty;
         ChatType? chatType = Enum.TryParse(chatTypeString, out ChatType result) ? result : null;
@@ -185,12 +184,10 @@ ILogger<TelegramBotController> logger)
             return Ok();
           }
         }
-
-
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Exception - public async Task<IActionResult> Post([FromBody] Update update)\n{ex.Message}\n{ex.InnerException?.Message}");
+        await Extensions.SendDebugMessage($"Exception - public async Task<IActionResult> Post([FromBody] Update update)\n\n{ex.Message}\n{ex.StackTrace}\n\n{ex.InnerException?.Message}");
       }
 
       try

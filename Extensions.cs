@@ -40,6 +40,29 @@ namespace automation.mbtdistr.ru
       return display?.Name ?? enumValue.ToString();
     }
 
+    /// <summary>
+    /// Возвращает значение, указанное в EnumMemberAttribute, или имя элемента перечисления.
+    /// </summary>
+    /// <param name="enumValue">Значение перечисления.</param>
+    /// <returns>Строковое значение из атрибута или имя элемента.</returns>
+    public static string GetEnumMemberValue(this Enum enumValue)
+    {
+      if (enumValue == null)
+        throw new ArgumentNullException(nameof(enumValue));
+
+      var type = enumValue.GetType();
+      var memberInfo = type.GetField(enumValue.ToString());
+      if (memberInfo == null)
+        return enumValue.ToString();
+
+      var attribute = memberInfo
+          .GetCustomAttributes(typeof(EnumMemberAttribute), inherit: false)
+          .OfType<EnumMemberAttribute>()
+          .FirstOrDefault();
+
+      return attribute?.Value ?? enumValue.ToString();
+    }
+
     /// <summary>  
     /// Фабрика конвертеров JSON для перечислений, поддерживающая атрибут EnumMember и числовые значения.  
     /// </summary>  
@@ -361,9 +384,9 @@ namespace automation.mbtdistr.ru
         //  return;
         //}
       }
-      catch (Exception)
+      catch (Exception ex)
       {
-        throw;
+        await SendDebugMessage($"{ex.Message}\n{ex.StackTrace}");
       }
     }
 
