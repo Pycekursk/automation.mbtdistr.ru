@@ -320,7 +320,7 @@ namespace automation.mbtdistr.ru.Services
 
             if (currentStatus != newStatus || oldChangedAt != newChangedAt)
             {
-              message = FormatReturnHtmlParse(existingReturn, cab, false, currentStatus);
+              message = FormatReturnHtmlMessage(existingReturn, cab, false, currentStatus);
               ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
             }
           }
@@ -348,7 +348,7 @@ namespace automation.mbtdistr.ru.Services
 
               await db.SaveChangesAsync();
 
-              message = FormatReturnHtmlParse(@return, cab, true);
+              message = FormatReturnHtmlMessage(@return, cab, true);
               ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
             }
             catch (Exception ex)
@@ -464,7 +464,7 @@ namespace automation.mbtdistr.ru.Services
                 existingReturn.ChangedAt = newChangedAt;
                 db.Returns.Update(existingReturn);
                 returnsList.Add(existingReturn);
-                var message = FormatReturnHtmlParse(existingReturn, cab, false);
+                var message = FormatReturnHtmlMessage(existingReturn, cab, false);
                 ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
               }
             }
@@ -486,7 +486,7 @@ namespace automation.mbtdistr.ru.Services
               db.Returns.Add(@return);
               returnsList.Add(@return);
 
-              var message = FormatReturnHtmlParse(@return, cab, true);
+              var message = FormatReturnHtmlMessage(@return, cab, true);
               ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
             }
           }
@@ -503,19 +503,19 @@ namespace automation.mbtdistr.ru.Services
       return returnsList;
     }
 
-    public static string FormatReturnHtmlParse(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
+    public static string FormatReturnHtmlMessage(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
     {
       var sb = new StringBuilder();
 
       if (isNew.HasValue && isNew.Value)
       {
-        sb.AppendLine($"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
-        sb.AppendLine("");
+        sb.AppendLine($"<b>НОВЫЙ ВОЗВРАТ<b>");
+        sb.AppendLine($"{cab.Name} ({cab.Marketplace.ToUpper()})");
       }
       else if (isNew.HasValue && !isNew.Value)
       {
-        sb.AppendLine($"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
-        sb.AppendLine("");
+        sb.AppendLine($"<b>Обновление возврата<b>");
+        sb.AppendLine($"{cab.Name} ({cab.Marketplace.ToUpper()})");
       }
 
       sb.AppendLine($"<b>ID возврата:</b> {x.Info.ReturnInfoId}");
@@ -528,14 +528,14 @@ namespace automation.mbtdistr.ru.Services
       return sb.ToString();
     }
 
-    public static string FormatReturnHtml(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
+    public static string FormatReturnHtmlContent(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
     {
       var sb = new StringBuilder();
 
       if (isNew.HasValue && isNew.Value)
       {
         sb.AppendLine($"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
-        sb.AppendLine("");
+        sb.AppendLine("<br>");
       }
       else if (isNew.HasValue && !isNew.Value)
       {

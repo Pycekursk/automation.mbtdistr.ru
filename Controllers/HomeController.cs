@@ -295,7 +295,7 @@ namespace automation.mbtdistr.ru.Controllers
         GreetingMessage = $"Возврат {_return.Info.ReturnInfoId}\n{_return.CreatedAt}"
       };
 
-      mainMenu.HtmlContent = MarketSyncService.FormatReturnHtml(_return, _return.Cabinet, null);
+      mainMenu.HtmlContent = MarketSyncService.FormatReturnHtmlContent(_return, _return.Cabinet, null);
 
       return View(mainMenu);
     }
