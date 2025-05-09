@@ -426,8 +426,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     {
       //получаем значение аттрибута enummember
 
-
-
       var queryParams = new Dictionary<string, object>();
       if (FromDate != null) queryParams.Add("fromDate", FromDate);
       if (ToDate != null) queryParams.Add("toDate", ToDate);

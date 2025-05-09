@@ -266,7 +266,7 @@ namespace automation.mbtdistr.ru.Models
   }
 
 
-public enum SellerScheme
+  public enum SellerScheme
   {
     [EnumMember(Value = "FBO")]
     FBO, // Продавец на складе Ozon

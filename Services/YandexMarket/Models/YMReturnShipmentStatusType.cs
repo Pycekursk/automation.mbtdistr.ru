@@ -98,5 +98,5 @@ public enum YMReturnShipmentStatusType
   [JsonPropertyName("UNKNOWN")]
   [JsonProperty("UNKNOWN")]
   [Display(Name = "Неизвестный статус")]
-  Unknown
+  Unknown = 0
 }

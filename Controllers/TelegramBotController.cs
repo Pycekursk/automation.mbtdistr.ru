@@ -227,8 +227,6 @@ ILogger<TelegramBotController> logger)
       return Ok();
     }
 
-
-
     [HttpGet("open")]
     public async Task<IActionResult> Open()
     {
@@ -327,7 +325,6 @@ ILogger<TelegramBotController> logger)
       return true;
     }
 
-    // Шаг 2: сохраняем marketplace и просим имя
     private async Task HandleCreateCabinetMarketplaceAsync(long chatId, long userId, string marketplace)
     {
       var cabinet = new Cabinet
@@ -345,7 +342,6 @@ ILogger<TelegramBotController> logger)
       _waitingService.Register(userId, "create_cab_name", cabinet.Id);
     }
 
-    // Шаг 3: сохраняем имя и показываем детали
     private async Task HandleCreateCabinetNameAsync(long chatId, string name, int cabinetId)
     {
       var cabinet = await _db.Cabinets
@@ -554,7 +550,6 @@ ILogger<TelegramBotController> logger)
         throw;
       }
     }
-
 
     private async Task HandleGetWorkersAsync(Message msg, bool editPrev = false)
     {
@@ -1136,7 +1131,6 @@ ILogger<TelegramBotController> logger)
     }
 
     #endregion
-
 
     #region Callback Handlers
 

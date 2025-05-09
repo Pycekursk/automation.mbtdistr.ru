@@ -24,7 +24,15 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                 { MarketApiRequestType.ReturnsList,
                   new EndpointDefinition("campaigns/{campaignId}/returns", HttpMethod.Get) },
                 { MarketApiRequestType.Orders,
-                  new EndpointDefinition("campaigns/{campaignId}/orders", HttpMethod.Get) }
+                  new EndpointDefinition("campaigns/{campaignId}/orders", HttpMethod.Get) },
+                { MarketApiRequestType.Image,
+                  new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision/{itemId}/image/{imageHash}", HttpMethod.Get) },
+                { MarketApiRequestType.SupplyRequests,
+                  new EndpointDefinition("campaigns/{campaignId}/supply-requests", HttpMethod.Post) },
+                { MarketApiRequestType.SupplyItems,
+                  new EndpointDefinition("campaigns/{campaignId}/supply-requests/items", HttpMethod.Post) },
+                { MarketApiRequestType.SupplyDocuments,
+                  new EndpointDefinition("campaigns/{campaignId}/supply-requests/documents", HttpMethod.Post) }
         };
 
     public YMApiHttpClient(IConfiguration config)

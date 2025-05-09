@@ -80,5 +80,5 @@ public enum YMReturnDecisionType
   [JsonPropertyName("UNKNOWN")]
   [JsonProperty("UNKNOWN")]
   [Display(Name = "Не указано")]
-  Unknown
+  Unknown = 0
 }

@@ -1,11 +1,15 @@
 ﻿using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.YandexMarket;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 using System;
+using System.Reflection.Emit;
 using System.Text.Json;
 
 using Telegram.Bot.Types;
@@ -27,6 +31,10 @@ namespace automation.mbtdistr.ru.Data
 
     public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }
 
+    public DbSet<YMSupplyRequest> YMSupplyRequests { get; set; }
+
+    public DbSet<YMSupplyRequestLocation> YMLocations { get; set; }
+
     public DbSet<CallbackAction> CallbackActions { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -44,7 +52,35 @@ namespace automation.mbtdistr.ru.Data
       //v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
       //v => JsonSerializer.Deserialize<List<NotificationLevel>>(v, (JsonSerializerOptions?)null))
       //   .HasColumnType("longtext"); // или longtext, если JSON не поддерживается
+      // Находим все enum-типы в сборке моделей, начинающиеся на "YM"
+      var ymEnumTypes = typeof(ApplicationDbContext).Assembly
+          .GetTypes()
+          .Where(t => t.IsEnum && t.Name.StartsWith("YM", StringComparison.Ordinal))
+          .ToList();
 
+      foreach (var enumType in ymEnumTypes)
+      {
+        // Создаём ValueConverter для данного enum-типа
+        var converterType = typeof(EnumToStringConverter<>).MakeGenericType(enumType);
+        var converter = (ValueConverter)Activator.CreateInstance(converterType);
+
+        // Для каждой сущности ищем свойства этого enum-типа
+        foreach (var entityType in mb.Model.GetEntityTypes())
+        {
+          var clrType = entityType.ClrType;
+          var enumProperties = clrType
+              .GetProperties()
+              .Where(p => p.PropertyType == enumType);
+
+          foreach (var prop in enumProperties)
+          {
+            mb
+                .Entity(clrType)
+                .Property(prop.Name)
+                .HasConversion(converter);
+          }
+        }
+      }
 
       mb.Entity<ReturnMainInfo>()
         .Property(r => r.ReturnStatus)
@@ -89,6 +125,9 @@ namespace automation.mbtdistr.ru.Data
     {
       if (!optionsBuilder.IsConfigured)
       {
+      
+
+
         optionsBuilder.UseMySql(Program.Configuration.GetConnectionString("DefaultConnection"),
         new MySqlServerVersion(new Version(8, 0, 21)));
       }

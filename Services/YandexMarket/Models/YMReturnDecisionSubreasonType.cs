@@ -122,5 +122,5 @@ public enum YMReturnDecisionSubreasonType
   [JsonPropertyName("UNKNOWN")]
   [JsonProperty("UNKNOWN")]
   [Display(Name = "Детали причины не указаны")]
-  Unknown
+  Unknown = 0
 }

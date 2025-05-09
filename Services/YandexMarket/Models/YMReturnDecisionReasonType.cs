@@ -80,5 +80,5 @@ public enum YMReturnDecisionReasonType
   [JsonPropertyName("UNKNOWN")]
   [JsonProperty("UNKNOWN")]
   [Display(Name = "Причина не известна")]
-  Unknown
+  Unknown = 0
 }

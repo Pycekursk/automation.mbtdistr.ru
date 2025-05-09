@@ -2,15 +2,18 @@
 {
   public enum MarketApiRequestType
   {
-    ExampleMethod,      // Пример запроса
-    ProductList,         // Получение списка товаров
-    ProductInfo,         // Получение информации о товаре
-    CreatePosting,       // Создание отправления
+
+    ProductList,         
+    ProductInfo,         
     ReturnsList,
     SellerInfo,
     Ping,
     Campaigns,
-    Orders
+    Orders,
+    Image,
+    SupplyRequests,
+    SupplyItems,
+    SupplyDocuments
     // и так далее...
   }
 }

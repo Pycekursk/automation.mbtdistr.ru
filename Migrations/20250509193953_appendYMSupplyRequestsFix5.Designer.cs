@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250509193953_appendYMSupplyRequestsFix5")]
+    partial class appendYMSupplyRequestsFix5
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -541,29 +544,26 @@ namespace automation.mbtdistr.ru.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CountersId")
+                    b.Property<int>("CountersId")
                         .HasColumnType("int");
 
-                    b.Property<long?>("ExternalIdId")
+                    b.Property<long>("ExternalIdId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Subtype")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<int?>("TargetLocationId")
+                    b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int?>("TransitLocationId")
+                    b.Property<int>("Subtype")
                         .HasColumnType("int");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("longtext");
+                    b.Property<int>("TargetLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TransitLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
@@ -654,9 +654,8 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<long>("ServiceId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("longtext");
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.Property<int?>("YMSupplyRequestLocationId")
                         .HasColumnType("int");
@@ -831,19 +830,27 @@ namespace automation.mbtdistr.ru.Migrations
                 {
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestCounters", "Counters")
                         .WithMany()
-                        .HasForeignKey("CountersId");
+                        .HasForeignKey("CountersId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestId", "ExternalId")
                         .WithMany()
-                        .HasForeignKey("ExternalIdId");
+                        .HasForeignKey("ExternalIdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", "TargetLocation")
                         .WithMany()
-                        .HasForeignKey("TargetLocationId");
+                        .HasForeignKey("TargetLocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", "TransitLocation")
                         .WithMany()
-                        .HasForeignKey("TransitLocationId");
+                        .HasForeignKey("TransitLocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Counters");
 
