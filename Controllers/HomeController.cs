@@ -213,6 +213,14 @@ namespace automation.mbtdistr.ru.Controllers
           CSS = "btn btn-outline-danger",
           Icon = "bi bi-box-seam"
         });
+        mainMenu.Menu.Add(new MenuItem
+        {
+          Action = "supplieslist",
+          EntityId = $"{cabinet.Id}",
+          Title = "Заявки",
+          CSS = "btn btn-outline-primary",
+          Icon = "bi bi-box-seam"
+        });
       }
 
       return View(mainMenu);
@@ -292,6 +300,7 @@ namespace automation.mbtdistr.ru.Controllers
         {
           mainMenu.Menu.Add(new MenuItem
           {
+            Title = $"{r.Info.ReturnInfoId} от {r.CreatedAt} ({r.Cabinet.Name})",
             Action = "returninfo",
             EntityId = $"{r.Id}",
             Icon = "bi bi-box-seam me-2",
@@ -304,6 +313,58 @@ namespace automation.mbtdistr.ru.Controllers
         mainMenu.GreetingMessage = "У кабинета нет активных возвратов.";
       }
 
+      return View(mainMenu);
+    }
+
+    [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/supplieslist")]
+    public IActionResult SuppliesList([FromRoute] int id, [FromRoute] int? cabinetId)
+    {
+      var supplies = _db.YMSupplyRequests.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
+      MainMenuViewModel mainMenu = new MainMenuViewModel
+      {
+        WorkerId = id,
+        GreetingMessage = $"Заявки кабинета {cabinetId}"
+      };
+      if (supplies?.Count > 0)
+      {
+        foreach (var r in supplies)
+        {
+          mainMenu.Menu.Add(new MenuItem
+          {
+            Title = $"{r.ExternalId} ({r?.Cabinet?.Name})",
+            Action = "supplyinfo",
+            EntityId = $"{r?.Id}",
+            Icon = "bi bi-box-seam me-2",
+            CSS = "list-group-item bg-transparent text-primary"
+          });
+        }
+      }
+      else
+      {
+        mainMenu.GreetingMessage = "У кабинета нет активных заявок.";
+      }
+      return View(mainMenu);
+    }
+
+    [HttpGet("botmenu/{id?}/supplyinfo/{supplyId?}")]
+    public IActionResult SupplyInfo([FromRoute] int id, [FromRoute] long supplyId)
+    {
+      var supply = _db.YMSupplyRequests
+        .Include(r => r.Cabinet)
+        .Include(s => s.TargetLocation)
+        .ThenInclude(tl => tl.Address)
+        .FirstOrDefault(r => r.Id == supplyId);
+
+      if (supply == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
+      MainMenuViewModel mainMenu = new MainMenuViewModel
+      {
+        WorkerId = id,
+        GreetingMessage = $"Заявка {supply.ExternalId} ({supply.Cabinet?.Name})"
+      };
+      mainMenu.HtmlContent = MarketSyncService.FormatSupplyHtmlContent(supply, supply.Cabinet!, null);
       return View(mainMenu);
     }
 

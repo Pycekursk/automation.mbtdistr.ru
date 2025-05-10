@@ -27,6 +27,7 @@ using automation.mbtdistr.ru.Services.YandexMarket;
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 using Return = automation.mbtdistr.ru.Models.Return;
 using ZXing;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
 
 namespace automation.mbtdistr.ru.Services
 {
@@ -552,6 +553,46 @@ namespace automation.mbtdistr.ru.Services
       sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
       sb.AppendLine("<br>");
       sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
+      return sb.ToString();
+    }
+
+    public static string FormatSupplyHtmlContent(
+    YMSupplyRequest supply,
+    Cabinet cab,
+    bool? isNew,
+    YMSupplyRequestStatusType? oldStatus = null)   // SupplyRequestStatus — ваш enum статусов заявки
+    {
+      var sb = new StringBuilder();
+
+      if (isNew.HasValue && isNew.Value)
+      {
+        sb.AppendLine($"<b>Новый запрос на поставку в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine("<br>");
+      }
+      else if (isNew.HasValue && !isNew.Value)
+      {
+        sb.AppendLine($"<b>Обновление запроса на поставку в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine("<br>");
+      }
+
+      sb.AppendLine($"<b>ID Заявки:</b> {supply.ExternalId}");
+      sb.AppendLine($"<b>Тип:</b> {supply.Type.GetDisplayName()}");
+      sb.AppendLine($"<b>Подтип:</b> {supply.Subtype.GetDisplayName()}");
+      sb.AppendLine($"<b>Статус:</b> {supply.Status.GetDisplayName()}");
+
+      // При обновлении — показываем старый и новый статус
+      if (oldStatus.HasValue && isNew.HasValue && !isNew.Value)
+      {
+        sb.AppendLine($"<b>Старый статус:</b> {oldStatus.Value.GetDisplayName()}");
+        sb.AppendLine($"<b>Новый статус:</b> {supply.Status.GetDisplayName()}");
+      }
+
+      sb.AppendLine("<br>");
+      sb.AppendLine($"<b>Локация:</b> {supply.TargetLocation?.Name}");
+      sb.AppendLine("<br>");
+      sb.AppendLine("<br>");
+      sb.AppendLine($"<b>Обновлен:</b> {supply.UpdatedAt:dd.MM.yyyy HH:mm:ss}");
+
       return sb.ToString();
     }
 
