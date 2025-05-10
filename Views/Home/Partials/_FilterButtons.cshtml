@@ -1,0 +1,12 @@
+﻿@model automation.mbtdistr.ru.ViewModels.FilterButtonsViewModel
+
+<div class="filter-buttons" data-filter-name="@Model.FilterName">
+  @foreach (var opt in Model.Options)
+  {
+    <button type="button"
+            class="filter-button @(opt.Selected ? "selected" : "")"
+            data-value="@opt.Value">
+      @opt.DisplayName
+    </button>
+  }
+</div>

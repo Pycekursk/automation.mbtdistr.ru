@@ -45,7 +45,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-    public async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 500, long? lastId = null)
+    public async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 100, long? lastId = null)
     {
       if (filter == null)
       {
@@ -88,7 +88,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-    public async Task<YMSupplyRequestResponse> GetSupplyRequests(Cabinet cabinet, Campaign campaign)
+    public async Task<YMApiResponse<YMGetSupplyRequests>> GetSupplyRequests(Cabinet cabinet, Campaign campaign, int limit = 100, YMFilter? filter = null)
     {
       try
       {
@@ -99,12 +99,18 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
             pathParams: new Dictionary<string, object>
             {
               { "campaignId", campaign.Id }
+            },
+            query: new Dictionary<string, object>
+            {
+              { "limit", limit }
             }
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMSupplyRequestResponse>(json, new JsonSerializerSettings()
+        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMGetSupplyRequests>>(json, new JsonSerializerSettings()
         {
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
           Converters = new List<JsonConverter>
           {
             new StringEnumConverter()
@@ -119,9 +125,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-
-
-
     /// <summary>
     /// Получение списка товаров в заданной заявке на поставку.
     /// </summary>
@@ -131,11 +134,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <param name="limit">Максимальное число записей на странице.</param>
     /// <param name="pageToken">Токен следующей страницы для пагинации.</param>
     /// <returns>Десериализованный ответ с товарами в заявке.</returns>
-    public async Task<YMGetSupplyRequestItemsResponse> GetSupplyRequestItemsAsync(
+    public async Task<YMApiResponse<YMSupplyRequestItemsResult>> GetSupplyRequestItemsAsync(
         Cabinet cabinet,
         Campaign campaign,
         long requestId,
-        int? limit = null,
+        int? limit = 100,
         string pageToken = null)
     {
       try
@@ -163,11 +166,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        var result = JsonConvert.DeserializeObject<YMGetSupplyRequestItemsResponse>(json, new JsonSerializerSettings
+        var result = JsonConvert.DeserializeObject<YMApiResponse<YMSupplyRequestItemsResult>>(json, new JsonSerializerSettings
         {
-          Converters = new List<JsonConverter>
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
+          Converters = new List<JsonConverter>()
                     {
-                        new StringEnumConverter()
+                       new StringEnumConverter()
                     }
         });
 
@@ -179,6 +184,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         return default;
       }
     }
+
     /// <summary>
     /// Получение списка документов по заявке на поставку, вывоз или утилизацию.
     /// </summary>
@@ -186,7 +192,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <param name="campaign">Информация о кампании (магазине).</param>
     /// <param name="requestId">Идентификатор заявки.</param>
     /// <returns>Десериализованный ответ с документами по заявке.</returns>
-    public async Task<YMGetSupplyRequestDocumentsResponse> GetSupplyRequestDocumentsAsync(
+    public async Task<YMApiResponse<YMSupplyRequestDocumentsResult>> GetSupplyRequestDocumentsAsync(
         Cabinet cabinet,
         Campaign campaign,
         long requestId)
@@ -208,8 +214,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        var result = JsonConvert.DeserializeObject<YMGetSupplyRequestDocumentsResponse>(json, new JsonSerializerSettings
+        var result = JsonConvert.DeserializeObject<YMApiResponse<YMSupplyRequestDocumentsResult>>(json, new JsonSerializerSettings
         {
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
           Converters = new List<JsonConverter>
                     {
                         new StringEnumConverter()
@@ -245,25 +253,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
   #region Response Models
 
-  /// <summary>
-  /// Ответ API: список документов по заявке и информация по ним.
-  /// </summary>
-  public class YMGetSupplyRequestDocumentsResponse
-  {
-    /// <summary>
-    /// Статус ответа.
-    /// </summary>
-    [Display(Name = "Статус ответа")]
-    [JsonProperty("status")]
-    public YMApiResponseStatusType Status { get; set; }
 
-    /// <summary>
-    /// Результат запроса.
-    /// </summary>
-    [Display(Name = "Результат запроса")]
-    [JsonProperty("result")]
-    public YMSupplyRequestDocumentsResult Result { get; set; }
-  }
 
   /// <summary>
   /// Результат получения документов по заявке.
@@ -439,25 +429,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
   #region Response Models
 
-  /// <summary>
-  /// Ответ API: список товаров в заявке и информация по ним.
-  /// </summary>
-  public class YMGetSupplyRequestItemsResponse
-  {
-    /// <summary>
-    /// Статус ответа.
-    /// </summary>
-    [Display(Name = "Статус ответа")]
-    [JsonProperty("status")]
-    public YMApiResponseStatusType Status { get; set; }
 
-    /// <summary>
-    /// Результат запроса.
-    /// </summary>
-    [Display(Name = "Результат запроса")]
-    [JsonProperty("result")]
-    public YMSupplyRequestItemsResult Result { get; set; }
-  }
 
   /// <summary>
   /// Результат получения товаров в заявке.
@@ -658,15 +630,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
   #region Yandex Market supplies DTOs
 
-  public class YMSupplyRequestResponse
-  {
-    [Newtonsoft.Json.JsonProperty("status")]
-    public string Status { get; set; } = string.Empty;
-    [Newtonsoft.Json.JsonProperty("result")]
-    public YMGetSupplyRequests Result { get; set; } = new();
-  }
-
-
   /// <summary>
   /// Параметры сортировки заявок.
   /// </summary>
@@ -705,85 +668,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [JsonProperty("paging")]
     [Display(Name = "Идентификатор следующей страницы")]
     public YMForwardScrollingPager Paging { get; set; }
-  }
-
-  /// <summary>
-  /// Информация о заявке на поставку, вывоз или утилизацию.
-  /// </summary>
-  public class YMSupplyRequest
-  {
-    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
-
-    /// <summary>
-    /// Счетчики: количество товаров, коробок и палет в заявке.
-    /// </summary>
-    [JsonProperty("counters")]
-    [Display(Name = "Счетчики")]
-    public YMSupplyRequestCounters? Counters { get; set; }
-
-    /// <summary>
-    /// Идентификаторы заявки.
-    /// </summary>
-    [JsonProperty("id")]
-    [Display(Name = "Идентификаторы заявки")]
-    public YMSupplyRequestId? ExternalId { get; set; }
-
-    /// <summary>
-    /// Статус заявки.
-    /// </summary>
-    [JsonProperty("status")]
-    [Display(Name = "Статус заявки")]
-    public YMSupplyRequestStatusType Status { get; set; }
-
-    /// <summary>
-    /// Подтип заявки.
-    /// </summary>
-    [JsonProperty("subtype")]
-    [Display(Name = "Подтип заявки")]
-    public YMSupplyRequestSubType Subtype { get; set; }
-
-    /// <summary>
-    /// Информация о основном складе или ПВЗ.
-    /// </summary>
-    [JsonProperty("targetLocation")]
-    [Display(Name = "Основной склад/ПВЗ")]
-    public YMSupplyRequestLocation? TargetLocation { get; set; }
-
-    /// <summary>
-    /// Тип заявки.
-    /// </summary>
-    [JsonProperty("type")]
-    [Display(Name = "Тип заявки")]
-    public YMSupplyRequestType Type { get; set; }
-
-    /// <summary>
-    /// Дата и время последнего обновления заявки.
-    /// </summary>
-    [JsonProperty("updatedAt")]
-    [Display(Name = "Дата и время последнего обновления заявки")]
-    public DateTime UpdatedAt { get; set; }
-
-    /// <summary>
-    /// Ссылки на дочерние заявки.
-    /// </summary>
-    [JsonProperty("childrenLinks")]
-    [Display(Name = "Ссылки на дочерние заявки"), NotMapped]
-    public List<YMSupplyRequestReference>? ChildrenLinks { get; set; }
-
-    /// <summary>
-    /// Ссылка на родительскую заявку.
-    /// </summary>
-    [JsonProperty("parentLink")]
-    [Display(Name = "Ссылка на родительскую заявку"), NotMapped]
-    public YMSupplyRequestReference? ParentLink { get; set; }
-
-    /// <summary>
-    /// Информация о транзитном складе или ПВЗ.
-    /// </summary>
-    [JsonProperty("transitLocation")]
-    [Display(Name = "Транзитный склад/ПВЗ")]
-    public YMSupplyRequestLocation? TransitLocation { get; set; }
   }
 
   /// <summary>
@@ -830,13 +714,14 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   /// </summary>
   public class YMSupplyRequestId
   {
-    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public long Id { get; set; }  // для EF Core
+    //[JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    //public long Id { get; set; }  // для EF Core
 
     /// <summary>Внутренний идентификатор заявки.</summary>
     [JsonProperty("id")]
     [Display(Name = "Внутренний ID заявки")]
-    public long ExternalId { get; set; }
+    [Key]
+    public long Id { get; set; }
 
     /// <summary>Номер заявки на маркетплейсе.</summary>
     [JsonProperty("marketplaceRequestId")]
@@ -915,10 +800,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }  // для EF Core
 
+    [JsonIgnore, ForeignKey(nameof(YMSupplyRequestId))]
+    public long? YMSupplyRequestReferenceId { get; set; }  // для EF Core
+
     /// <summary>Идентификаторы связанной заявки.</summary>
     [JsonProperty("id")]
     [Display(Name = "Идентификаторы связанной заявки")]
-    public YMSupplyRequestId ExternalId { get; set; }
+    public YMSupplyRequestId? YMSupplyRequestId { get; set; }
 
     /// <summary>Тип связи между заявками.</summary>
     [JsonProperty("type")]

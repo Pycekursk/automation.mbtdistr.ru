@@ -1,11 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Threading.Tasks;
 
 using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
+using automation.mbtdistr.ru.ViewModels;
 
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
@@ -276,9 +276,35 @@ namespace automation.mbtdistr.ru.Controllers
     }
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/returnslist")]
-    public IActionResult ReturnsList([FromRoute] long id, [FromRoute] int? cabinetId)
+    public IActionResult ReturnsList([FromRoute] int id, [FromRoute] int? cabinetId)
     {
-      return NoContent();
+      var returns = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
+
+      MainMenuViewModel mainMenu = new MainMenuViewModel
+      {
+        WorkerId = id,
+        GreetingMessage = $"Возвраты кабинета {cabinetId}"
+      };
+
+      if (returns?.Count > 0)
+      {
+        foreach (var r in returns)
+        {
+          mainMenu.Menu.Add(new MenuItem
+          {
+            Action = "returninfo",
+            EntityId = $"{r.Id}",
+            Icon = "bi bi-box-seam me-2",
+            CSS = "list-group-item bg-transparent text-primary"
+          });
+        }
+      }
+      else
+      {
+        mainMenu.GreetingMessage = "У кабинета нет активных возвратов.";
+      }
+
+      return View(mainMenu);
     }
 
     [HttpGet("botmenu/{workerId?}/returninfo/{returnId?}")]
@@ -305,29 +331,141 @@ namespace automation.mbtdistr.ru.Controllers
     {
       return Ok();
     }
-  }
 
-  public class MainMenuViewModel
-  {
-    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
-    public string GreetingMessage { get; set; }
-    public int? WorkerId { get; set; }
-    public List<MenuItem> Menu { get; set; } = new List<MenuItem>();
-    public string HtmlContent { get; set; } = string.Empty; //HtmlContent для отображения на странице
-  }
+    //YMSupplyRequests
+    [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/ymsupplyrequests")]
+    public IActionResult YMSupplyRequests([FromRoute] int workerId, [FromRoute] int? cabinetId)
+    {
+      var worker = _db.Workers.Include(w => w.AssignedCabinets).FirstOrDefault(w => w.Id == workerId);
+      if (worker == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
 
-  public class MenuItem
-  {
-    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
-    public Worker Worker { get; set; }
-    public string Icon { get; set; }
+      ListViewModel<YMSupplyRequest> listViewModel = new ListViewModel<YMSupplyRequest>
+      {
+        //TODO: доделать отображение вьюмодели
+      };
+      listViewModel.Items = _db.YMSupplyRequests
+        .Include(r => r.Cabinet)
+        .Where(r => r.CabinetId == cabinetId)
+        .ToList();
 
-    public string CSS { get; set; } = "btn btn-primary";
+      listViewModel.FilterButtonModels = new Dictionary<string, FilterButtonsViewModel>();
 
-    public string Action { get; set; }
-    public string Title { get; set; }
-    public string EntityId { get; set; } = string.Empty;
+      KeyValuePair<string, FilterButtonsViewModel> filterButton = new KeyValuePair<string, FilterButtonsViewModel>(
+        "status",
+        new FilterButtonsViewModel
+        {
+          FilterName = "Статус",
+          Options = new List<FilterButtonOption> {
+            new FilterButtonOption
+            {
+              DisplayName = "Создана",
+              Value = "PUBLISHED",
+              Selected = true
+            },
+            new FilterButtonOption
+            {
+              DisplayName = "Готов к выдаче",
+              Value = "READY_TO_WITHDRAW",
+              Selected = false
+            },
+            new FilterButtonOption
+            {
+              DisplayName = "Готовы к утилизации",
+              Value = "READY_FOR_UTILIZATION ",
+              Selected = false
+            },
+            new FilterButtonOption
+            {
+              DisplayName = "Завершен",
+              Value = "FINISHED",
+              Selected = false
+            },
+            new FilterButtonOption
+            {
+              DisplayName = "Отменен",
+              Value = "CANCELLED",
+              Selected = false
+            },
+          }
+        });
+
+      KeyValuePair<string, FilterButtonsViewModel> filterButton2 = new KeyValuePair<string, FilterButtonsViewModel>(
+        "type",
+        new FilterButtonsViewModel
+        {
+          FilterName = "Тип",
+          Options = new List<FilterButtonOption>
+          {
+            new FilterButtonOption
+            {
+              DisplayName = "Поставка",
+              Value = "SUPPLY",
+              Selected = false
+            },
+            new FilterButtonOption
+            {
+              DisplayName = "Вывоз",
+              Value = "WITHDRAW",
+              Selected = false
+            },
+            new FilterButtonOption
+            {
+              DisplayName = "Утилизация",
+              Value = "UTILIZATION",
+              Selected = false
+            },
+          }
+        });
+
+      KeyValuePair<string, FilterButtonsViewModel> filterButton3 = new KeyValuePair<string, FilterButtonsViewModel>(
+        "subtype",
+       new FilterButtonsViewModel
+       {
+         FilterName = "Подтип",
+         Options = new List<FilterButtonOption>()
+       {
+         new FilterButtonOption
+         {
+          DisplayName = "Утилизация по запросу склада",
+          Value = "FORCE_PLAN",
+          Selected = false
+         },
+          new FilterButtonOption
+          {
+            DisplayName = "Утилизация непринятых товаров",
+            Value = "FORCE_PLAN_ANOMALY_PER_SUPPLY",
+            Selected = false
+          },
+          new FilterButtonOption
+          {
+            DisplayName = "Утилизация по запросу магазина",
+            Value = "PLAN_BY_SUPPLIER",
+            Selected = false
+          },
+          new FilterButtonOption
+          {
+            DisplayName = "Вывоз непринятых товаров",
+            Value = "ANOMALY_WITHDRAW",
+            Selected = false
+          },
+          new FilterButtonOption
+          {
+            DisplayName = "Ручная утилизация по запросу склада",
+            Value = "MAN_UTIL",
+            Selected = false
+          } }
+       });
+
+      listViewModel.FilterButtonModels.Add(filterButton.Key, filterButton.Value);
+      listViewModel.FilterButtonModels.Add(filterButton2.Key, filterButton2.Value);
+      listViewModel.FilterButtonModels.Add(filterButton3.Key, filterButton3.Value);
+
+      listViewModel.Title = "Поставки, вывоз и утилизация";
+
+      return View(listViewModel);
+    }
   }
 }

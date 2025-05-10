@@ -1,0 +1,86 @@
+﻿@model automation.mbtdistr.ru.ViewModels.ListViewModel<YMSupplyRequest>
+
+@using automation.mbtdistr.ru.Models
+@using automation.mbtdistr.ru.Services.YandexMarket.Models
+@using automation.mbtdistr.ru.ViewModels
+
+@{
+  // Предположим, что контроллер в ListViewModel.FilterButtonModels уже положил ключ "SupplyRequestStatus"
+  var fbModel = Model.FilterButtonModels["SupplyRequestStatus"];
+}
+
+<h2>@Model.Title</h2>
+
+<div id="filtersWrapper">
+  @Html.Partial("_FilterButtons", Model.FilterButtonModels)
+  @* можно подключать другие фильтры по тому же принципу *@
+</div>
+
+<!-- сюда мы через AJAX будем подгружать только partial _ItemList -->
+<div id="itemsContainer">
+  @Html.Partial("_ymSupplyRequestsList", Model.Items)
+</div>
+
+@section Scripts {
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Делегируем клик на все filter-buttons в контейнере
+        document.getElementById('filtersWrapper')
+          .addEventListener('click', function(e) {
+            if (!e.target.classList.contains('filter-button')) return;
+            e.target.classList.toggle('selected');
+            reloadItems();
+          });
+
+        function reloadItems() {
+            const params = new URLSearchParams();
+            document.querySelectorAll('.filter-buttons').forEach(fb => {
+                const name = fb.dataset.filterName;
+                fb.querySelectorAll('.filter-button.selected')
+                  .forEach(btn => params.append('filters', `${name}=${btn.dataset.value}`));
+            });
+
+            fetch('/ym/get-supplies?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                // перезаписываем контейнер новым HTML partial
+                // но т.к. backend отдаёт JSON-массив, вставим его в partial через client-side render:
+                document.getElementById('itemsContainer')
+                        .innerHTML = renderPartial(data);
+            })
+            .catch(console.error);
+        }
+
+        function renderPartial(items) {
+            if (!items.length) {
+                return `<table class="table">
+                    <thead>
+                      <tr><th>Id</th><th>Статус</th><th>Транзит</th><th>Цель</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td colspan="4" class="text-center">Нет данных</td></tr>
+                    </tbody>
+                </table>`;
+            }
+            let rows = items.map(item => `
+              <tr>
+                <td>${item.id}</td>
+                <td>${item.supplyRequestStatus}</td>
+                <td>${item.transitLocation?.name || ''}</td>
+                <td>${item.targetLocation?.name || ''}</td>
+              </tr>`).join('');
+            return `<table class="table">
+                <thead>
+                  <tr><th>Id</th><th>Статус</th><th>Транзит</th><th>Цель</th></tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+        }
+
+        // Первая загрузка
+        reloadItems();
+    });
+  </script>
+}

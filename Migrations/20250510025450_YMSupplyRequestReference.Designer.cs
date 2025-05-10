@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250510025450_YMSupplyRequestReference")]
+    partial class YMSupplyRequestReference
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -535,13 +538,22 @@ namespace automation.mbtdistr.ru.Migrations
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>
                 {
-                    b.Property<long?>("Id")
-                        .HasColumnType("bigint");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int?>("CabinetId")
                         .HasColumnType("int");
 
                     b.Property<int?>("CountersId")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("ExternalIdId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("ParentLinkId")
                         .HasColumnType("int");
 
                     b.Property<string>("Status")
@@ -570,6 +582,10 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("CabinetId");
 
                     b.HasIndex("CountersId");
+
+                    b.HasIndex("ExternalIdId");
+
+                    b.HasIndex("ParentLinkId");
 
                     b.HasIndex("TargetLocationId");
 
@@ -616,6 +632,9 @@ namespace automation.mbtdistr.ru.Migrations
                         .HasColumnType("bigint");
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ExternalId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("MarketplaceRequestId")
                         .HasColumnType("longtext");
@@ -678,6 +697,33 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("YMSupplyRequestLocationAddress");
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestReference", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int?>("YMSupplyRequestId1")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("YMSupplyRequestReferenceId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("YMSupplyRequestId1");
+
+                    b.HasIndex("YMSupplyRequestReferenceId");
+
+                    b.ToTable("YMSupplyRequestReference");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -833,9 +879,11 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestId", "ExternalId")
                         .WithMany()
-                        .HasForeignKey("Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("ExternalIdId");
+
+                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestReference", "ParentLink")
+                        .WithMany()
+                        .HasForeignKey("ParentLinkId");
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", "TargetLocation")
                         .WithMany()
@@ -850,6 +898,8 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Counters");
 
                     b.Navigation("ExternalId");
+
+                    b.Navigation("ParentLink");
 
                     b.Navigation("TargetLocation");
 
@@ -896,6 +946,19 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestReference", b =>
+                {
+                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", null)
+                        .WithMany("ChildrenLinks")
+                        .HasForeignKey("YMSupplyRequestId1");
+
+                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestId", "YMSupplyRequestId")
+                        .WithMany()
+                        .HasForeignKey("YMSupplyRequestReferenceId");
+
+                    b.Navigation("YMSupplyRequestId");
+                });
+
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Cabinet", b =>
                 {
                     b.Navigation("Settings")
@@ -919,6 +982,11 @@ namespace automation.mbtdistr.ru.Migrations
                 {
                     b.Navigation("NotificationOptions")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>
+                {
+                    b.Navigation("ChildrenLinks");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", b =>

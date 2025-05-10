@@ -1,8 +1,9 @@
-﻿@{
+﻿@using automation.mbtdistr.ru.ViewModels
+@{
   ViewData["Title"] = "Список кабинетов";
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
 }
-@model automation.mbtdistr.ru.Controllers.MainMenuViewModel?
+@model MainMenuViewModel?
 
 <h5 class="text-secondary">@Model?.GreetingMessage</h5>
 <div class="">
@@ -31,7 +32,7 @@
              window.history.back();
            });
              document.addEventListener("DOMContentLoaded", function () {
-                 document.querySelectorAll('.menu-buttons button').forEach(button => {
+                 document.querySelectorAll('.list-group button').forEach(button => {
                      button.addEventListener('click', function () {
                          const action = this.getAttribute('action');
                          const entityId = this.getAttribute('entity-id')
@@ -44,7 +45,7 @@
                      });
                  });
               function sendData(data) {
-                let url = `/botmenu/${data.workerId}/return/${data.entityId}`;
+                let url = `/botmenu/${data.workerId}/cabinet/${data.entityId}`;
   // alert(url);
                    window.location.href = url;
               }

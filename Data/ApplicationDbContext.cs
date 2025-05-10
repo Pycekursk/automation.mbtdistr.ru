@@ -1,5 +1,6 @@
 ﻿using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.YandexMarket;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
