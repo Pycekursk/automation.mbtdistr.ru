@@ -17,7 +17,7 @@ namespace automation.mbtdistr.ru.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.13")
+                .HasAnnotation("ProductVersion", "8.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -292,31 +292,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.ToTable("WorkerCabinets", (string)null);
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.AuditLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("AuditLogs");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Cabinet", b =>
                 {
                     b.Property<int>("Id")
@@ -355,33 +330,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsUnique();
 
                     b.ToTable("CabinetSettings");
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.CallbackAction", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ActionType")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int>("TargetId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TelegramId")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("CallbackActions");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Compensation", b =>
@@ -552,11 +500,11 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("TargetLocationId")
-                        .HasColumnType("int");
+                    b.Property<long?>("TargetLocationServiceId")
+                        .HasColumnType("bigint");
 
-                    b.Property<int?>("TransitLocationId")
-                        .HasColumnType("int");
+                    b.Property<long?>("TransitLocationServiceId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -571,11 +519,37 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("CountersId");
 
-                    b.HasIndex("TargetLocationId");
+                    b.HasIndex("TargetLocationServiceId");
 
-                    b.HasIndex("TransitLocationId");
+                    b.HasIndex("TransitLocationServiceId");
 
                     b.ToTable("YMSupplyRequests");
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMCurrencyValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CurrencyId")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<long>("Value")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("YMSupplyRequestItemId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("YMSupplyRequestItemId")
+                        .IsUnique();
+
+                    b.ToTable("YMCurrencyValue");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestCounters", b =>
@@ -628,13 +602,74 @@ namespace automation.mbtdistr.ru.Migrations
                     b.ToTable("YMSupplyRequestId");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", b =>
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItem", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CountersId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("OfferId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<long?>("YMSupplyRequestId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CountersId");
+
+                    b.HasIndex("YMSupplyRequestId");
+
+                    b.ToTable("YMSupplyRequestItem");
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItemCounters", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DefectCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FactCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PlanCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ShortageCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SurplusCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("YMSupplyRequestItemCounters");
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", b =>
+                {
+                    b.Property<long>("ServiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("ServiceId"));
 
                     b.Property<int>("AddressId")
                         .HasColumnType("int");
@@ -645,21 +680,18 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<DateTime?>("RequestedDate")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<long>("ServiceId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("YMSupplyRequestLocationId")
-                        .HasColumnType("int");
+                    b.Property<long?>("YMSupplyRequestLocationServiceId")
+                        .HasColumnType("bigint");
 
-                    b.HasKey("Id");
+                    b.HasKey("ServiceId");
 
                     b.HasIndex("AddressId");
 
-                    b.HasIndex("YMSupplyRequestLocationId");
+                    b.HasIndex("YMSupplyRequestLocationServiceId");
 
                     b.ToTable("YMLocations");
                 });
@@ -675,7 +707,16 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<string>("FullAddress")
                         .HasColumnType("longtext");
 
+                    b.Property<decimal>("Latitude")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<decimal>("Longitude")
+                        .HasColumnType("decimal(65,30)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Latitude", "Longitude")
+                        .IsUnique();
 
                     b.ToTable("YMSupplyRequestLocationAddress");
                 });
@@ -757,15 +798,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.AuditLog", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Models.Worker", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.CabinetSettings", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Models.Cabinet", "Cabinet")
@@ -839,11 +871,11 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", "TargetLocation")
                         .WithMany()
-                        .HasForeignKey("TargetLocationId");
+                        .HasForeignKey("TargetLocationServiceId");
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", "TransitLocation")
                         .WithMany()
-                        .HasForeignKey("TransitLocationId");
+                        .HasForeignKey("TransitLocationServiceId");
 
                     b.Navigation("Cabinet");
 
@@ -856,6 +888,32 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("TransitLocation");
                 });
 
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMCurrencyValue", b =>
+                {
+                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItem", "SupplyRequestItem")
+                        .WithOne("Price")
+                        .HasForeignKey("automation.mbtdistr.ru.Services.YandexMarket.YMCurrencyValue", "YMSupplyRequestItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SupplyRequestItem");
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItem", b =>
+                {
+                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItemCounters", "Counters")
+                        .WithMany()
+                        .HasForeignKey("CountersId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", null)
+                        .WithMany("Items")
+                        .HasForeignKey("YMSupplyRequestId");
+
+                    b.Navigation("Counters");
+                });
+
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocationAddress", "Address")
@@ -866,7 +924,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", null)
                         .WithMany("SupplyRequests")
-                        .HasForeignKey("YMSupplyRequestLocationId");
+                        .HasForeignKey("YMSupplyRequestLocationServiceId");
 
                     b.Navigation("Address");
                 });
@@ -918,6 +976,17 @@ namespace automation.mbtdistr.ru.Migrations
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Worker", b =>
                 {
                     b.Navigation("NotificationOptions")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItem", b =>
+                {
+                    b.Navigation("Price")
                         .IsRequired();
                 });
 

@@ -22,6 +22,7 @@ using Newtonsoft.Json.Converters;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Runtime.Serialization;
+using System.Text;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -126,7 +127,7 @@ namespace automation.mbtdistr.ru.Controllers
         .AsNoTracking()
         .Include(c => c.Settings)
         .ThenInclude(cs => cs.ConnectionParameters)
-        .Where(c => c.Marketplace == "YANDEXMARKET")
+        .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
         .ToListAsync();
 
       List<YMSupplyRequest> supplyRequests = new List<YMSupplyRequest>();
@@ -154,23 +155,39 @@ namespace automation.mbtdistr.ru.Controllers
       //проходим по всем заявкам и выбираем адреса
       foreach (var request in supplyRequests)
       {
-        //проверяем обьекты YMSupplyRequestLocation на наличие в массиве locations и если нет, то добавляем
+        if (request.TargetLocation?.Address != null)
+        {
+          var address = request.TargetLocation.Address;
 
-        var transitLocation = request.TransitLocation;
-        var targetLocation = request.TargetLocation;
-        if (transitLocation != null && locations.FirstOrDefault(l => l.Id == transitLocation.Id) == null)
-        {
-          locations.Add(transitLocation);
+          if (locations.FirstOrDefault(l => l.ServiceId == request.TargetLocation.ServiceId) == null)
+          {
+            locations.Add(request.TargetLocation);
+          }
         }
-        if (targetLocation != null && locations.FirstOrDefault(l => l.Id == targetLocation.Id) == null)
+        if (request.TransitLocation?.Address != null)
         {
-          locations.Add(targetLocation);
+          var address = request.TransitLocation.Address;
+
+          // проверяем обьект YMSupplyRequestLocation на наличие в массиве locations и если нет, то добавляем
+          if (locations.FirstOrDefault(l => l.ServiceId == request.TransitLocation.ServiceId) == null)
+          {
+            locations.Add(request.TransitLocation);
+          }
         }
       }
       //проверяем обьекты YMSupplyRequestLocation на наличие в базе и если нет, то добавляем
+
+      var dbLocations = _db.YMLocations
+        .Include(l => l.Address)
+        .AsNoTracking()
+        .ToList();
+
       foreach (var location in locations)
       {
-        var dbLocation = await _db.YMLocations.AsNoTracking().FirstOrDefaultAsync(l => l.Id == location.Id);
+        location.Address.Latitude = location.Address.Gps.Latitude;
+        location.Address.Longitude = location.Address.Gps.Longitude;
+
+        var dbLocation = dbLocations.FirstOrDefault(l => l.ServiceId == location.ServiceId);
         if (dbLocation == null)
         {
           _db.YMLocations.Add(location);

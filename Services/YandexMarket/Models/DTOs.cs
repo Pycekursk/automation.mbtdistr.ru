@@ -66,6 +66,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("to")]
     [JsonProperty("to")]
     public int To { get; set; }
+
+    /// <summary>
+    /// Идентификатор следующей страницы
+    /// </summary>
+    [JsonPropertyName("nextPageToken")]
+    [JsonProperty("nextPageToken")]
+    public string? NextPageToken { get; set; }
   }
 
 
@@ -418,6 +425,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("orderIds")]
     [JsonProperty("orderIds")]
     public List<long>? OrderIds { get; set; }
+
+    /// <summary>
+    /// Количество результатов в ответе.
+    /// </summary>
+    public int Limit { get; internal set; }
 
     /// <summary>
     /// Метод преобразования фильтра в словарь для строки запроса.

@@ -20,6 +20,8 @@ public class ReturnMainInfo
 
   [ForeignKey(nameof(Return))]
   public int ReturnId { get; set; }  // Внешний ключ к таблице Return
+
+  [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
   public Return Return { get; set; }
 
   /// <summary>

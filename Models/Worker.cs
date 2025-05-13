@@ -50,4 +50,5 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Все")]
     AllCabinetNotifications = 5
   }
+
 }

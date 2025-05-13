@@ -1,0 +1,76 @@
+﻿@using automation.mbtdistr.ru.ViewModels
+@using automation.mbtdistr.ru.Services.YandexMarket.Models
+@{
+  ViewData["Title"] = "Заявки";
+  Layout = "/Views/Shared/_BotMenuLayout.cshtml";
+}
+
+@model List<YMSupplyRequest>
+
+<div class="container">
+  @(
+    Html.DevExtreme().DataGrid<YMSupplyRequest>()
+    .ID("gridContainer")
+    .KeyExpr("Id")
+    .ColumnAutoWidth(true)
+    .ShowRowLines(true)
+    .ShowBorders(true)
+    .DataSource(Model)
+    .ColumnChooser(cc =>
+    {
+      cc
+      .Enabled(true)
+      .Height("400px")
+      .Mode(GridColumnChooserMode.Select)
+      .Position(pc => pc
+      .My(HorizontalAlignment.Right, VerticalAlignment.Top)
+      .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
+      .Of(".dx-datagrid-column-chooser-button")
+      );
+
+      cc.Search(ccs => ccs
+      .Enabled(true)
+      .EditorOptions(new { Placeholder = "Search column" })
+      );
+
+      cc.Selection(ccs => ccs
+      .AllowSelectAll(true)
+      .SelectByClick(true)
+      .Recursive(true)
+      );
+    })
+
+
+    .LoadPanel(loadPanel => loadPanel.Enabled(true))
+    .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
+    .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
+    .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
+    .AllowColumnResizing(true)
+    .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{Model.GetType().Name}_grid"))
+    .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
+    @* .FilterPanel(f => f.Visible(true)) *@
+    .HeaderFilter(h => h.Visible(true))
+    .Selection(s => s.Mode(SelectionMode.Single))
+    .FilterRow(f => f.Visible(true))
+    .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true))))
+</div>
+
+<script>
+  // function treeViewItemClick(e) {
+  //     var data = e.itemData;
+  //     var citiesData = data.Cities;
+  //     if (citiesData) {
+  //         $("#country-flag").attr("src", data.Flag);
+  //         $("#full-country-name").text(data.FullName);
+  //         $("#country-description").text(data.Description);
+
+  //         $("#country-area").text(data.Area);
+  //         $("#country-population").text(data.Population);
+  //         $("#country-gdp").text("$" + data.GDP);
+
+  //         var tabPanel = $("#tabpanel").dxTabPanel("instance");
+  //         tabPanel.option("dataSource", citiesData);
+  //         tabPanel.option("selectedIndex", 0);
+  //     }
+  // }
+</script>

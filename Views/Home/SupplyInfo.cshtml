@@ -31,8 +31,6 @@ else
   <script>
     document.getElementById("content-wrapper").innerHTML = `@(new HtmlString(Model?.HtmlContent))`
   </script>
-
-
   @* <script> *@
   @*   var workerId = @Model?.WorkerId *@
   @*   const tg = window.Telegram.WebApp; *@
@@ -51,12 +49,10 @@ else
   @*               sendData(data); *@
   @*           }); *@
   @*       }); *@
-
   @*       function sendData(data) { *@
   @*           let url = `/botmenu/${data.action}/${data.entityId}`; *@
   @*           window.location.href = url; *@
   @*       } *@
   @*   }); *@
   @* </script> *@
-
 }

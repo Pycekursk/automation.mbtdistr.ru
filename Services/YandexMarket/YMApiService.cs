@@ -10,11 +10,15 @@ using Newtonsoft.Json.Converters;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
+
+
 //using System.Text.Json.Serialization;
 
 //using System.Text.Json.Serialization;
 
 using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
+
+using JsonConverter = Newtonsoft.Json.JsonConverter;
 
 namespace automation.mbtdistr.ru.Services.YandexMarket
 {
@@ -45,7 +49,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-    public async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 100, long? lastId = null)
+    public async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 100, string? pageToken = null)
     {
       if (filter == null)
       {
@@ -53,6 +57,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         {
           FromDate = DateTime.Now.AddDays(-20).ToString("yyyy-MM-dd"),
           ToDate = DateTime.Now.ToString("yyyy-MM-dd"),
+          Limit = limit,
           //Type = YMReturnType.Unredeemed,
           //Statuses = new List<YMRefundStatusType> { YMRefundStatusType.StartedByUser, YMRefundStatusType.RefundInProgress, YMRefundStatusType.RefundedWithBonuses, YMRefundStatusType.DecisionMade, YMRefundStatusType.RefundedByShop, YMRefundStatusType.WaitingForDecision }
         };
@@ -71,7 +76,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        await Extensions.SendDebugMessage(json);
+
         var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<ReturnsListResponse>(json, new JsonSerializerSettings()
         {
           Converters = new List<JsonConverter>
@@ -79,6 +84,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
             new StringEnumConverter()
           }
         });
+
+        if (obj?.Result?.Paging?.NextPageToken is string e && !string.IsNullOrEmpty(e))
+          await Extensions.SendDebugMessage($"В компании {campaign.Domain} ({campaign.Id}) с кабинетом {cabinet.Id} найдено {obj.Result.Paging.Total} возвратов. Нужна обработка постаничной загрузки");
+
         return obj;
       }
       catch (Exception ex)
@@ -88,7 +97,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-    public async Task<YMApiResponse<YMGetSupplyRequests>> GetSupplyRequests(Cabinet cabinet, Campaign campaign, int limit = 100, YMFilter? filter = null)
+    public async Task<YMApiResponse<YMGetSupplyRequests>> GetSupplyRequests(Cabinet cabinet, Campaign campaign, int limit = 100, YMFilter? filter = null, string? pageToken = null)
     {
       try
       {
@@ -111,11 +120,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         {
           StringEscapeHandling = StringEscapeHandling.Default,
           Culture = System.Globalization.CultureInfo.CurrentCulture,
-          Converters = new List<JsonConverter>
+          Converters = new List<Newtonsoft.Json.JsonConverter>
           {
             new StringEnumConverter()
           }
         });
+        if (obj?.Result?.Paging.NextPageToken is string s && !string.IsNullOrEmpty(s))
+          await Extensions.SendDebugMessage($"В компании {campaign.Domain} ({campaign.Id}) нужна обработка постаничной загрузки");
         return obj;
       }
       catch (Exception ex)
@@ -138,14 +149,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         Cabinet cabinet,
         Campaign campaign,
         long requestId,
-        int? limit = 100,
-        string pageToken = null)
+        int limit = 100,
+        string? pageToken = null)
     {
       try
       {
         var query = new Dictionary<string, object>();
-        if (limit.HasValue)
-          query.Add("limit", limit.Value);
+        query.Add("limit", limit);
         if (!string.IsNullOrEmpty(pageToken))
           query.Add("page_token", pageToken);
 
@@ -420,7 +430,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// Идентификатор заявки.
     /// </summary>
     [Display(Name = "Идентификатор заявки")]
-    [JsonProperty("requestId")]
+    [JsonProperty("requestId"), System.Text.Json.Serialization.JsonPropertyName("requestId")]
     [Required]
     public long RequestId { get; set; }
   }
@@ -450,12 +460,12 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [JsonProperty("paging")]
     public YMForwardScrollingPager Paging { get; set; }
 
-    /// <summary>
-    /// Количество товаров в заявке.
-    /// </summary>
-    [Display(Name = "Количество товаров в заявке")]
-    [JsonProperty("counters")]
-    public YMSupplyRequestItemCounters Counters { get; set; }
+    ///// <summary>
+    ///// Количество товаров в заявке.
+    ///// </summary>
+    //[Display(Name = "Количество товаров в заявке")]
+    //[JsonProperty("counters"), System.Text.Json.Serialization.JsonPropertyName("counters")]
+    //public YMSupplyRequestItemCounters Counters { get; set; }
   }
 
   /// <summary>
@@ -463,6 +473,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   /// </summary>
   public class YMSupplyRequestItem
   {
+    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }  // для EF Core
+
     /// <summary>
     /// Название товара.
     /// </summary>
@@ -488,6 +501,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [JsonProperty("price")]
     [Required]
     public YMCurrencyValue Price { get; set; }
+
+    [JsonProperty("counters")]
+    public YMSupplyRequestItemCounters Counters { get; set; }
   }
 
   /// <summary>
@@ -495,6 +511,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   /// </summary>
   public class YMSupplyRequestItemCounters
   {
+    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }  // для EF Core
+
     /// <summary>
     /// Количество товаров с браком.
     /// </summary>
@@ -534,8 +553,18 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   /// <summary>
   /// Валюта и ее значение.
   /// </summary>
+
+
   public class YMCurrencyValue
   {
+    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }  // для EF Core
+
+    [ForeignKey(nameof(SupplyRequestItem))]
+    public int YMSupplyRequestItemId { get; set; }  // для EF Core
+
+    public YMSupplyRequestItem SupplyRequestItem { get; set; }  // для EF Core
+
     /// <summary>
     /// Код валюты.
     /// </summary>
@@ -548,7 +577,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// </summary>
     [Display(Name = "Значение")]
     [JsonProperty("value")]
-    public decimal Value { get; set; }
+    public long Value { get; set; }
   }
 
   #endregion
@@ -739,8 +768,15 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   /// </summary>
   public class YMSupplyRequestLocationAddress
   {
-    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    [Key]
     public int Id { get; set; }  // для EF Core
+
+    public decimal Latitude { get; set; }
+    public decimal Longitude { get; set; }
+
+    [NotMapped]
+    [JsonProperty("id")]
+    public string CoordinateKey => $"{Latitude},{Longitude}";
 
     /// <summary>Полный адрес склада или ПВЗ.</summary>
     [JsonProperty("fullAddress")]
@@ -762,10 +798,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [JsonIgnore]
     public ICollection<YMSupplyRequestLocation>? SupplyRequests { get; set; }
 
-
-    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }  // для EF Core
-
+    
     /// <summary>Адрес склада или ПВЗ.</summary>
     [JsonProperty("address")]
     [Display(Name = "Адрес")]
@@ -777,7 +810,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     public string? Name { get; set; }
 
     /// <summary>Идентификатор склада или логистического партнёра.</summary>
-    [JsonProperty("serviceId")]
+    [JsonProperty("serviceId"), Key]
     [Display(Name = "Идентификатор склада/партнёра")]
     public long ServiceId { get; set; }
 
@@ -797,7 +830,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   /// </summary>
   public class YMSupplyRequestReference
   {
-    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    [JsonIgnore, Key]
     public int Id { get; set; }  // для EF Core
 
     [JsonIgnore, ForeignKey(nameof(YMSupplyRequestId))]

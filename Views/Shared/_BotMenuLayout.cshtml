@@ -4,249 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>@ViewData["Title"] - automation.mbtdistr.ru</title>
-  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.css" />
-  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-icons.css" />
-  <script src="~/lib/jquery/dist/jquery.min.js"></script>
+
+  <script src="~/lib/dx/js/jquery.js"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body {
-      background-color: #000000;
-      /* Черный фон */
-      color: #ffffff;
-      /* Белый текст */
-      font-family: 'Acrom', sans-serif;
-    }
+  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-icons.css" />
+  <link rel="stylesheet" href="~/lib/dx/css/bootstrap.css">
+  <link rel="stylesheet" href="~/lib/dx/css/dx.dark.css ">
 
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      font-family: 'Acrom', sans-serif;
-    }
+  <script type="text/javascript" src="~/lib/dx/js/dx.all.js"></script>
 
-    /* Синий цвет для градиента: RGB(64,158,245) */
-    .gradient-text {
-      background: linear-gradient(to right, #ffffff, rgb(64, 158, 245));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
+  <script src="~/lib/dx/js/aspnet/dx.aspnet.data.js"></script>
+  <script src="~/lib/dx/js/aspnet/dx.aspnet.mvc.js"></script>
 
-    .hero-section {
-      position: relative;
-      min-height: 70vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      background: url('assets/img/futuristic-bg.jpg') no-repeat center center/cover;
-    }
+  <script src="~/lib/dx/js/localization/dx.messages.ru.js"></script>
 
-    .hero-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      /* затемнение фона */
-    }
-
-    .hero-content {
-      position: relative;
-      z-index: 10;
-      padding: 2rem;
-    }
-
-    .hero-title {
-      font-size: 3rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-    }
-
-    .hero-subtitle {
-      font-size: 1.25rem;
-      margin-bottom: 2rem;
-    }
-
-    /* Икс-образный элемент */
-    .x-mark {
-      display: inline-block;
-      position: relative;
-      width: 150px;
-      height: 150px;
-    }
-
-      .x-mark::before,
-      .x-mark::after {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 3px;
-        height: 100%;
-        background: #ffffff;
-      }
-
-      .x-mark::before {
-        transform: translate(-50%, -50%) rotate(45deg);
-      }
-
-      .x-mark::after {
-        transform: translate(-50%, -50%) rotate(-45deg);
-      }
-
-    .section-title {
-      text-align: center;
-      margin: 3rem 0 2rem 0;
-      font-size: 2rem;
-      font-weight: 600;
-    }
-
-    .underline {
-      width: 60px;
-      height: 3px;
-      background: rgb(64, 158, 245);
-      margin: 0.5rem auto 0 auto;
-    }
-
-    .about-text p {
-      line-height: 1.5;
-      margin-bottom: 1rem;
-    }
-
-    /* Карточка компании */
-    .company-card {
-      background-color: #111111;
-      border: 1px solid #333333;
-      border-radius: 8px;
-      padding: 2rem;
-      margin: 2rem 0;
-    }
-
-      .company-card h5 {
-        margin-top: 1rem;
-        color: rgb(64, 158, 245);
-      }
-
-    /* Контрастная полоса у основания (пример для футера) */
-    .footer-bar {
-      height: 4px;
-      background: #ffffff;
-      margin-bottom: 1rem;
-    }
-
-    footer {
-      background: #000000;
-      text-align: center;
-      padding: 1rem 0;
-      font-size: 0.9rem;
-    }
-
-    .contact-info a {
-      color: #ffffff;
-      text-decoration: underline;
-    }
-
-    .brand-strip {
-      background: #ffffff;
-      color: #000000;
-      font-weight: 700;
-      text-align: center;
-      padding: 0.5rem 0;
-    }
-
-    @@media (max-width: 576px) {
-      .hero-title {
-        font-size: 2rem;
-      }
-
-      .hero-subtitle {
-        font-size: 1rem;
-      }
-    }
-
-    .brand-logo {
-      width: 100%;
-      object-fit: contain;
-      max-height: 170px;
-    }
-
-    .logo {
-      max-height: 40px;
-      width: 100%;
-      object-fit: contain;
-    }
-
-    img.hero-img {
-      object-fit: contain;
-      width: 100%;
-      max-height: 400px;
-      margin-bottom: 2rem;
-      margin-top: 2rem;
-    }
-
-    /* Стрелка вверх */
-    .scroll-to-top {
-      position: fixed;
-      bottom: 40px;
-      right: 40px;
-      width: 50px;
-      height: 50px;
-      background-color: rgba(255, 255, 255, 0.8);
-      color: rgb(0, 0, 0);
-      text-align: center;
-      line-height: 50px;
-      font-size: 24px;
-      border-radius: 10px;
-      text-decoration: none;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s, visibility 0.3s;
-      z-index: 999;
-    }
-
-      .scroll-to-top:hover {
-        background-color: rgb(64, 158, 245);
-        color: #000;
-      }
-
-      .scroll-to-top.visible {
-        opacity: 1;
-        visibility: visible;
-      }
-
-    .navbar-nav {
-      text-align: right;
-      /* Выровнять текст по правому краю */
-      margin-left: auto;
-      /* Смещение вправо */
-    }
-
-      .navbar-nav .nav-item {
-        display: block;
-        /* Элементы будут занимать всю ширину */
-      }
-
-      .navbar-nav .nav-link {
-        text-align: right;
-        /* Применяется к тексту ссылок */
-      }
-
-    .menu-buttons {
-      display: inline-flex;
-      gap: 0.5rem;
-      flex-direction: row;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-      .menu-buttons > * {
-        flex: 1 0 40%;
-        width: 100%;
-      }
-  </style>
   <script>
           // Синхронные ошибки
     window.onerror = function (message, source, lineno, colno, error) {
@@ -258,11 +29,38 @@
       alert(`Ошибка в промисе: ${event.reason}`);
     });
 
+        // Целевой селектор
+    const targetSelector = 'dx-license';
+
+    // Функция для поиска второго вложенного элемента
+    function handleDxLicenseAppeared(licenseElement) {
+        const children = licenseElement.children;
+        if (children.length >= 2) {
+            const secondChild = children[1];
+            secondChild.click();
+            // здесь ваша логика
+        } else {
+        }
+    }
+
+    const observer = new MutationObserver((mutations, obs) => {
+        const licenseElement = document.querySelector(targetSelector);
+        if (licenseElement) {
+            handleDxLicenseAppeared(licenseElement);
+            obs.disconnect(); // Отключаем наблюдатель после нахождения
+        }
+    });
   </script>
 </head>
-<body>
-  <div class="container-fluid">
-    <div class="row row-cols-2">
+<body class="dx-viewport">
+  <script>
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+  </script>
+  <div class="dx-viewport-inner">
+    @*  <div class="row row-cols-2">
       <div class="mt-3 d-none" id="goback-wrapper">
         <button class="btn btn-link text-decoration-none text-light" id="goback"><i class="bi bi-arrow-left"></i> Назад</button>
         <script>
@@ -274,12 +72,44 @@
           });
         </script>
       </div>
+    </div> *@
+
+    <div class="my-menu-container">
+      @(Html.DevExtreme().TabPanel()           // используем NavBar вместо TabPanel
+              .ID("mainMenuBar")
+              .SelectedIndex(0)                  // по умолчанию первый пункт
+              .OnItemClick("onMenuItemClick")    // JS-обработчик клика
+              .ItemTemplate("menuItemTemplate")  // шаблон отрисовки пункта
+              )
     </div>
-    <main role="main" class="pb-3">
-      @RenderBody()
+
+    <script>
+      // Шаблон одного пункта меню: иконка + текст
+      function menuItemTemplate(itemData) {
+          return `
+              <div class="menu-item">
+                  <i class="dx-icon dx-icon-${itemData.icon}"></i>
+                  <span>${itemData.text}</span>
+              </div>`;
+      }
+
+      // При клике — делаем переход по Route
+      function onMenuItemClick(e) {
+          var route = e.itemData.route;
+          if(route) {
+              window.location.href = route;
+          }
+      }
+    </script>
+
+    <div class="container-fluid">
+<main role="main">
+        @RenderBody()
     </main>
+    </div>
+
   </div>
-  <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="~/lib/dx/js/bootstrap.js"></script>
   <script src="~/js/tgwebapp.js"></script>
   @await RenderSectionAsync("Scripts", required: false)
 </body>

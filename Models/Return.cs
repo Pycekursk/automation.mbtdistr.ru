@@ -13,6 +13,8 @@ namespace automation.mbtdistr.ru.Models
     public int Id { get; set; }
 
     public int CabinetId { get; set; } // кабинет/бренд/ООО
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
     public Cabinet Cabinet { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -43,6 +45,8 @@ namespace automation.mbtdistr.ru.Models
 
     [ForeignKey("Return")]
     public int ReturnId { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
     public Return Return { get; set; }
   }
 
@@ -264,18 +268,4 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Неизвестен")]
     Unknown
   }
-
-
-  public enum SellerScheme
-  {
-    [EnumMember(Value = "FBO")]
-    FBO, // Продавец на складе Ozon
-
-    [EnumMember(Value = "FBS")]
-    FBS, // Продавец на своём складе
-
-    [EnumMember(Value = "Unknown")]
-    Unknown = 0 // Неизвестно
-  }
-
 }

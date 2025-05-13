@@ -1,5 +1,12 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+
+using System.ComponentModel.DataAnnotations;
+using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
+
+using JsonConverter = Newtonsoft.Json.JsonConverter;
+using JsonConverterAttribute = Newtonsoft.Json.JsonConverterAttribute;
 
 namespace automation.mbtdistr.ru.Services.Ozon.Models
 {
@@ -93,29 +100,46 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
 
 
   }
-
+  /// <summary>
+  /// Информация о пользователе, отправившем уведомление.
+  /// </summary>
   public class User
   {
+    /// <summary>
+    /// Идентификатор пользователя в системе Ozon.
+    /// </summary>
+    [Display(Name = "Идентификатор пользователя")]
+    [JsonProperty("id")]
     [JsonPropertyName("id")]
     public string? Id { get; set; }
 
+    /// <summary>
+    /// Тип пользователя в системе.
+    /// </summary>
+    [Display(Name = "Тип пользователя")]
+    [JsonProperty("type")]
     [JsonPropertyName("type")]
     public UserType Type { get; set; }
   }
 
-
-
-
+  /// <summary>
+  /// Причина отмены отправления.
+  /// </summary>
   public class Reason
   {
-    /// <summary>  
-    /// Идентификатор причины отмены.  
-    /// </summary>  
+    /// <summary>
+    /// Идентификатор причины отмены.
+    /// </summary>
+    [Display(Name = "Идентификатор причины отмены")]
+    [JsonProperty("id")]
     [JsonPropertyName("id")]
     public int Id { get; set; }
-    /// <summary>  
-    /// Сообщение об ошибке.  
-    /// </summary>  
+
+    /// <summary>
+    /// Сообщение об ошибке.
+    /// </summary>
+    [Display(Name = "Сообщение об ошибке")]
+    [JsonProperty("message")]
     [JsonPropertyName("message")]
     public string? Message { get; set; }
   }
@@ -369,59 +393,86 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
     /// Доставлено.
     /// </summary>
     [Display(Name = "Доставлено")]
-    posting_delivered
+    posting_delivered,
+
+    /// <summary>
+    ///  Получено
+    /// </summary>
+    [Display(Name = "Получено"), EnumMember(Value = "posting_received")]
+    posting_received,
+
+    /// <summary>
+    /// Отменено
+    /// </summary>
+    [Display(Name = "Отменено"), EnumMember(Value = "posting_cancelled")]
+    posting_cancelled
   }
 
-  /// <summary>  
-  /// Тип пользователя в системе.  
-  /// </summary>  
+  /// <summary>
+  /// Тип пользователя в системе.
+  /// </summary>
+  [JsonConverter(typeof(StringEnumConverter))]
   public enum UserType
   {
-    /// <summary>  
-    /// Покупатель.  
-    /// </summary>  
+    /// <summary>
+    /// Неизвестный тип пользователя.
+    /// </summary>
+    [EnumMember(Value = "Unknown")]
+    [Display(Name = "Неизвестный")]
+    Unknown = 0,
+
+    /// <summary>
+    /// Покупатель.
+    /// </summary>
+    [EnumMember(Value = "Customer")]
     [Display(Name = "Покупатель")]
     Customer,
 
-    /// <summary>  
-    /// Поддержка.  
-    /// </summary>  
+    /// <summary>
+    /// Поддержка.
+    /// </summary>
+    [EnumMember(Value = "Support")]
     [Display(Name = "Поддержка")]
     Support,
 
-    /// <summary>  
-    /// Ozon.  
-    /// </summary>  
+    /// <summary>
+    /// Ozon.
+    /// </summary>
+    [EnumMember(Value = "NotificationUser")]
     [Display(Name = "Ozon")]
     NotificationUser,
 
-    /// <summary>  
-    /// Неизвестный тип пользователя.  
-    /// </summary>  
-    [Display(Name = "Неизвестный")]
-    Unknown = 0
+    /// <summary>
+    /// Чат-бот.
+    /// </summary>
+    [EnumMember(Value = "ChatBot"), Display(Name = "Бот")]
+    ChatBot
   }
 
-  /// <summary>  
-  /// Тип чата в системе.  
-  /// </summary>  
+  /// <summary>
+  /// Тип чата в системе.
+  /// </summary>
+  [JsonConverter(typeof(StringEnumConverter))]
   public enum ChatType
   {
-    /// <summary>  
-    /// Чат с поддержкой.  
-    /// </summary>  
+    /// <summary>
+    /// Чат с поддержкой.
+    /// </summary>
+    [EnumMember(Value = "SellerSupport")]
     [Display(Name = "Чат с поддержкой")]
     SellerSupport,
 
-    /// <summary>  
-    /// Чат с покупателем.  
-    /// </summary>  
+    /// <summary>
+    /// Чат с покупателем.
+    /// </summary>
+    [EnumMember(Value = "BuyerSeller")]
     [Display(Name = "Чат с покупателем")]
     BuyerSeller,
 
-    /// <summary>  
-    /// Уведомления Ozon.  
-    /// </summary>  
+    /// <summary>
+    /// Уведомления Ozon.
+    /// </summary>
+    [EnumMember(Value = "SellerNotification")]
     [Display(Name = "Уведомления Ozon")]
     SellerNotification
   }

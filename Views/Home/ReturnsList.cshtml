@@ -1,65 +1,60 @@
 ﻿@using automation.mbtdistr.ru.ViewModels
 @{
-  ViewData["Title"] = "Все возвраты";
+  ViewData["Title"] = "Возвраты";
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
 }
-@model MainMenuViewModel?
+@model List<Return>?
 
-
-
-@if (Model?.WorkerId == null)
+@if (Model?.Count > 0)
 {
-      <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        const userId = tg.initDataUnsafe?.user?.id;
-        if (userId) {
-            window.location.href = `botmenu?id=${userId}`;
-        } else {
-            alert("Ошибка: не удалось получить ID пользователя Telegram.");
-        }
-      </script>
+  @(
+       Html.DevExtreme().DataGrid<Return>()
+     .ID("gridContainer")
+     .KeyExpr("Id")
+     .ColumnAutoWidth(true)
+     .ShowRowLines(true)
+     .ShowBorders(true)
+     .DataSource(Model)
+     .ColumnChooser(cc =>
+     {
+       cc
+       .Enabled(true)
+       .Height("400px")
+       .Mode(GridColumnChooserMode.Select)
+       .Position(pc => pc
+       .My(HorizontalAlignment.Right, VerticalAlignment.Top)
+       .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
+       .Of(".dx-datagrid-column-chooser-button")
+       );
+
+       cc.Search(ccs => ccs
+       .Enabled(true)
+       .EditorOptions(new { Placeholder = "Search column" })
+       );
+
+       cc.Selection(ccs => ccs
+       .AllowSelectAll(true)
+       .SelectByClick(true)
+       .Recursive(true)
+       );
+     })
+
+
+     .LoadPanel(loadPanel => loadPanel.Enabled(true))
+     .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
+     .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
+     .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
+     .AllowColumnResizing(true)
+     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{Model.GetType().Name}_grid"))
+     .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
+     @* .FilterPanel(f => f.Visible(true)) *@
+     .HeaderFilter(h => h.Visible(true))
+     .Selection(s => s.Mode(SelectionMode.Single))
+     .FilterRow(f => f.Visible(true))
+     .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true))))
 }
 else
 {
-      <div class="container text-center mt-4">
-        <h5 class="text-secondary">@Model?.GreetingMessage</h5>
-        <form>
-          <div class="menu-buttons mt-4">
-        @foreach (var butt in Model?.Menu)
-        {
-                      <button entity-id="@butt.EntityId" action="@butt.Action" type="button" class="@butt.CSS">
-                    <i class="@butt.Icon me-2"></i> @butt.Title
-                  </button>
-        }
-          </div>
-        </form>
-      </div>
-
-      <script>
-        var workerId = @Model?.WorkerId
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-
-        document.addEventListener("DOMContentLoaded", function () {
-            document.querySelectorAll('.menu-buttons button').forEach(button => {
-                button.addEventListener('click', function () {
-                    const action = this.getAttribute('action');
-                      const entityId = this.getAttribute('entity-id');
-                    var data = {
-                        action: action,
-                        workerId: workerId,
-                           entityId : entityId
-                    };
-                    sendData(data);
-                });
-            });
-
-            function sendData(data) {
-                let url = `/botmenu/${data.workerId}/${data.action}/${data.entityId}`;
-                window.location.href = url;
-            }
-        });
-      </script>
-
+  
 }
+

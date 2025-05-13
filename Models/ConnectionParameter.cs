@@ -8,6 +8,8 @@ namespace automation.mbtdistr.ru.Models
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
     public int CabinetSettingsId { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
     public CabinetSettings CabinetSettings { get; set; }
 
     [Display(Name = "Параметр")]

@@ -89,6 +89,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [Display(Name = "Транзитный склад/ПВЗ")]
     public YMSupplyRequestLocation? TransitLocation { get; set; }
 
+    [JsonIgnore, Display(Name = "Продукты")]
+    public ICollection<YMSupplyRequestItem>? Items { get; set; }
+
+
     /// <summary>
     /// Кабинет которому принадлежит заявка
     /// </summary>

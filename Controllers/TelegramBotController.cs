@@ -71,7 +71,7 @@ ILogger<TelegramBotController> logger)
     [HttpPost, IgnoreAntiforgeryToken]
     public async Task<IActionResult> Post([FromBody] object obj)
     {
-      await Extensions.SendDebugMessage(obj.ToString());
+      //await Extensions.SendDebugMessage(obj.ToString());
       string objString = obj.ToString() ?? string.Empty;
       JsonSerializerOptions options = new JsonSerializerOptions
       {
@@ -104,7 +104,7 @@ ILogger<TelegramBotController> logger)
         var cts = new CancellationTokenSource();
         var ct = cts.Token;
 
- 
+
         string caption = $"Telegram Bot API\n" +
            $"{DateTime.Now}\n" +
            $"Тип обновления: {update.Type}\n" +
@@ -113,11 +113,11 @@ ILogger<TelegramBotController> logger)
            $"Текст сообщения: {update.Message?.Text ?? update.CallbackQuery?.Data}";
 
 
-        await Extensions.SendDebugObject<Update>(update, caption);
+        // await Extensions.SendDebugObject<Update>(update, caption);
 
-        
-        var chatT = update.Message.Chat.Type;
-        string chatTypeString = update.Message?.Chat.Type.ToString() ?? update.CallbackQuery?.Message?.Chat.Type.ToString() ?? string.Empty;
+
+        //var chatT = update?.Message?.Chat.Type ?? update?.CallbackQuery?.Message?.Chat.Type;
+        string chatTypeString = update?.Message?.Chat?.Type.ToString() ?? update?.CallbackQuery?.Message?.Chat.Type.ToString() ?? string.Empty;
         ChatType? chatType = Enum.TryParse(chatTypeString, out ChatType result) ? result : null;
         var temp = (ChatType)chatType.GetValueOrDefault();
         //если чат не приватный, то игнорируем
@@ -193,6 +193,14 @@ ILogger<TelegramBotController> logger)
       try
       {
         var worker = await GetOrCreateWorkerAsync(update);
+
+        if (worker.Role == RoleType.Guest)
+        {
+          await _botClient.SendMessage(
+              worker.TelegramId,
+              "Вы зарегистрированы как Гость. Ожидайте назначения роли администратором.");
+          return Ok();
+        }
 
         switch (update.Type)
         {
@@ -443,7 +451,6 @@ ILogger<TelegramBotController> logger)
           case "/start":
             await _botClient.SendMessage(msg.Chat.Id, $"Привет, {worker.Name}! Вы {worker.Role.GetDisplayName()}");
             break;
-
           case "/help":
             await HandleGetHelpAsync(msg, worker);
             break;
@@ -472,7 +479,7 @@ ILogger<TelegramBotController> logger)
             {
               obj.Add(await _wb.GetReturnsListAsync(cab, true));
             }
-            await Extensions.SendDebugObject<List<Services.Wildberries.Models.ReturnsListResponse>>(obj, $"{obj.GetType().AssemblyQualifiedName?.Replace("automation_mbtdistr_ru_", "")}");
+            //  await Extensions.SendDebugObject<List<Services.Wildberries.Models.ReturnsListResponse>>(obj, $"{obj.GetType().AssemblyQualifiedName?.Replace("automation_mbtdistr_ru_", "")}");
             break;
           case "/ym":
             if (worker.Role != RoleType.Admin)
@@ -528,7 +535,7 @@ ILogger<TelegramBotController> logger)
               //obj2.Add(await _oz.GetReturnsListAsync(cab));
             }
 
-            await Extensions.SendDebugObject<List<Services.Ozon.Models.ReturnsListResponse>>(obj2, $"{obj2.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
+            // await Extensions.SendDebugObject<List<Services.Ozon.Models.ReturnsListResponse>>(obj2, $"{obj2.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
 
             break;
           //case "/subscribe":

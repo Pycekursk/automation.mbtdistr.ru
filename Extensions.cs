@@ -25,6 +25,31 @@ namespace automation.mbtdistr.ru
 {
   public static class Extensions
   {
+    /// <summary>
+    /// Элемент для Lookup: Id = числовое значение enum, Text = DisplayName или имя константы.
+    /// </summary>
+    public class LookupItem
+    {
+      public int Id { get; set; }
+      public string Text { get; set; }
+    }
+
+    /// <summary>
+    /// Возвращает список LookupItem для произвольного enum-типа.
+    /// </summary>
+    public static List<LookupItem> ToLookup<TEnum>() where TEnum : struct, Enum
+    {
+      var type = typeof(TEnum);
+      return Enum.GetValues(type)
+                 .Cast<Enum>()
+                 .Select(e => new LookupItem
+                 {
+                   Id = Convert.ToInt32(e),
+                   Text = GetDisplayName(e)
+                 })
+                 .ToList();
+    }
+
     /// <summary>  
     /// Получает отображаемое имя для значения перечисления, используя атрибут Display.  
     /// </summary>  
@@ -362,7 +387,7 @@ namespace automation.mbtdistr.ru
           }
           else
           {
-            message = $"```\n{message}\n```";
+            message = $"```\n{message.EscapeMarkdownV2()}\n```";
             await BotClient.SendMessage(
             chatId: 1406950293,
             text: message,

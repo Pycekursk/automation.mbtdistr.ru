@@ -1,5 +1,5 @@
 ﻿using automation.mbtdistr.ru.Data;
-using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services;
 using automation.mbtdistr.ru.Services.BarcodeService;
 using automation.mbtdistr.ru.Services.Google.Drive;
 using automation.mbtdistr.ru.Services.Google.Sheets;
@@ -12,6 +12,7 @@ using Google.Apis.Sheets.v4;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Models;
 
 using Swashbuckle.AspNetCore.Filters;
@@ -43,7 +44,7 @@ namespace automation.mbtdistr.ru
       Configuration = builder.Configuration;
       Services = builder.Services;
 
-      // Add services to the container.
+      // Add services to the container
 
       builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -51,18 +52,6 @@ namespace automation.mbtdistr.ru
 
 
       builder.Services.AddControllersWithViews();
-
-
-      //    builder.Services
-      //.AddControllersWithViews().AddJsonOptions(o =>
-      //{
-      //  o.JsonSerializerOptions.WriteIndented = true;
-      //  o.JsonSerializerOptions.Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic);
-      //  o.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-      //  o.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
-      //  o.JsonSerializerOptions.Converters.Add(new JsonStringEnumMemberConverterFactory());
-      //});
-
 
       // 2. Генерация XML-комментариев
       var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -184,7 +173,7 @@ namespace automation.mbtdistr.ru
 
       }
 
-     
+
 
       if (app.Environment.IsDevelopment())
       {

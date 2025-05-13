@@ -241,46 +241,55 @@ namespace automation.mbtdistr.ru.Controllers
       {
         return Redirect("https://t.me/MbtdistrBot");
       }
-      MainMenuViewModel mainMenu = new MainMenuViewModel
-      {
-        WorkerId = worker.Id,
+      //MainMenuViewModel mainMenu = new MainMenuViewModel
+      //{
+      //  WorkerId = worker.Id,
 
-      };
-      string greetingMessage = $"Вы находитесь в разделе Возвраты. Здесь отображаются возвраты по всем закрепленным кабинетам ({worker.AssignedCabinets.Count})";
+      //};
+      //string greetingMessage = 
 
-      if (worker.AssignedCabinets?.Count == 0)
+      ViewData["GreetingMessage"] = $"Вы находитесь в разделе Возвраты. Здесь отображаются возвраты по всем закрепленным кабинетам ({worker.AssignedCabinets.Count} шт.)";
+
+
+
+      var returns = new List<Return>();
+      var cabinets = new List<Cabinet>();
+
+      if (worker.Role == RoleType.Admin || worker.Role == RoleType.Director)
       {
-        greetingMessage = "У вас нет закрепленных кабинетов. Пожалуйста, свяжитесь с администратором.";
-        mainMenu.GreetingMessage = greetingMessage;
-        return View(mainMenu);
+        cabinets = await _db.Cabinets
+           .Include(c => c.Settings)
+           .ThenInclude(s => s.ConnectionParameters)
+           .ToListAsync();
       }
-      List<MenuItem> menuItems = new List<MenuItem>();
-      foreach (var cab in worker?.AssignedCabinets!)
+      else
       {
-        var _returns = _db.Returns.Include(r => r.Info).Where(r => r.CabinetId == cab.Id).ToList();
-        if (_returns.Count > 0)
+        cabinets = await _db.Cabinets
+          .Include(c => c.Settings)
+          .ThenInclude(s => s.ConnectionParameters)
+          .Where(c => worker.AssignedCabinets.Select(wc => wc.Id).Contains(c.Id))
+          .ToListAsync();
+      }
+      if (cabinets.Count == 0)
+      {
+        ViewData["GreetingMessage"] = "У вас нет закрепленных кабинетов. Пожалуйста, свяжитесь с администратором.";
+        return View();
+      }
+      foreach (var cabinet in cabinets)
+      {
+        var cabinetReturns = await _db.Returns
+          .Include(r => r.Info)
+          .Include(r => r.Cabinet)
+          .Where(r => r.CabinetId == cabinet.Id)
+          .ToListAsync();
+        if (cabinetReturns != null)
         {
-          foreach (var r in _returns)
-          {
-            menuItems.Add(new MenuItem
-            {
-              Action = "returninfo",
-              EntityId = $"{r.Id}",
-              Title = $"{cab.Marketplace} / {cab.Name} от {r.CreatedAt}",
-              Icon = "bi bi-box-seam me-2",
-              CSS = "list-group-item bg-transparent text-primary"
-            });
-          }
+          returns.AddRange(cabinetReturns);
         }
       }
-      if (menuItems.Count == 0)
-      {
-        greetingMessage = "У закрепленных за Вами кабинетов нет активных возвратов.";
-        mainMenu.GreetingMessage = greetingMessage;
-        return View(mainMenu);
-      }
-      mainMenu.Menu = menuItems;
-      return View(mainMenu);
+
+
+      return View(returns);
     }
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/returnslist")]
@@ -288,32 +297,16 @@ namespace automation.mbtdistr.ru.Controllers
     {
       var returns = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
 
-      MainMenuViewModel mainMenu = new MainMenuViewModel
-      {
-        WorkerId = id,
-        GreetingMessage = $"Возвраты кабинета {cabinetId}"
-      };
-
       if (returns?.Count > 0)
       {
-        foreach (var r in returns)
-        {
-          mainMenu.Menu.Add(new MenuItem
-          {
-            Title = $"{r.Info.ReturnInfoId} от {r.CreatedAt} ({r.Cabinet.Name})",
-            Action = "returninfo",
-            EntityId = $"{r.Id}",
-            Icon = "bi bi-box-seam me-2",
-            CSS = "list-group-item bg-transparent text-primary"
-          });
-        }
+        ViewData["GreetingMessage"] = $"Возвраты кабинета {cabinetId} ({returns.Count} шт.)";
       }
       else
       {
-        mainMenu.GreetingMessage = "У кабинета нет активных возвратов.";
+        ViewData["GreetingMessage"] = "У кабинета нет активных возвратов.";
       }
 
-      return View(mainMenu);
+      return View(returns);
     }
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/supplieslist")]
@@ -343,7 +336,10 @@ namespace automation.mbtdistr.ru.Controllers
       {
         mainMenu.GreetingMessage = "У кабинета нет активных заявок.";
       }
-      return View(mainMenu);
+
+      //ViewBag.supplies = supplies;
+
+      return View("/Views/Home/SuppliesListV2.cshtml", supplies);
     }
 
     [HttpGet("botmenu/{id?}/supplyinfo/{supplyId?}")]
