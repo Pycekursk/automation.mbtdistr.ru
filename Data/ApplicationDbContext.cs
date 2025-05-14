@@ -43,6 +43,16 @@ namespace automation.mbtdistr.ru.Data
 
     public DbSet<YMSupplyRequestReference> YMSupplyRequestReferences { get; set; }
 
+    public DbSet<YMOrder> YMOrders { get; set; }
+
+    public DbSet<YMOrderBuyer> YMOrderBuyers { get; set; }
+
+    public DbSet<YMOrderDelivery> YMOrderDeliveries { get; set; }
+
+    public DbSet<YMOrderItem> YMOrderItems { get; set; }
+
+    public DbSet<YMCurrencyValue> YMCurrencyValues { get; set; }
+
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
@@ -80,6 +90,24 @@ namespace automation.mbtdistr.ru.Data
         }
       }
 
+      modelBuilder.ApplyConfiguration(new YMOrderConfiguration());
+      modelBuilder.ApplyConfiguration(new YMOrderBuyerConfiguration());
+      modelBuilder.ApplyConfiguration(new YMOrderDeliveryConfiguration());
+      modelBuilder.ApplyConfiguration(new YMOrderItemConfiguration());
+
+      // 1. Один-ко-многим: заявка → дочерние ссылки
+      modelBuilder.Entity<YMSupplyRequestReference>()
+          .HasOne(rf => rf.Request)
+          .WithMany(r => r.ChildrenLinks)
+          .HasForeignKey(rf => rf.RequestId)
+          .OnDelete(DeleteBehavior.Cascade);
+
+      // 2. Один-к-одному: заявка → родительская ссылка
+      modelBuilder.Entity<YMSupplyRequestReference>()
+          .HasOne(rf => rf.RelatedRequest)
+          .WithOne(r => r.ParentLink)
+          .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
+          .OnDelete(DeleteBehavior.Cascade);
 
       modelBuilder.Entity<YMSupplyRequestItem>()
           .HasOne(i => i.Price)

@@ -1,4 +1,5 @@
-﻿@using automation.mbtdistr.ru.ViewModels
+﻿@using DevExtreme.AspNet.Mvc.Builders
+@using automation.mbtdistr.ru.ViewModels
 @using automation.mbtdistr.ru.Services.YandexMarket.Models
 
 @{
@@ -19,142 +20,205 @@
   @using System.ComponentModel.DataAnnotations
   @{
     var columns = typeof(YMSupplyRequest).GetProperties()
-    .Where(p =>
-    {
-      if (!p.CanRead) return false;
+      .Where(p =>
+      {
+        if (!p.CanRead) return false;
 
-      var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
-    .Cast<DataGridAttribute>()
-    .FirstOrDefault();
+        var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
+      .Cast<DataGridAttribute>()
+      .FirstOrDefault();
 
-      return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
-    })
-    .Select(p => new
-    {
-      Field = p.Name,
-      Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
-    .Cast<DisplayAttribute>()
-    .FirstOrDefault()?.Name ?? p.Name,
-      IsEnum = p.PropertyType.IsEnum,
-      EnumType = p.PropertyType
-    })
-    .ToList();
+        return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
+      })
+      .Select(p => new
+      {
+        Field = p.Name,
+        Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
+      .Cast<DisplayAttribute>()
+      .FirstOrDefault()?.Name ?? p.Name,
+        IsEnum = p.PropertyType.IsEnum,
+        EnumType = p.PropertyType
+      })
+      .ToList();
   }
   @{
     var enumFields = typeof(YMSupplyRequest).GetProperties()
-    .Where(p => p.PropertyType.IsEnum)
-    .ToList();
+      .Where(p => p.PropertyType.IsEnum)
+      .ToList();
   }
   @(
-      Html.DevExtreme().DataGrid<YMSupplyRequest>()
-      .ID("gridContainer")
-      .KeyExpr("Id")
-      .ColumnAutoWidth(true)
-      .Height("700px")
-      .ShowRowLines(true)
-      .ShowBorders(true)
-      .DataSource(Model)
-      .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx", "pdf" }); })
-      .OnExporting("onExportingHandler")
-      .Columns(columnsBuilder =>
-      {
-        foreach (var col in columns)
-        {
-          var column = columnsBuilder.Add()
-          .DataField(col.Field)
-          .Caption(col.Caption);
+                Html.DevExtreme().DataGrid<YMSupplyRequest>()
+                                            .ID("gridContainer")
+                                            .KeyExpr("Id")
+                                            .ColumnAutoWidth(true)
+                                            .Height("700px")
+                                            .ShowRowLines(true)
+                                            .ShowBorders(true)
+                                            .DataSource(Model)
+                                            .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx", "pdf" }); })
+                                            .OnExporting("onExportingHandler")
 
-          if (col.IsEnum)
-          {
-            var enumValues = Enum.GetValues(col.EnumType)
-            .Cast<Enum>()
-            .Select(e => new
-            {
-              Id = Convert.ToInt32(e),
-              Name = e.GetDisplayName()
-            })
-            .ToList();
+                                            .Columns(columnsBuilder =>
+                                            {
+                                              foreach (var col in columns)
+                                              {
+                                                DataGridColumnBuilder<YMSupplyRequest>? column = null;
+                                                if (col.Field == "TargetLocation")
+                                                {
+                                                  column = columnsBuilder.Add()
+                                                  .Caption(col.Caption)
+                                                    .CssClass("wrap-text-cell")
+                                                    .DataType(GridColumnDataType.String)
+                                                  .CalculateCellValue("function(data) { return data.TargetLocation ? data.TargetLocation.Name + ' ' + data.TargetLocation.Address.FullAddress : ''; }").AllowFiltering(true)
+            .AllowSorting(false);
+                                                }
+                                                else if (col.Field == "TransitLocation")
+                                                {
+                                                  column = columnsBuilder.Add()
+                                                  .Caption(col.Caption)
+                                                    .CssClass("wrap-text-cell")
+                                                    .CalculateCellValue("function(data) { return data.TransitLocation ? data.TransitLocation.Name + ' ' + data.TransitLocation.Address.FullAddress : ''; }").AllowFiltering(true)
+              .AllowSorting(false);
+                                                }
+                                                else if (col.Field == "Cabinet")
+                                                {
+                                                  column = columnsBuilder.Add()
+                                                  .Caption(col.Caption)
+                                                    .CssClass("wrap-text-cell")
+                                                      .CalculateCellValue(@"function(data) { return data.Cabinet ? data.Cabinet.Name +'\n'+ data.Cabinet.Marketplace : ''; }").AllowFiltering(true)
+                .AllowSorting(false);
+                                                }
+                                                else if (col.Field == "Items")
+                                                {
+                                                  column = columnsBuilder.Add()
+                                                    .Caption(col.Caption)
+                                                    .CssClass("wrap-text-cell")
+                                 .Caption("Товары")
+                                  .CssClass("wrap-text-cell")
+                                   .CalculateCellValue(@"
+                            function(rowData) {
+                                if (!rowData.Items || rowData.Items.length === 0)
+                                    return '';
+                                return rowData.Items.map(function(p, i) {
+                                    return (i + 1) + '. ' + p.Name + ' (' + p.OfferId + ')';
+                                }).join('\n\n');
+                            }
+                        ")
+              .AllowFiltering(true)
+              .AllowSorting(false); // можно отключить сортировку, если не нужна
+                                                }
+                                                else
+                                                {
+                                                  column = columnsBuilder.Add()
+                                                    .DataField(col.Field)
+                                                    .CssClass("wrap-text-cell")
+                                                    .Caption(col.Caption);
+                                                }
 
-            column.Lookup(lookup => lookup
-            .DataSource(enumValues)
-            .ValueExpr("Id")
-            .DisplayExpr("Name"));
-          }
-        }
-      })
-      .ColumnChooser(cc =>
-      {
-        cc.Enabled(true)
-        .Height("400px")
-        .Mode(GridColumnChooserMode.Select)
-        .Position(pc => pc
-        .My(HorizontalAlignment.Right, VerticalAlignment.Top)
-        .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
-        .Of(".dx-datagrid-column-chooser-button")
-        );
+                                                if (col.IsEnum)
+                                                {
+                                                  var enumValues = Enum.GetValues(col.EnumType)
+                                                  .Cast<Enum>()
+                                                  .Select(e => new
+                                                  {
+                                                    Id = Convert.ToInt32(e),
+                                                    Name = e.GetDisplayName()
+                                                  })
+                                                  .ToList();
 
-        cc.Search(ccs => ccs
-        .Enabled(true)
-        .EditorOptions(new { Placeholder = "Поиск" })
-        );
+                                                  column.Lookup(lookup => lookup
+                                                  .DataSource(enumValues)
+                                                  .ValueExpr("Id")
+                                                  .DisplayExpr("Name"));
+                                                }
+                                              }
+                                            })
 
-        cc.Selection(ccs => ccs
-        .AllowSelectAll(true)
-        .SelectByClick(true)
-        .Recursive(true)
-        );
-      })
-      .LoadPanel(loadPanel => loadPanel.Enabled(true))
-      .Scrolling(scrolling => scrolling
-      .Mode(GridScrollingMode.Virtual)
-      .ColumnRenderingMode(GridColumnRenderingMode.Virtual)
-      )
-      .Paging(p => p.PageSize(20))
-      .AllowColumnReordering(true)
-      .Pager(p =>
-      {
-        p.Visible(true);
-        p.ShowPageSizeSelector(true);
-        p.AllowedPageSizes(new int[] { 20, 50, 100 });
-      })
-      .AllowColumnResizing(true)
-      .StateStoring(s => s
-      .Enabled(true)
-      .Type(StateStoringType.SessionStorage)
-      .StorageKey($"{Model.GetType().Name}_grid")
-      )
-      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
-      .HeaderFilter(h => h.Visible(true))
-      .Toolbar(toolbar =>
-      {
-        toolbar.Items(items =>
-        {
-          items.Add()
-        .Location(ToolbarItemLocation.Before)
-        .Widget(w =>
-        {
-          var b = w.Button();
-          b.Text("Назад");
-          b.OnClick("goBack");
-          return b;
-        });
-          items.Add()
-        .Name("exportButton")
-        .Location(ToolbarItemLocation.After);
 
-          items.Add()
-        .Name("columnChooserButton")
-        .Location(ToolbarItemLocation.After);
-        });
-      })
-      .Selection(s => s.Mode(SelectionMode.Single))
-      .FilterRow(f => f.Visible(true))
-      .HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true)))
-      )
+                                          .ColumnChooser(cc =>
+                                          {
+                                            cc.Enabled(true)
+                                            .Height("400px")
+                                            .Mode(GridColumnChooserMode.Select)
+                                            .Position(pc => pc
+                                            .My(HorizontalAlignment.Right, VerticalAlignment.Top)
+                                            .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
+                                            .Of(".dx-datagrid-column-chooser-button")
+                                            );
+
+                                            cc.Search(ccs => ccs
+                                            .Enabled(true)
+                                            .EditorOptions(new { Placeholder = "Поиск" })
+                                            );
+
+                                            cc.Selection(ccs => ccs
+                                            .AllowSelectAll(true)
+                                            .SelectByClick(true)
+                                            .Recursive(true)
+                                            );
+                                          })
+                                          .LoadPanel(loadPanel => loadPanel.Enabled(true))
+                                          .Scrolling(scrolling => scrolling
+                                          .Mode(GridScrollingMode.Standard)
+                                          .ColumnRenderingMode(GridColumnRenderingMode.Virtual)
+                                          )
+                                          .Paging(p => p.PageSize(20))
+                                          .AllowColumnReordering(true)
+                                          .Pager(p =>
+                                          {
+                                            p.Visible(true);
+                                            p.ShowPageSizeSelector(true);
+                                            p.AllowedPageSizes(new int[] { 20, 50, 100 });
+                                          })
+                                          .AllowColumnResizing(true)
+                                          .StateStoring(s => s
+                                          .Enabled(true)
+                                          .Type(StateStoringType.SessionStorage)
+                                          .StorageKey($"{Model.GetType().Name}_grid")
+                                          )
+                                          .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
+
+
+
+                                          .Toolbar(toolbar =>
+                                          {
+                                            toolbar.Items(items =>
+                                            {
+                                              items.Add()
+                                            .Location(ToolbarItemLocation.Before)
+                                            .Widget(w =>
+                                            {
+                                              var b = w.Button();
+                                              b.Text("Назад");
+                                              b.OnClick("goBack");
+                                              return b;
+                                            });
+
+                                              items.Add()
+                  .Name("searchPanel") // <<< это добавляет поле поиска
+                  .Location(ToolbarItemLocation.Center); // или Before/After
+
+
+                                              items.Add()
+                                            .Name("exportButton")
+                                            .Location(ToolbarItemLocation.After);
+
+                                              items.Add()
+                                            .Name("columnChooserButton")
+                                            .Location(ToolbarItemLocation.After);
+                                            });
+                                          })
+
+
+                                          .Selection(s => s.Mode(SelectionMode.Single))
+                                          .HeaderFilter(hf => hf.Visible(true))
+
+                                              .SearchPanel(s => s.Visible(true))
+                              )
 
 
 </div>
 
 <script>
-   
+
 </script>

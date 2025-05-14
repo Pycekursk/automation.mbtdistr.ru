@@ -23,10 +23,25 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                   new EndpointDefinition("campaigns", HttpMethod.Get) },
                 { MarketApiRequestType.ReturnsList,
                   new EndpointDefinition("campaigns/{campaignId}/returns", HttpMethod.Get) },
+
+                { MarketApiRequestType.ReturnInfo,
+                  new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}", HttpMethod.Get) },
+
                 { MarketApiRequestType.Orders,
                   new EndpointDefinition("campaigns/{campaignId}/orders", HttpMethod.Get) },
+
                 { MarketApiRequestType.Image,
                   new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision/{itemId}/image/{imageHash}", HttpMethod.Get) },
+
+                { MarketApiRequestType.ReturnApplication,
+                  new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/application", HttpMethod.Get)},
+
+                { MarketApiRequestType.ReturnDecision,
+                  new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision", HttpMethod.Get) },
+
+                { MarketApiRequestType.SubmitReturnDecision,
+                  new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision/submit", HttpMethod.Post)},
+
                 { MarketApiRequestType.SupplyRequests,
                   new EndpointDefinition("campaigns/{campaignId}/supply-requests", HttpMethod.Post) },
                 { MarketApiRequestType.SupplyItems,

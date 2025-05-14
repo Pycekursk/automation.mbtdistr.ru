@@ -34,6 +34,8 @@ namespace automation.mbtdistr.ru
       public string Text { get; set; }
     }
 
+ 
+
     /// <summary>
     /// Возвращает список LookupItem для произвольного enum-типа.
     /// </summary>
@@ -542,7 +544,7 @@ namespace automation.mbtdistr.ru
     }
 
     /// <summary>
-    /// Делит текст на фрагменты <= TelegramMaxMessageLength,
+    /// Делит текст на фрагменты TelegramMaxMessageLength,
     /// стараясь рвать по двойным/одинарным переносам или границам предложений.
     /// </summary>
     private static IEnumerable<string> SplitMessage(string text)

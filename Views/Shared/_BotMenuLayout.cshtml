@@ -5,31 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>@ViewData["Title"] - automation.mbtdistr.ru</title>
 
-  <script src="~/lib/dx/js/jquery.js"></script>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="~/lib/jquery/dist/jquery.js"></script>
+
   <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-icons.css" />
   <link rel="stylesheet" href="~/lib/dx/css/bootstrap.css">
 
-  @* <link rel="stylesheet" href="~/css/devextreme/dx.dark.css"> *@
-
   <link rel="stylesheet" href="~/lib/dx/css/dx.dark.compact.css">
-  
+
   <script src="~/js/devextreme/polyfill.min.js"></script>
   <script src="~/js/devextreme/exceljs.js"></script>
   <script src="~/js/devextreme/jszip.js"></script>
   <script src="~/js/devextreme/jspdf.umd.js"></script>
 
-  <script src="~/js/devextreme/pdfmake.js"></script>
-    <script src="~/js/devextreme/vfs_fonts.js"></script>
+  @* <script src="~/js/devextreme/pdfmake.js"></script> *@
+  @*   <script src="~/js/devextreme/vfs_fonts.js"></script> *@
 
-@*   <script src="~/js/devextreme/jspdf.plugin.autotable.js"></script> *@
+  @*   <script src="~/js/devextreme/jspdf.plugin.autotable.js"></script> *@
   <script src="~/js/devextreme/FileSaver.js"></script>
   <script type="text/javascript" src="~/js/devextreme/dx.all.js"></script>
 
   <script src="~/js/devextreme/aspnet/dx.aspnet.data.js"></script>
   <script src="~/js/devextreme/aspnet/dx.aspnet.mvc.js"></script>
-   
   <script src="~/js/devextreme/localization/dx.messages.ru.js"></script>
+
+   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <script>
           // Синхронные ошибки
@@ -81,6 +80,11 @@
     body.dx-viewport {
       background-color: var(--dx-color-main-bg);
     }
+
+    .dx-datagrid .wrap-text-cell {
+      white-space: pre-wrap !important;
+      word-wrap: break-word; /* переносит длинные слова */
+    }
   </style>
 </head>
 <body class="dx-viewport">
@@ -91,35 +95,9 @@
     });
   </script>
   <div class="dx-viewport-inner">
-    <div class="my-menu-container">
-      @* @(Html.DevExtreme().TabPanel()           // используем NavBar вместо TabPanel *@
-      @*             .ID("mainMenuBar") *@
-      @*             .SelectedIndex(0)                  // по умолчанию первый пункт *@
-      @*             .OnItemClick("onMenuItemClick")    // JS-обработчик клика *@
-      @*             .ItemTemplate("menuItemTemplate")  // шаблон отрисовки пункта *@
-      @*             ) *@
-    </div>
-
     <script>
 
-        // где-то в вашем клиентском скрипте, **после** загрузки pdfmake.min.js и vfs_fonts.js:
-DevExpress.pdfMake = pdfMake;
-
-      function menuItemTemplate(itemData) {
-          return `
-              <div class="menu-item">
-                  <i class="dx-icon dx-icon-${itemData.icon}"></i>
-                  <span>${itemData.text}</span>
-              </div>`;
-      }
-
-      // При клике — делаем переход по Route
-      function onMenuItemClick(e) {
-          var route = e.itemData.route;
-          if(route) {
-              window.location.href = route;
-          }
-      }
+//DevExpress.pdfMake = pdfMake;
     </script>
 
     <div class="container-fluid py-3">
@@ -129,7 +107,7 @@ DevExpress.pdfMake = pdfMake;
     </div>
 
   </div>
-  
+
   <script src="~/js/tgwebapp.js" asp-append-version="true"></script>
   @await RenderSectionAsync("Scripts", required: false)
 </body>

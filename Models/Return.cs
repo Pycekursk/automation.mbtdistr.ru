@@ -17,7 +17,6 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Кабинет")]
     public int CabinetId { get; set; } // кабинет/бренд/ООО
 
-  
     [Display(Name = "Кабинет")]
     public Cabinet Cabinet { get; set; }
 

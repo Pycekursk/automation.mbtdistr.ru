@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250514160530_fixRels")]
+    partial class fixRels
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -481,163 +484,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.ToTable("Workers");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrder", b =>
-                {
-                    b.Property<long>("Id")
-                        .HasColumnType("bigint");
-
-                    b.Property<decimal>("BuyerItemsTotalBeforeDiscount")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<DateTime>("CreationDate")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<decimal>("DeliveryTotal")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<bool>("Fake")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<decimal>("ItemsTotal")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("PaymentMethod")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("PaymentType")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Substatus")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("TaxSystem")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("YMOrders", (string)null);
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderBuyer", b =>
-                {
-                    b.Property<long>("OrderId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("Id")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("MiddleName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.HasKey("OrderId");
-
-                    b.ToTable("YMOrderBuyers", (string)null);
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDelivery", b =>
-                {
-                    b.Property<long>("OrderId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DeliveryPartnerType")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<long?>("DeliveryServiceId")
-                        .HasColumnType("bigint");
-
-                    b.Property<int?>("DispatchType")
-                        .HasColumnType("int");
-
-                    b.Property<bool?>("Estimated")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<decimal?>("LiftPrice")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<int?>("LiftType")
-                        .HasColumnType("int");
-
-                    b.Property<decimal?>("Price")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.HasKey("OrderId");
-
-                    b.ToTable("YMOrderDeliveries", (string)null);
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderItem", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("Count")
-                        .HasColumnType("int");
-
-                    b.Property<string>("OfferId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("OfferName")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<long>("OrderId")
-                        .HasColumnType("bigint");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("Vat")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId");
-
-                    b.ToTable("YMOrderItems", (string)null);
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>
                 {
                     b.Property<long>("Id")
@@ -714,7 +560,7 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("YMSupplyRequestItemId")
                         .IsUnique();
 
-                    b.ToTable("YMCurrencyValues");
+                    b.ToTable("YMCurrencyValue");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestCounters", b =>
@@ -1025,121 +871,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Cabinet");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderBuyer", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrder", "Order")
-                        .WithOne("Buyer")
-                        .HasForeignKey("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderBuyer", "OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDelivery", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrder", "Order")
-                        .WithOne("Delivery")
-                        .HasForeignKey("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDelivery", "OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDeliveryAddress", "Address", b1 =>
-                        {
-                            b1.Property<long>("YMOrderDeliveryOrderId")
-                                .HasColumnType("bigint");
-
-                            b1.Property<string>("Apartment")
-                                .IsRequired()
-                                .HasColumnType("longtext")
-                                .HasColumnName("Apartment");
-
-                            b1.Property<string>("City")
-                                .IsRequired()
-                                .HasColumnType("longtext")
-                                .HasColumnName("City");
-
-                            b1.Property<string>("Country")
-                                .IsRequired()
-                                .HasColumnType("longtext")
-                                .HasColumnName("Country");
-
-                            b1.Property<string>("House")
-                                .IsRequired()
-                                .HasColumnType("longtext")
-                                .HasColumnName("House");
-
-                            b1.Property<string>("Postcode")
-                                .IsRequired()
-                                .HasColumnType("longtext")
-                                .HasColumnName("Postcode");
-
-                            b1.Property<string>("Street")
-                                .IsRequired()
-                                .HasColumnType("longtext")
-                                .HasColumnName("Street");
-
-                            b1.HasKey("YMOrderDeliveryOrderId");
-
-                            b1.ToTable("YMOrderDeliveries");
-
-                            b1.WithOwner()
-                                .HasForeignKey("YMOrderDeliveryOrderId");
-                        });
-
-                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDeliveryDates", "Dates", b1 =>
-                        {
-                            b1.Property<long>("YMOrderDeliveryOrderId")
-                                .HasColumnType("bigint");
-
-                            b1.Property<DateTime>("FromDate")
-                                .HasColumnType("datetime(6)")
-                                .HasColumnName("FromDate");
-
-                            b1.Property<TimeSpan?>("FromTime")
-                                .HasColumnType("time(6)")
-                                .HasColumnName("FromTime");
-
-                            b1.Property<DateTime?>("RealDeliveryDate")
-                                .HasColumnType("datetime(6)")
-                                .HasColumnName("RealDeliveryDate");
-
-                            b1.Property<DateTime>("ToDate")
-                                .HasColumnType("datetime(6)")
-                                .HasColumnName("ToDate");
-
-                            b1.Property<TimeSpan?>("ToTime")
-                                .HasColumnType("time(6)")
-                                .HasColumnName("ToTime");
-
-                            b1.HasKey("YMOrderDeliveryOrderId");
-
-                            b1.ToTable("YMOrderDeliveries");
-
-                            b1.WithOwner()
-                                .HasForeignKey("YMOrderDeliveryOrderId");
-                        });
-
-                    b.Navigation("Address")
-                        .IsRequired();
-
-                    b.Navigation("Dates")
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderItem", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrder", "Order")
-                        .WithMany("Items")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Models.Cabinet", "Cabinet")
@@ -1289,17 +1020,6 @@ namespace automation.mbtdistr.ru.Migrations
                 {
                     b.Navigation("NotificationOptions")
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrder", b =>
-                {
-                    b.Navigation("Buyer")
-                        .IsRequired();
-
-                    b.Navigation("Delivery")
-                        .IsRequired();
-
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>

@@ -25,12 +25,6 @@
 </div>
 <script>
          var workerId = @Model?.WorkerId
-         const tg = window.Telegram.WebApp;
-           tg.ready();
-           tg.BackButton.show();
-           tg.BackButton.onClick(function() {
-             window.history.back();
-           });
              document.addEventListener("DOMContentLoaded", function () {
                  document.querySelectorAll('.list-group button').forEach(button => {
                      button.addEventListener('click', function () {

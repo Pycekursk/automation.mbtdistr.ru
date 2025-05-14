@@ -108,8 +108,8 @@ namespace automation.mbtdistr.ru.Services
       MarketSyncService.SupplyStatusChanged += OnSupplyStatusChanged;
 
 
-      //if (Program.Environment.IsDevelopment())
-      //  SyncAllAsync(CancellationToken.None);
+      if (Program.Environment.IsDevelopment())
+        SyncAllAsync(CancellationToken.None);
     }
 
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
@@ -118,8 +118,12 @@ namespace automation.mbtdistr.ru.Services
       if (e.ApiDTO != null)
         await Extensions.SendDebugObject(e.ApiDTO, $"Обьект возврата: {e.Return.Id}");
 
+
+      using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+
+
       // Null-check для cab и связанных работников
-      var workers = _db.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
+      var workers = context.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
       if (workers == null)
         return;
       // Отправляем сообщение всем рабочим
@@ -134,8 +138,9 @@ namespace automation.mbtdistr.ru.Services
 
     private async void OnSupplyStatusChanged(SupplyStatusChangedEventArgs e)
     {
+      using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
       // Null-check для cab и связанных работников
-      var workers = _db.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
+      var workers = context.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
       if (workers == null)
         return;
       // Отправляем сообщение всем рабочим
@@ -153,7 +158,7 @@ namespace automation.mbtdistr.ru.Services
       {
         try
         {
-           await SyncAllAsync(stoppingToken);
+          await SyncAllAsync(stoppingToken);
         }
         catch (Exception ex)
         {
@@ -164,7 +169,7 @@ namespace automation.mbtdistr.ru.Services
 
     private async Task SyncAllAsync(CancellationToken ct)
     {
-      if (Program.Environment.IsDevelopment()) return;
+      // if (Program.Environment.IsDevelopment()) return;
 
       using var scope = _scopeFactory.CreateScope();
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
@@ -249,11 +254,29 @@ namespace automation.mbtdistr.ru.Services
               var result = await _yMApiService.GetReturnsListAsync(cab, camp);
               if (result?.Result?.Returns?.Count > 0)
               {
+                var ids = result.Result?.Returns.Select((r) => new { orderId = r.OrderId, returnId = r.Id }).ToList();
+
+                ids?.ForEach(async i =>
+                {
+
+                  //var response = await _yMApiService.GetReturnInfoAsync(cab, camp, i.orderId, i.returnId);
+                });
+
                 _ymReturns.Add(result);
+
               }
+
+              //TODO: вызов метода получения информации о возврате
+
+              //TODO: вызов метода получения информации о заказе
+
+
             }
             if (_ymReturns.Count > 0)
             {
+
+
+
               await ProcessYMReturnsAsync(_ymReturns, cab, _db, ct);
             }
           }

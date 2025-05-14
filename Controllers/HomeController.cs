@@ -317,11 +317,16 @@ namespace automation.mbtdistr.ru.Controllers
     {
       var worker = _db.Workers.Include(w => w.AssignedCabinets).FirstOrDefault(w => w.Id == id);
 
+      if (worker.Role == RoleType.Admin || worker.Role == RoleType.Director)
+      {
+        worker.AssignedCabinets = _db.Cabinets.AsNoTracking().ToList();
+      }
+
       List<YMSupplyRequest> supplies = new List<YMSupplyRequest>();
 
       foreach (var cabinet in worker.AssignedCabinets)
       {
-        supplies = _db.YMSupplyRequests.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinet.Id)
+        var _supplies = _db.YMSupplyRequests.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinet.Id)
         .Include(c => c.TransitLocation)
         .ThenInclude(tl => tl.Address)
         .Include(c => c.TargetLocation)
@@ -332,15 +337,16 @@ namespace automation.mbtdistr.ru.Controllers
         .ThenInclude(i => i.Counters)
         .Include(r => r.ExternalId)
         .ToList();
+        supplies.AddRange(_supplies);
 
-        if (supplies?.Count > 0)
-        {
-          ViewData["GreetingMessage"] = $"Все заявки ({supplies.Count} шт.)";
-        }
-        else 
-        {
-          ViewData["GreetingMessage"] = "У кабинетов нет активных заявок.";
-        }
+      }
+      if (supplies?.Count > 0)
+      {
+        ViewData["GreetingMessage"] = $"Все заявки ({supplies.Count} шт.)";
+      }
+      else
+      {
+        ViewData["GreetingMessage"] = "У кабинетов нет активных заявок.";
       }
       MainMenuViewModel mainMenu = new MainMenuViewModel
       {
@@ -349,14 +355,21 @@ namespace automation.mbtdistr.ru.Controllers
       ViewBag.Statuses = Extensions.ToLookup<YMSupplyRequestStatusType>();
       ViewBag.Types = Extensions.ToLookup<YMSupplyRequestType>();
       ViewBag.SubType = Extensions.ToLookup<YMSupplyRequestSubType>();
-      //ViewBag.supplies = supplies;
       return View("/Views/Home/SuppliesListV2.cshtml", supplies);
     }
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/supplieslist")]
     public IActionResult SuppliesList([FromRoute] int id, [FromRoute] int? cabinetId)
     {
-      var supplies = _db.YMSupplyRequests.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
+      var supplies = _db.YMSupplyRequests.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).Include(c => c.TransitLocation)
+        .ThenInclude(tl => tl.Address)
+        .Include(c => c.TargetLocation)
+        .ThenInclude(tl => tl.Address)
+        .Include(r => r.Items)
+        .ThenInclude(i => i.Price)
+        .Include(r => r.Items)
+        .ThenInclude(i => i.Counters)
+        .Include(r => r.ExternalId).ToList();
       MainMenuViewModel mainMenu = new MainMenuViewModel
       {
         WorkerId = id,

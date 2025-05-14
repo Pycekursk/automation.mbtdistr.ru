@@ -9,7 +9,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
   /// <summary>
   /// Этап обработки заказа (если он имеет статус PROCESSING) или причина отмены заказа (если он имеет статус CANCELLED).
   /// </summary>
-  public enum OrderSubstatusType
+  public enum YMOrderSubstatusType
   {
     /// <summary>
     /// Заказ подтвержден, его можно начать обрабатывать.
@@ -153,7 +153,16 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("TECHNICAL_ERROR")]
     [JsonProperty("TECHNICAL_ERROR")]
     [Display(Name = "Техническая ошибка")]
-    TechnicalError
+    TechnicalError,
+
+    /// <summary>
+    /// Неизвестно
+    /// </summary>
+    [EnumMember(Value = "UNKNOWN")]
+    [JsonPropertyName("UNKNOWN")]
+    [JsonProperty("UNKNOWN")]
+    [Display(Name = "Неизвестно")]
+    Unknown = 0
   }
 }
 

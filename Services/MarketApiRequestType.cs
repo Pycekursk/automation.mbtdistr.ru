@@ -6,14 +6,21 @@
     ProductList,         
     ProductInfo,         
     ReturnsList,
+    ReturnInfo,
     SellerInfo,
     Ping,
     Campaigns,
     Orders,
     Image,
+    Images,
     SupplyRequests,
     SupplyItems,
-    SupplyDocuments
+    SupplyDocuments,
+    OrdersInfo,
+    OrderInfo,
+    ReturnApplication,
+    ReturnDecision,
+    SubmitReturnDecision
     // и так далее...
   }
 }

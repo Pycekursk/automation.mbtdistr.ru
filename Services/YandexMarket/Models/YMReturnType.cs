@@ -26,5 +26,14 @@ public enum YMReturnType
   [JsonPropertyName("RETURN")]
   [JsonProperty("RETURN")]
   [Display(Name = "Возврат")]
-  Return
+  Return,
+
+  /// <summary>
+  /// Неизвестный тип.
+  /// </summary>
+  [EnumMember(Value = "UNKNOWN")]
+  [JsonPropertyName("UNKNOWN")]
+  [JsonProperty("UNKNOWN")]
+  [Display(Name = "Неизвестный тип")]
+  Unknown = 0
 }

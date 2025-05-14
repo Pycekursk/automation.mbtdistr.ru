@@ -9,7 +9,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
   /// <summary>
   /// Способ отгрузки.
   /// </summary>
-  public enum OrderDeliveryDispatchType
+  public enum YMOrderDeliveryDispatchType
   {
     /// <summary>
     /// Доставка покупателю.
@@ -45,7 +45,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("UNKNOWN")]
     [JsonProperty("UNKNOWN")]
     [Display(Name = "Неизвестный тип")]
-    Unknown
+    Unknown = 0
   }
 
 }

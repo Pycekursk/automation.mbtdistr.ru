@@ -99,6 +99,97 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
+
+    /// <summary>
+    /// Получение информации о невыкупе или возврате
+    /// https://api.partner.market.yandex.ru/campaigns/{campaignId}/orders/{orderId}/returns/{returnId}
+    /// </summary> 
+     public async Task<YMApiResponse<YMReturn>> GetReturnInfoAsync(Cabinet cabinet, Campaign campaign, long orderId, long returnId)
+    {
+      try
+      {
+        var response = await _yMApiHttpClient.SendRequestAsync(
+            MarketApiRequestType.ReturnInfo,
+            cabinet,
+            null,
+            pathParams: new Dictionary<string, object>
+            {
+              { "campaignId", campaign.Id },
+              { "orderId", orderId },
+              { "returnId", returnId }
+            }
+        );
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMReturn>>(json, new JsonSerializerSettings()
+        {
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
+          Converters = new List<Newtonsoft.Json.JsonConverter>
+          {
+            new StringEnumConverter()
+          }
+        });
+        return obj;
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка получения информации о возврате: {ex.Message}");
+        return default;
+      }
+    }
+
+    /// <summary>
+    /// Метод получения информации о заказах
+    /// </summary>
+    public async Task<YMApiResponse<YMOrder>> GetOrdersAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 100, string? pageToken = null)
+    {
+      if (filter == null)
+      {
+        filter = new YMFilter
+        {
+          FromDate = DateTime.Now.AddDays(-20).ToString("yyyy-MM-dd"),
+          ToDate = DateTime.Now.ToString("yyyy-MM-dd"),
+          Limit = limit,
+          //Statuses = new List<YMOrderStatusType> { YMOrderStatusType.Unpaid }
+        };
+      }
+      try
+      {
+        var response = await _yMApiHttpClient.SendRequestAsync(
+            MarketApiRequestType.Orders,
+            cabinet,
+            null,
+            query: filter.ToQueryParams(),
+            pathParams: new Dictionary<string, object>
+            {
+              { "campaignId", campaign.Id }
+            }
+        );
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMOrder>>(json, new JsonSerializerSettings()
+        {
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
+          Converters = new List<Newtonsoft.Json.JsonConverter>
+          {
+            new StringEnumConverter()
+          }
+        });
+        return obj;
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка получения списка заказов: {ex.Message}");
+        return default;
+      }
+    }
+
+
+
+
+
     public async Task<YMApiResponse<YMGetSupplyRequests>> GetSupplyRequests(Cabinet cabinet, Campaign campaign, int limit = 100, YMFilter? filter = null, string? pageToken = null)
     {
       try
@@ -633,8 +724,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         if (dbItem != null)
         {
           dbItem.Name = item.Name;
-          dbItem.Price.CurrencyId = item.Price.CurrencyId;
-          dbItem.Price.Value = item.Price.Value;
+          if (dbItem.Price != null)
+          {
+            dbItem.Price.CurrencyId = item.Price.CurrencyId;
+            dbItem.Price.Value = item.Price.Value;
+          }
           dbItem.Counters.DefectCount = item.Counters.DefectCount;
           dbItem.Counters.FactCount = item.Counters.FactCount;
           dbItem.Counters.PlanCount = item.Counters.PlanCount;
@@ -719,12 +813,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         await context.SaveChangesAsync();
       }
 
-      // 4) Обновляем ссылки: сначала удаляем все старые
+      // 4) Удаляем все старые ссылки — теперь это приведёт к физическому DELETE
       var oldRefs = await context.YMSupplyRequestReferences
           .Where(rf => rf.RequestId == existing.Id || rf.RelatedRequestId == existing.Id)
           .ToListAsync();
       context.YMSupplyRequestReferences.RemoveRange(oldRefs);
       await context.SaveChangesAsync();
+
 
       // 5) Локальная функция для добавления одной ссылки, пропуская отсутствующие
       async Task AddReferenceAsync(YMSupplyRequestReference link, bool isParentLink)
@@ -769,8 +864,15 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     }
 
 
+
+
   }
 
+  #region Orders Models
+
+
+
+  #endregion
 
 
   #region Request Models

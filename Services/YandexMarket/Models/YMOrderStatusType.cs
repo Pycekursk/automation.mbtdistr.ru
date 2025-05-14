@@ -9,7 +9,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
   /// <summary>
   /// Статус заказа.
   /// </summary>
-  public enum OrderStatusType
+  public enum YMOrderStatusType
   {
     /// <summary>
     /// Оформляется, подготовка к резервированию.
@@ -117,7 +117,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("UNKNOWN")]
     [JsonProperty("UNKNOWN")]
     [Display(Name = "Неизвестный статус")]
-    Unknown
+    Unknown = 0
   }
 }
 

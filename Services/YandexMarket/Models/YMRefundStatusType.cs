@@ -122,5 +122,5 @@ public enum YMRefundStatusType
   [JsonPropertyName("UNKNOWN")]
   [JsonProperty("UNKNOWN")]
   [Display(Name = "Неизвестный статус")]
-  Unknown
+  Unknown = 0
 }
