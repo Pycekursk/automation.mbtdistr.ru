@@ -31,6 +31,61 @@ document.addEventListener('DOMContentLoaded', function () {
     }, false);
 });
 
+function goBack() {
+    window.history.back();
+}
+
+function onExportingHandler(e) {
+    const defaultName = '@defaultExportFileName';
+    DevExpress.ui.dialog.custom({
+        title: "Сохранить как",
+        messageHtml: "<div>Введите имя файла:</div><input type='text' id='filenameInput' value='" + defaultName + "' style='width:100%' />",
+        buttons: [
+            {
+                text: "Сохранить", onClick: () => {
+                    const filename = document.getElementById('filenameInput').value || defaultName;
+                    e.fileName = filename;
+
+                    if (e.format === 'xlsx') {
+
+                        var workbook = new ExcelJS.Workbook();
+                        var worksheet = workbook.addWorksheet('Main sheet');
+                        DevExpress.excelExporter.exportDataGrid({
+                            worksheet: worksheet,
+                            component: e.component,
+                            customizeCell: function (options) {
+                                options.excelCell.font = { name: 'Arial', size: 12 };
+                                options.excelCell.alignment = { horizontal: 'left' };
+                            }
+                        }).then(function () {
+                            workbook.xlsx.writeBuffer().then(function (buffer) {
+                                saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `${e.fileName}.xlsx`);
+                            });
+                        });
 
 
+                    }
+                    else if (e.format === 'pdf') {
+                        const doc = new jspdf.jsPDF();
+                        DevExpress.pdfExporter.exportDataGrid({
+                            jsPDFDocument: doc,
+                            component: e.component,
+                        }).then(() => {
+                            doc.save(`${e.fileName}.pdf`);
+                        });
+
+                    }
+
+
+
+
+                }
+            },
+            { text: "Отмена", onClick: () => e.cancel = true }
+        ]
+    }).show();
+
+    // отменяем экспорт по умолчанию, он продолжится в диалоге
+    e.cancel = true;
+}
 

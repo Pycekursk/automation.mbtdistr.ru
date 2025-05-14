@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 
 using automation.mbtdistr.ru.Data;
@@ -62,17 +63,17 @@ namespace automation.mbtdistr.ru.Controllers
     {
       var user = _db.Workers.FirstOrDefault(w => w.TelegramId == id.ToString());
       MainMenuViewModel mainMenu = new MainMenuViewModel();
+      if (user?.Role == RoleType.Guest)
+      {
+        mainMenu.GreetingMessage = "Вы зарегистрированы в системе как гость. Пожалуйста, свяжитесь с администратором для получения доступа.";
+        return View(mainMenu);
+      }
       if (user != null)
       {
         mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
         mainMenu.WorkerId = user.Id;
 
-        if (user.Role == RoleType.Guest)
-        {
-          mainMenu.GreetingMessage = "Вы не зарегистрированы в системе. Пожалуйста, свяжитесь с администратором.";
-          mainMenu.Menu = new List<MenuItem>();
-        }
-        else if (user.Role == RoleType.Admin)
+        if (user.Role == RoleType.Admin)
         {
           mainMenu.Menu = new List<MenuItem>
           {
@@ -97,7 +98,15 @@ namespace automation.mbtdistr.ru.Controllers
               Title = "Возвраты",
               CSS = "btn btn-outline-danger"
             },
-            new MenuItem
+               new MenuItem
+            {
+
+              Action = "supplieslist",
+              Title = "Заявки",
+              CSS = "btn btn-outline-primary",
+              Icon = "bi bi-box-seam"
+            },
+                new MenuItem
             {
               Icon = "bi bi-gear-fill",
               Action = "workersettings",
@@ -126,16 +135,16 @@ namespace automation.mbtdistr.ru.Controllers
 
               Action = "returnslist",
               Title = "Возвраты",
-              CSS = "btn btn-outline-danger",
+              CSS = "btn btn-outline-primary",
               Icon = "bi bi-box-seam"
             },
-            new MenuItem
+               new MenuItem
             {
 
-              Action = "workersettings",
-              Title = "Настройки",
-              CSS = "btn btn-outline-light",
-              Icon = "bi bi-gear-fill"
+              Action = "supplieslist",
+              Title = "Заявки",
+              CSS = "btn btn-outline-danger",
+              Icon = "bi bi-box-seam"
             }
           };
         }
@@ -241,12 +250,6 @@ namespace automation.mbtdistr.ru.Controllers
       {
         return Redirect("https://t.me/MbtdistrBot");
       }
-      //MainMenuViewModel mainMenu = new MainMenuViewModel
-      //{
-      //  WorkerId = worker.Id,
-
-      //};
-      //string greetingMessage = 
 
       ViewData["GreetingMessage"] = $"Вы находитесь в разделе Возвраты. Здесь отображаются возвраты по всем закрепленным кабинетам ({worker.AssignedCabinets.Count} шт.)";
 
@@ -309,6 +312,47 @@ namespace automation.mbtdistr.ru.Controllers
       return View(returns);
     }
 
+    [HttpGet("botmenu/{id?}/supplieslist")]
+    public IActionResult SuppliesList([FromRoute] int id)
+    {
+      var worker = _db.Workers.Include(w => w.AssignedCabinets).FirstOrDefault(w => w.Id == id);
+
+      List<YMSupplyRequest> supplies = new List<YMSupplyRequest>();
+
+      foreach (var cabinet in worker.AssignedCabinets)
+      {
+        supplies = _db.YMSupplyRequests.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinet.Id)
+        .Include(c => c.TransitLocation)
+        .ThenInclude(tl => tl.Address)
+        .Include(c => c.TargetLocation)
+        .ThenInclude(tl => tl.Address)
+        .Include(r => r.Items)
+        .ThenInclude(i => i.Price)
+        .Include(r => r.Items)
+        .ThenInclude(i => i.Counters)
+        .Include(r => r.ExternalId)
+        .ToList();
+
+        if (supplies?.Count > 0)
+        {
+          ViewData["GreetingMessage"] = $"Все заявки ({supplies.Count} шт.)";
+        }
+        else 
+        {
+          ViewData["GreetingMessage"] = "У кабинетов нет активных заявок.";
+        }
+      }
+      MainMenuViewModel mainMenu = new MainMenuViewModel
+      {
+        WorkerId = id,
+      };
+      ViewBag.Statuses = Extensions.ToLookup<YMSupplyRequestStatusType>();
+      ViewBag.Types = Extensions.ToLookup<YMSupplyRequestType>();
+      ViewBag.SubType = Extensions.ToLookup<YMSupplyRequestSubType>();
+      //ViewBag.supplies = supplies;
+      return View("/Views/Home/SuppliesListV2.cshtml", supplies);
+    }
+
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/supplieslist")]
     public IActionResult SuppliesList([FromRoute] int id, [FromRoute] int? cabinetId)
     {
@@ -320,23 +364,25 @@ namespace automation.mbtdistr.ru.Controllers
       };
       if (supplies?.Count > 0)
       {
-        foreach (var r in supplies)
-        {
-          mainMenu.Menu.Add(new MenuItem
-          {
-            Title = $"{r.ExternalId} ({r?.Cabinet?.Name})",
-            Action = "supplyinfo",
-            EntityId = $"{r?.Id}",
-            Icon = "bi bi-box-seam me-2",
-            CSS = "list-group-item bg-transparent text-primary"
-          });
-        }
+        //foreach (var r in supplies)
+        //{
+        //  mainMenu.Menu.Add(new MenuItem
+        //  {
+        //    Title = $"{r.ExternalId} ({r?.Cabinet?.Name})",
+        //    Action = "supplyinfo",
+        //    EntityId = $"{r?.Id}",
+        //    Icon = "bi bi-box-seam me-2",
+        //    CSS = "list-group-item bg-transparent text-primary"
+        //  });
+        //}
       }
       else
       {
         mainMenu.GreetingMessage = "У кабинета нет активных заявок.";
       }
-
+      ViewBag.Statuses = Extensions.ToLookup<YMSupplyRequestStatusType>();
+      ViewBag.Types = Extensions.ToLookup<YMSupplyRequestType>();
+      ViewBag.SubType = Extensions.ToLookup<YMSupplyRequestSubType>();
       //ViewBag.supplies = supplies;
 
       return View("/Views/Home/SuppliesListV2.cshtml", supplies);

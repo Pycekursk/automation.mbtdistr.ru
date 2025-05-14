@@ -33,24 +33,24 @@ namespace automation.mbtdistr.ru.Data
 
     public DbSet<YMSupplyRequest> YMSupplyRequests { get; set; }
 
+    public DbSet<YMSupplyRequestLocation> YMSupplyRequestLocations { get; set; }
+
     public DbSet<YMSupplyRequestLocation> YMLocations { get; set; }
+
+    public DbSet<YMSupplyRequestLocationAddress> YMLocationAddresses { get; set; }
+
+    public DbSet<YMSupplyRequestItem> YMSupplyRequestItems { get; set; }
+
+    public DbSet<YMSupplyRequestReference> YMSupplyRequestReferences { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
     }
 
-    protected override void OnModelCreating(ModelBuilder mb)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-      base.OnModelCreating(mb);
-
-      //mb.Entity<NotificationOptions>()
-      //    .Property(o => o.NotificationLevels)
-      //    .HasConversion(
-      //v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
-      //v => JsonSerializer.Deserialize<List<NotificationLevel>>(v, (JsonSerializerOptions?)null))
-      //   .HasColumnType("longtext"); // или longtext, если JSON не поддерживается
-      // Находим все enum-типы в сборке моделей, начинающиеся на "YM"
+      base.OnModelCreating(modelBuilder);
       var ymEnumTypes = typeof(ApplicationDbContext).Assembly
           .GetTypes()
           .Where(t => t.IsEnum && t.Name.StartsWith("YM", StringComparison.Ordinal))
@@ -63,7 +63,7 @@ namespace automation.mbtdistr.ru.Data
         var converter = (ValueConverter)Activator.CreateInstance(converterType);
 
         // Для каждой сущности ищем свойства этого enum-типа
-        foreach (var entityType in mb.Model.GetEntityTypes())
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
           var clrType = entityType.ClrType;
           var enumProperties = clrType
@@ -72,7 +72,7 @@ namespace automation.mbtdistr.ru.Data
 
           foreach (var prop in enumProperties)
           {
-            mb
+            modelBuilder
                 .Entity(clrType)
                 .Property(prop.Name)
                 .HasConversion(converter);
@@ -80,46 +80,78 @@ namespace automation.mbtdistr.ru.Data
         }
       }
 
-      //mb.Entity<YMSupplyRequestLocationAddress>(b =>
-      //{
-      //  // Расплющиваем owned type YMGps в колонки
-      //  b.OwnsOne(e => e.Gps, gps =>
-      //  {
-      //    gps.Property(p => p.Latitude).HasColumnName("Latitude");
-      //    gps.Property(p => p.Longitude).HasColumnName("Longitude");
-      //  });
 
-      //  // Составной ключ по двум колонкам
-      //  b.HasKey(
-      //      nameof(YMSupplyRequestLocationAddress.Gps) + "." + nameof(YMGps.Latitude),
-      //      nameof(YMSupplyRequestLocationAddress.Gps) + "." + nameof(YMGps.Longitude)
-      //  );
-      //});
-      mb.Entity<YMSupplyRequestLocationAddress>(b =>
-      {
-        b.HasKey(e => e.Id);
-        b.HasIndex(e => new { e.Latitude, e.Longitude })
-         .IsUnique();
-      });
+      modelBuilder.Entity<YMSupplyRequestItem>()
+          .HasOne(i => i.Price)
+          .WithOne(p => p.SupplyRequestItem)
+          .HasForeignKey<YMCurrencyValue>(p => p.YMSupplyRequestItemId)
+          .OnDelete(DeleteBehavior.Cascade);
 
-      mb.Entity<ReturnMainInfo>()
+      modelBuilder.Entity<YMSupplyRequestItem>()
+          .HasOne(i => i.Counters)
+          .WithOne(c => c.Item)
+          .HasForeignKey<YMSupplyRequestItemCounters>(c => c.Id) // при совпадении ID с item.Id
+          .OnDelete(DeleteBehavior.Cascade);
+
+      modelBuilder.Entity<YMSupplyRequest>()
+ .HasMany(r => r.Items)
+ .WithOne(i => i.SupplyRequest)
+ .HasForeignKey(i => i.SupplyRequestId)
+ .OnDelete(DeleteBehavior.Cascade);
+
+      // 1) Один-ко-многим: YMSupplyRequest → ChildrenLinks
+      modelBuilder.Entity<YMSupplyRequest>()
+          .HasMany(r => r.ChildrenLinks)
+          .WithOne(rf => rf.Request)
+          .HasForeignKey(rf => rf.RequestId)
+          .OnDelete(DeleteBehavior.Cascade);
+
+      // 2) Один-к-одному (опционально): YMSupplyRequest → ParentLink
+      modelBuilder.Entity<YMSupplyRequest>()
+          .HasOne(r => r.ParentLink)
+          .WithOne(rf => rf.RelatedRequest)
+          .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
+          .OnDelete(DeleteBehavior.Restrict);
+
+      // ─── SupplyRequest → TargetLocation ────────
+      modelBuilder.Entity<YMSupplyRequest>()
+          .HasOne(r => r.TargetLocation)
+          .WithMany(l => l.AsTargetInRequests)
+          .HasForeignKey(r => r.TargetLocationServiceId)
+          .OnDelete(DeleteBehavior.Restrict);
+
+      // ─── SupplyRequest → TransitLocation ───────
+      modelBuilder.Entity<YMSupplyRequest>()
+          .HasOne(r => r.TransitLocation)
+          .WithMany(l => l.AsTransitInRequests)
+          .HasForeignKey(r => r.TransitLocationServiceId)
+          .OnDelete(DeleteBehavior.Restrict);
+
+      // ─── Location → Address ────────────────────
+      modelBuilder.Entity<YMSupplyRequestLocation>()
+          .HasOne(l => l.Address)
+          .WithMany(a => a.LocationAddresses)
+          .HasForeignKey(l => l.AddressId)
+          .OnDelete(DeleteBehavior.Restrict);
+
+      modelBuilder.Entity<ReturnMainInfo>()
         .Property(r => r.ReturnStatus)
         .HasConversion<string>();
 
       // 1:1 Cabinet ↔ CabinetSettings
-      mb.Entity<Cabinet>()
+      modelBuilder.Entity<Cabinet>()
         .HasOne(c => c.Settings)
         .WithOne(s => s.Cabinet)
         .HasForeignKey<CabinetSettings>(s => s.CabinetId);
 
       // 1:* CabinetSettings ↔ ConnectionParameter
-      mb.Entity<ConnectionParameter>()
+      modelBuilder.Entity<ConnectionParameter>()
         .HasOne(p => p.CabinetSettings)
         .WithMany(s => s.ConnectionParameters)
         .HasForeignKey(p => p.CabinetSettingsId);
 
       // Many-to-Many Worker ↔ Cabinet через таблицу WorkerCabinets
-      mb.Entity<Worker>()
+      modelBuilder.Entity<Worker>()
         .HasMany(w => w.AssignedCabinets)
         .WithMany(c => c.AssignedWorkers)
         .UsingEntity<Dictionary<string, object>>(
@@ -145,7 +177,8 @@ namespace automation.mbtdistr.ru.Data
     {
       if (!optionsBuilder.IsConfigured)
       {
-
+        optionsBuilder.EnableDetailedErrors();
+        optionsBuilder.EnableSensitiveDataLogging();
 
 
         optionsBuilder.UseMySql(Program.Configuration.GetConnectionString("DefaultConnection"),

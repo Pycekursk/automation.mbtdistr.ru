@@ -1,5 +1,6 @@
 ﻿@using automation.mbtdistr.ru.ViewModels
 @using automation.mbtdistr.ru.Services.YandexMarket.Models
+
 @{
   ViewData["Title"] = "Заявки";
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
@@ -7,70 +8,153 @@
 
 @model List<YMSupplyRequest>
 
+@{
+  var modelName = typeof(YMSupplyRequest).Name;
+  var defaultExportFileName = $"{modelName}_{DateTime.Now:yyyy-MM-dd}";
+}
+
+
 <div class="container">
-  @(
-    Html.DevExtreme().DataGrid<YMSupplyRequest>()
-    .ID("gridContainer")
-    .KeyExpr("Id")
-    .ColumnAutoWidth(true)
-    .ShowRowLines(true)
-    .ShowBorders(true)
-    .DataSource(Model)
-    .ColumnChooser(cc =>
+
+  @using System.ComponentModel.DataAnnotations
+  @{
+    var columns = typeof(YMSupplyRequest).GetProperties()
+    .Where(p =>
     {
-      cc
-      .Enabled(true)
-      .Height("400px")
-      .Mode(GridColumnChooserMode.Select)
-      .Position(pc => pc
-      .My(HorizontalAlignment.Right, VerticalAlignment.Top)
-      .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
-      .Of(".dx-datagrid-column-chooser-button")
-      );
+      if (!p.CanRead) return false;
 
-      cc.Search(ccs => ccs
-      .Enabled(true)
-      .EditorOptions(new { Placeholder = "Search column" })
-      );
+      var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
+    .Cast<DataGridAttribute>()
+    .FirstOrDefault();
 
-      cc.Selection(ccs => ccs
-      .AllowSelectAll(true)
-      .SelectByClick(true)
-      .Recursive(true)
-      );
+      return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
     })
+    .Select(p => new
+    {
+      Field = p.Name,
+      Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
+    .Cast<DisplayAttribute>()
+    .FirstOrDefault()?.Name ?? p.Name,
+      IsEnum = p.PropertyType.IsEnum,
+      EnumType = p.PropertyType
+    })
+    .ToList();
+  }
+  @{
+    var enumFields = typeof(YMSupplyRequest).GetProperties()
+    .Where(p => p.PropertyType.IsEnum)
+    .ToList();
+  }
+  @(
+      Html.DevExtreme().DataGrid<YMSupplyRequest>()
+      .ID("gridContainer")
+      .KeyExpr("Id")
+      .ColumnAutoWidth(true)
+      .Height("700px")
+      .ShowRowLines(true)
+      .ShowBorders(true)
+      .DataSource(Model)
+      .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx", "pdf" }); })
+      .OnExporting("onExportingHandler")
+      .Columns(columnsBuilder =>
+      {
+        foreach (var col in columns)
+        {
+          var column = columnsBuilder.Add()
+          .DataField(col.Field)
+          .Caption(col.Caption);
+
+          if (col.IsEnum)
+          {
+            var enumValues = Enum.GetValues(col.EnumType)
+            .Cast<Enum>()
+            .Select(e => new
+            {
+              Id = Convert.ToInt32(e),
+              Name = e.GetDisplayName()
+            })
+            .ToList();
+
+            column.Lookup(lookup => lookup
+            .DataSource(enumValues)
+            .ValueExpr("Id")
+            .DisplayExpr("Name"));
+          }
+        }
+      })
+      .ColumnChooser(cc =>
+      {
+        cc.Enabled(true)
+        .Height("400px")
+        .Mode(GridColumnChooserMode.Select)
+        .Position(pc => pc
+        .My(HorizontalAlignment.Right, VerticalAlignment.Top)
+        .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
+        .Of(".dx-datagrid-column-chooser-button")
+        );
+
+        cc.Search(ccs => ccs
+        .Enabled(true)
+        .EditorOptions(new { Placeholder = "Поиск" })
+        );
+
+        cc.Selection(ccs => ccs
+        .AllowSelectAll(true)
+        .SelectByClick(true)
+        .Recursive(true)
+        );
+      })
+      .LoadPanel(loadPanel => loadPanel.Enabled(true))
+      .Scrolling(scrolling => scrolling
+      .Mode(GridScrollingMode.Virtual)
+      .ColumnRenderingMode(GridColumnRenderingMode.Virtual)
+      )
+      .Paging(p => p.PageSize(20))
+      .AllowColumnReordering(true)
+      .Pager(p =>
+      {
+        p.Visible(true);
+        p.ShowPageSizeSelector(true);
+        p.AllowedPageSizes(new int[] { 20, 50, 100 });
+      })
+      .AllowColumnResizing(true)
+      .StateStoring(s => s
+      .Enabled(true)
+      .Type(StateStoringType.SessionStorage)
+      .StorageKey($"{Model.GetType().Name}_grid")
+      )
+      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
+      .HeaderFilter(h => h.Visible(true))
+      .Toolbar(toolbar =>
+      {
+        toolbar.Items(items =>
+        {
+          items.Add()
+        .Location(ToolbarItemLocation.Before)
+        .Widget(w =>
+        {
+          var b = w.Button();
+          b.Text("Назад");
+          b.OnClick("goBack");
+          return b;
+        });
+          items.Add()
+        .Name("exportButton")
+        .Location(ToolbarItemLocation.After);
+
+          items.Add()
+        .Name("columnChooserButton")
+        .Location(ToolbarItemLocation.After);
+        });
+      })
+      .Selection(s => s.Mode(SelectionMode.Single))
+      .FilterRow(f => f.Visible(true))
+      .HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true)))
+      )
 
 
-    .LoadPanel(loadPanel => loadPanel.Enabled(true))
-    .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
-    .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
-    .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
-    .AllowColumnResizing(true)
-    .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{Model.GetType().Name}_grid"))
-    .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
-    @* .FilterPanel(f => f.Visible(true)) *@
-    .HeaderFilter(h => h.Visible(true))
-    .Selection(s => s.Mode(SelectionMode.Single))
-    .FilterRow(f => f.Visible(true))
-    .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true))))
 </div>
 
 <script>
-  // function treeViewItemClick(e) {
-  //     var data = e.itemData;
-  //     var citiesData = data.Cities;
-  //     if (citiesData) {
-  //         $("#country-flag").attr("src", data.Flag);
-  //         $("#full-country-name").text(data.FullName);
-  //         $("#country-description").text(data.Description);
-
-  //         $("#country-area").text(data.Area);
-  //         $("#country-population").text(data.Population);
-  //         $("#country-gdp").text("$" + data.GDP);
-
-  //         var tabPanel = $("#tabpanel").dxTabPanel("instance");
-  //         tabPanel.option("dataSource", citiesData);
-  //         tabPanel.option("selectedIndex", 0);
-  //     }
-  // }
+   
 </script>

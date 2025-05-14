@@ -4,10 +4,6 @@ using Newtonsoft.Json;
 
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-//using System.Text.Json.Serialization;
-
-//using System.Text.Json.Serialization;
-
 
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
@@ -16,93 +12,76 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
   /// </summary>
   public class YMSupplyRequest
   {
-    /// <summary>
-    /// Счетчики: количество товаров, коробок и палет в заявке.
-    /// </summary>
-    [JsonProperty("counters")]
-    [Display(Name = "Счетчики")]
-    public YMSupplyRequestCounters? Counters { get; set; }
+    [Key, DataGrid(false)]
+    public long Id { get; set; }
 
-    [ForeignKey("ExternalId"), Key]
-    public long? Id { get; set; }
+    [ForeignKey(nameof(ExternalId)), JsonIgnore, DataGrid(false)]
+    public long ExternalIdId { get; set; }
 
-    /// <summary>
-    /// Идентификаторы заявки.
-    /// </summary>
+    /// <summary>Идентификаторы заявки.</summary>
     [JsonProperty("id")]
-    [Display(Name = "Идентификаторы заявки")]
+    [Display(Name = "Идентификаторы заявки"), DataGrid(false)]
     public YMSupplyRequestId? ExternalId { get; set; }
 
-    /// <summary>
-    /// Статус заявки.
-    /// </summary>
     [JsonProperty("status")]
     [Display(Name = "Статус заявки")]
     public YMSupplyRequestStatusType Status { get; set; }
 
-    /// <summary>
-    /// Подтип заявки.
-    /// </summary>
     [JsonProperty("subtype")]
     [Display(Name = "Подтип заявки")]
     public YMSupplyRequestSubType Subtype { get; set; }
 
-    /// <summary>
-    /// Информация о основном складе или ПВЗ.
-    /// </summary>
-    [JsonProperty("targetLocation")]
-    [Display(Name = "Основной склад/ПВЗ")]
-    public YMSupplyRequestLocation? TargetLocation { get; set; }
-
-    /// <summary>
-    /// Тип заявки.
-    /// </summary>
     [JsonProperty("type")]
     [Display(Name = "Тип заявки")]
     public YMSupplyRequestType Type { get; set; }
 
-    /// <summary>
-    /// Дата и время последнего обновления заявки.
-    /// </summary>
     [JsonProperty("updatedAt")]
-    [Display(Name = "Дата и время последнего обновления заявки")]
+    [Display(Name = "Обновление заявки")]
     public DateTime UpdatedAt { get; set; }
 
-    /// <summary>
-    /// Ссылки на дочерние заявки.
-    /// </summary>
-    [JsonProperty("childrenLinks")]
-    [Display(Name = "Ссылки на дочерние заявки"), NotMapped]
-    public List<YMSupplyRequestReference>? ChildrenLinks { get; set; }
+    [JsonProperty("counters")]
+    [Display(Name = "Счетчики")]
+    public YMSupplyRequestCounters? Counters { get; set; }
 
-    /// <summary>
-    /// Ссылка на родительскую заявку.
-    /// </summary>
-    [JsonProperty("parentLink")]
-    [Display(Name = "Ссылка на родительскую заявку"), NotMapped]
-    public YMSupplyRequestReference? ParentLink { get; set; }
+    /// <summary>Продукты</summary>
+    [JsonProperty("items")]
+    [Display(Name = "Продукты")]
+    public ICollection<YMSupplyRequestItem>? Items { get; set; }
 
-    /// <summary>
-    /// Информация о транзитном складе или ПВЗ.
-    /// </summary>
+    // ─── Target Location ───────────────────────────────
+
+    [JsonProperty("targetLocation")]
+    [Display(Name = "Основной склад/ПВЗ")]
+    public YMSupplyRequestLocation TargetLocation { get; set; }
+
+    [ForeignKey(nameof(TargetLocation)), DataGrid(false)]
+    public long TargetLocationServiceId { get; set; }
+
+    // ─── Transit Location ──────────────────────────────
+
     [JsonProperty("transitLocation")]
     [Display(Name = "Транзитный склад/ПВЗ")]
     public YMSupplyRequestLocation? TransitLocation { get; set; }
 
-    [JsonIgnore, Display(Name = "Продукты")]
-    public ICollection<YMSupplyRequestItem>? Items { get; set; }
+    [ForeignKey(nameof(TransitLocation)), DataGrid(false)]
+    public long? TransitLocationServiceId { get; set; }
 
+    // ─── Кабинет ───────────────────────────────────────
 
-    /// <summary>
-    /// Кабинет которому принадлежит заявка
-    /// </summary>
-    [JsonIgnore, ForeignKey("Cabinet")]
+    [DataGrid(false)]
     public int? CabinetId { get; set; }
 
-    /// <summary>
-    /// Кабинет которому принадлежит заявка
-    /// </summary>
-    [JsonIgnore]
+    [Display(Name = "Кабинет")]
     public Cabinet? Cabinet { get; set; }
+
+    // ─── Виртуальные связи (не сохраняются) ────────────
+
+    [JsonProperty("childrenLinks")]
+    [Display(Name = "Ссылки на дочерние заявки"), InverseProperty(nameof(YMSupplyRequestReference.Request))]
+    public List<YMSupplyRequestReference>? ChildrenLinks { get; set; }
+
+    [JsonProperty("parentLink")]
+    [Display(Name = "Ссылка на родительскую заявку"), InverseProperty(nameof(YMSupplyRequestReference.RelatedRequest))]
+    public YMSupplyRequestReference? ParentLink { get; set; }
   }
 }

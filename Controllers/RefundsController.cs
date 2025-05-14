@@ -23,6 +23,8 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Runtime.Serialization;
 using System.Text;
+using Telegram.Bot.Types;
+using System;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -144,104 +146,46 @@ namespace automation.mbtdistr.ru.Controllers
             if (supplyResponse?.Result?.Requests?.Count > 0)
             {
               supplyResponse.Result.Requests.ForEach(r => r.CabinetId = c.Id);
+              var supplies = supplyResponse.Result.Requests;
+              foreach (var supply in supplies)
+              {
+                if (supply.Status == YMSupplyRequestStatusType.Finished || supply.Status == YMSupplyRequestStatusType.Cancelled) continue;
+                var itemsResponse = await _ym.GetSupplyRequestItemsAsync(c, campaign, supply.ExternalId.Id);
+                var items = itemsResponse?.Result?.Items;
+                if (items != null && items.Count > 0)
+                {
+                  supply.Items = items;
+                }
+                else
+                {
+                  supply.Items = new List<YMSupplyRequestItem>();
+                }
+              }
               supplyRequests.AddRange(supplyResponse.Result.Requests);
             }
           }
         }
       }
 
-      List<YMSupplyRequestLocation> locations = new List<YMSupplyRequestLocation>();
-
-      //проходим по всем заявкам и выбираем адреса
+      var saved = new List<YMSupplyRequest>();
       foreach (var request in supplyRequests)
       {
-        if (request.TargetLocation?.Address != null)
+        var supply = await _ym.AddOrUpdateSupplyRequestAsync(request, _db);
+
+
+
+        if (supply != null)
         {
-          var address = request.TargetLocation.Address;
-
-          if (locations.FirstOrDefault(l => l.ServiceId == request.TargetLocation.ServiceId) == null)
-          {
-            locations.Add(request.TargetLocation);
-          }
-        }
-        if (request.TransitLocation?.Address != null)
-        {
-          var address = request.TransitLocation.Address;
-
-          // проверяем обьект YMSupplyRequestLocation на наличие в массиве locations и если нет, то добавляем
-          if (locations.FirstOrDefault(l => l.ServiceId == request.TransitLocation.ServiceId) == null)
-          {
-            locations.Add(request.TransitLocation);
-          }
-        }
-      }
-      //проверяем обьекты YMSupplyRequestLocation на наличие в базе и если нет, то добавляем
-
-      var dbLocations = _db.YMLocations
-        .Include(l => l.Address)
-        .AsNoTracking()
-        .ToList();
-
-      foreach (var location in locations)
-      {
-        location.Address.Latitude = location.Address.Gps.Latitude;
-        location.Address.Longitude = location.Address.Gps.Longitude;
-
-        var dbLocation = dbLocations.FirstOrDefault(l => l.ServiceId == location.ServiceId);
-        if (dbLocation == null)
-        {
-          _db.YMLocations.Add(location);
-          await _db.SaveChangesAsync();
-        }
-        else
-        {
-          dbLocation = location;
-          _db.YMLocations.Update(dbLocation);
-          await _db.SaveChangesAsync();
+          saved.Add(supply);
         }
       }
 
-      //проверяем обьекты YMSupplyRequest на наличие в базе и если нет, то добавляем, если есть то обновляем
-      //var dbSupplyRequests = await _db.YMSupplyRequests.Include(r => r.ExternalId).AsNoTracking().ToListAsync();
-      foreach (var request in supplyRequests)
-      {
-        //request.Id = request.ExternalId?.Id;
-        //request.ExternalId = null;
-
-        request.Id = request.ExternalId?.Id;
-        try
-        {
-          var dbRequest = await _db.YMSupplyRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == request.ExternalId.Id);
-          if (dbRequest == null)
-          {
-            _db.YMSupplyRequests.Add(request);
-          }
-          else
-          {
-            dbRequest = request;
-            _db.YMSupplyRequests.Update(dbRequest);
-          }
-          await _db.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-          await Extensions.SendDebugMessage($"public async Task<IActionResult> GetYandexMarketSupplyRequests()\n{ex.Message}\n\n{ex?.InnerException?.Message}");
-        }
-      }
-
-      dynamic obj = new
-      {
-        Count = supplyRequests.Count,
-        Items = supplyRequests
-      };
-
-      var json = Newtonsoft.Json.JsonConvert.SerializeObject(obj, Formatting.Indented, new JsonSerializerSettings()
+      var json = Newtonsoft.Json.JsonConvert.SerializeObject(saved, Formatting.Indented, new JsonSerializerSettings()
       {
         Culture = System.Globalization.CultureInfo.CurrentCulture,
         StringEscapeHandling = StringEscapeHandling.Default,
         Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
       });
-
       ContentResult contentResult = new ContentResult
       {
         Content = json,
@@ -251,28 +195,48 @@ namespace automation.mbtdistr.ru.Controllers
       return contentResult;
     }
 
-    //[HttpGet("ym/get-supplies")]
-    //public async Task<IActionResult> GetYandexMarketSupplyRequests([FromQuery] string[]? filters)
-    //{
-    //  var supplyRequests = await _db.YMSupplyRequests
-    //    .AsNoTracking()
-    //    .Include(r => r.TransitLocation)
-    //    .Include(r => r.TargetLocation)
-    //    .ToListAsync();
-    //  var json = Newtonsoft.Json.JsonConvert.SerializeObject(supplyRequests, Formatting.Indented, new JsonSerializerSettings()
-    //  {
-    //    Culture = System.Globalization.CultureInfo.CurrentCulture,
-    //    StringEscapeHandling = StringEscapeHandling.Default,
-    //    Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
-    //  });
-    //  ContentResult contentResult = new ContentResult
-    //  {
-    //    Content = json,
-    //    ContentType = "application/json",
-    //    StatusCode = 200
-    //  };
-    //  return contentResult;
-    //}
+    //метод синхронизации возвратов от яндекс маркета
+    [HttpGet("ym/sync-returns")]
+    public async Task<IActionResult> SyncYandexMarketReturns()
+    {
+      var cabinets = await _db.Cabinets
+        .AsNoTracking()
+        .Include(c => c.Settings)
+        .ThenInclude(cs => cs.ConnectionParameters)
+        .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
+        .ToListAsync();
+
+      List<YMReturn> returnRequests = new List<YMReturn>();
+      foreach (var c in cabinets)
+      {
+        var campaignsResponse = await _ym.GetCampaignsAsync(c);
+        if (campaignsResponse != null && campaignsResponse.Campaigns?.Count > 0)
+        {
+          foreach (var campaign in campaignsResponse.Campaigns)
+          {
+            var returnResponse = await _ym.GetReturnsListAsync(c, campaign);
+            if (returnResponse?.Result?.Returns?.Count > 0)
+            {
+              
+            }
+          }
+        }
+      }
+
+      var json = Newtonsoft.Json.JsonConvert.SerializeObject(returnRequests, Formatting.Indented, new JsonSerializerSettings()
+      {
+        Culture = System.Globalization.CultureInfo.CurrentCulture,
+        StringEscapeHandling = StringEscapeHandling.Default,
+        Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
+      });
+      ContentResult contentResult = new ContentResult
+      {
+        Content = json,
+        ContentType = "application/json",
+        StatusCode = 200
+      };
+      return contentResult;
+    }
 
     [HttpGet("ym/get-supplies")]
     public async Task<IActionResult> GetYandexMarketSupplyRequests([FromQuery] string[]? filters)

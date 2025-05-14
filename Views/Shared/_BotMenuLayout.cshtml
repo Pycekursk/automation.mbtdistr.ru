@@ -9,14 +9,27 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap-icons.css" />
   <link rel="stylesheet" href="~/lib/dx/css/bootstrap.css">
-  <link rel="stylesheet" href="~/lib/dx/css/dx.dark.css ">
 
-  <script type="text/javascript" src="~/lib/dx/js/dx.all.js"></script>
+  @* <link rel="stylesheet" href="~/css/devextreme/dx.dark.css"> *@
 
-  <script src="~/lib/dx/js/aspnet/dx.aspnet.data.js"></script>
-  <script src="~/lib/dx/js/aspnet/dx.aspnet.mvc.js"></script>
+  <link rel="stylesheet" href="~/lib/dx/css/dx.dark.compact.css">
+  
+  <script src="~/js/devextreme/polyfill.min.js"></script>
+  <script src="~/js/devextreme/exceljs.js"></script>
+  <script src="~/js/devextreme/jszip.js"></script>
+  <script src="~/js/devextreme/jspdf.umd.js"></script>
 
-  <script src="~/lib/dx/js/localization/dx.messages.ru.js"></script>
+  <script src="~/js/devextreme/pdfmake.js"></script>
+    <script src="~/js/devextreme/vfs_fonts.js"></script>
+
+@*   <script src="~/js/devextreme/jspdf.plugin.autotable.js"></script> *@
+  <script src="~/js/devextreme/FileSaver.js"></script>
+  <script type="text/javascript" src="~/js/devextreme/dx.all.js"></script>
+
+  <script src="~/js/devextreme/aspnet/dx.aspnet.data.js"></script>
+  <script src="~/js/devextreme/aspnet/dx.aspnet.mvc.js"></script>
+   
+  <script src="~/js/devextreme/localization/dx.messages.ru.js"></script>
 
   <script>
           // Синхронные ошибки
@@ -50,7 +63,25 @@
             obs.disconnect(); // Отключаем наблюдатель после нахождения
         }
     });
+
+
+          DevExpress.localization.locale('ru');
+
+
+
   </script>
+  <style>
+      .menu-buttons {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+    body.dx-viewport {
+      background-color: var(--dx-color-main-bg);
+    }
+  </style>
 </head>
 <body class="dx-viewport">
   <script>
@@ -60,31 +91,20 @@
     });
   </script>
   <div class="dx-viewport-inner">
-    @*  <div class="row row-cols-2">
-      <div class="mt-3 d-none" id="goback-wrapper">
-        <button class="btn btn-link text-decoration-none text-light" id="goback"><i class="bi bi-arrow-left"></i> Назад</button>
-        <script>
-            if (!window.location.href.includes("/botmenu?id")) {
-              document.getElementById("goback-wrapper").classList.remove("d-none");
-            }
-            document.getElementById("goback").addEventListener("click", function () {
-            window.history.back();
-          });
-        </script>
-      </div>
-    </div> *@
-
     <div class="my-menu-container">
-      @(Html.DevExtreme().TabPanel()           // используем NavBar вместо TabPanel
-              .ID("mainMenuBar")
-              .SelectedIndex(0)                  // по умолчанию первый пункт
-              .OnItemClick("onMenuItemClick")    // JS-обработчик клика
-              .ItemTemplate("menuItemTemplate")  // шаблон отрисовки пункта
-              )
+      @* @(Html.DevExtreme().TabPanel()           // используем NavBar вместо TabPanel *@
+      @*             .ID("mainMenuBar") *@
+      @*             .SelectedIndex(0)                  // по умолчанию первый пункт *@
+      @*             .OnItemClick("onMenuItemClick")    // JS-обработчик клика *@
+      @*             .ItemTemplate("menuItemTemplate")  // шаблон отрисовки пункта *@
+      @*             ) *@
     </div>
 
     <script>
-      // Шаблон одного пункта меню: иконка + текст
+
+        // где-то в вашем клиентском скрипте, **после** загрузки pdfmake.min.js и vfs_fonts.js:
+DevExpress.pdfMake = pdfMake;
+
       function menuItemTemplate(itemData) {
           return `
               <div class="menu-item">
@@ -102,15 +122,15 @@
       }
     </script>
 
-    <div class="container-fluid">
-<main role="main">
+    <div class="container-fluid py-3">
+      <main role="main">
         @RenderBody()
-    </main>
+      </main>
     </div>
 
   </div>
-  <script src="~/lib/dx/js/bootstrap.js"></script>
-  <script src="~/js/tgwebapp.js"></script>
+  
+  <script src="~/js/tgwebapp.js" asp-append-version="true"></script>
   @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

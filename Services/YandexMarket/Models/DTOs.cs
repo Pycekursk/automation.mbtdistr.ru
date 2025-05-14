@@ -6,13 +6,6 @@ using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
-  public partial class DTOs
-  {
-
-
-
-  }
-
   public class ReturnsListResponse
   {
     [JsonPropertyName("status"), Newtonsoft.Json.JsonProperty("status")]
@@ -74,7 +67,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonProperty("nextPageToken")]
     public string? NextPageToken { get; set; }
   }
-
 
   /// <summary>
   /// Возврат товара.
@@ -186,9 +178,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonProperty("decisionSubreason")]
     public YMReturnDecisionSubreasonType DecisionSubreason { get; set; }
   }
-
-
-
 
   /// <summary>
   /// Логистический пункт выдачи.
@@ -372,7 +361,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonProperty("lastId")]
     public long? LastId { get; set; }
   }
-
 
   /// <summary>
   /// Фильтр для запроса возвратов или невыкупов.

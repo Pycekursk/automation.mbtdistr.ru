@@ -49,7 +49,6 @@ namespace automation.mbtdistr.ru
                  })
                  .ToList();
     }
-
     /// <summary>  
     /// Получает отображаемое имя для значения перечисления, используя атрибут Display.  
     /// </summary>  

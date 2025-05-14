@@ -4,10 +4,40 @@
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
 }
 @model List<Return>?
+@{
+  var modelName = typeof(Return).Name;
+  var defaultExportFileName = $"{modelName}s_{DateTime.Now:yyyy-MM-dd}";
+}
+  @using System.ComponentModel.DataAnnotations
+@{
+  var columns = typeof(Return).GetProperties()
+  .Where(p =>
+  {
+    if (!p.CanRead) return false;
 
-@if (Model?.Count > 0)
-{
-  @(
+    var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
+  .Cast<DataGridAttribute>()
+  .FirstOrDefault();
+
+    return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
+  })
+  .Select(p => new
+  {
+    Field = p.Name,
+    Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
+  .Cast<DisplayAttribute>()
+  .FirstOrDefault()?.Name ?? p.Name,
+    IsEnum = p.PropertyType.IsEnum,
+    EnumType = p.PropertyType
+  })
+  .ToList();
+}
+@{
+  var enumFields = typeof(Return).GetProperties()
+  .Where(p => p.PropertyType.IsEnum)
+  .ToList();
+}
+@(
        Html.DevExtreme().DataGrid<Return>()
      .ID("gridContainer")
      .KeyExpr("Id")
@@ -15,31 +45,76 @@
      .ShowRowLines(true)
      .ShowBorders(true)
      .DataSource(Model)
-     .ColumnChooser(cc =>
-     {
-       cc
-       .Enabled(true)
-       .Height("400px")
-       .Mode(GridColumnChooserMode.Select)
-       .Position(pc => pc
-       .My(HorizontalAlignment.Right, VerticalAlignment.Top)
-       .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
-       .Of(".dx-datagrid-column-chooser-button")
-       );
+      .Columns(columnsBuilder =>
+      {
+        foreach (var col in columns)
+        {
+          var column = columnsBuilder.Add()
+          .DataField(col.Field)
+          .Caption(col.Caption);
 
-       cc.Search(ccs => ccs
-       .Enabled(true)
-       .EditorOptions(new { Placeholder = "Search column" })
-       );
+          if (col.IsEnum)
+          {
+            var enumValues = Enum.GetValues(col.EnumType)
+            .Cast<Enum>()
+            .Select(e => new
+            {
+              Id = Convert.ToInt32(e),
+              Name = e.GetDisplayName()
+            })
+            .ToList();
 
-       cc.Selection(ccs => ccs
-       .AllowSelectAll(true)
-       .SelectByClick(true)
-       .Recursive(true)
-       );
-     })
+            column.Lookup(lookup => lookup
+            .DataSource(enumValues)
+            .ValueExpr("Id")
+            .DisplayExpr("Name"));
+          }
+        }
+      })
+       .ColumnChooser(cc =>
+      {
+        cc.Enabled(true)
+        .Height("400px")
+        .Mode(GridColumnChooserMode.Select)
+        .Position(pc => pc
+        .My(HorizontalAlignment.Right, VerticalAlignment.Top)
+        .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
+        .Of(".dx-datagrid-column-chooser-button")
+        );
 
+        cc.Search(ccs => ccs
+        .Enabled(true)
+        .EditorOptions(new { Placeholder = "Поиск" })
+        );
 
+        cc.Selection(ccs => ccs
+        .AllowSelectAll(true)
+        .SelectByClick(true)
+        .Recursive(true)
+        );
+      })
+        .Toolbar(toolbar =>
+      {
+        toolbar.Items(items =>
+        {
+          items.Add()
+        .Location(ToolbarItemLocation.Before)
+        .Widget(w =>
+        {
+          var b = w.Button();
+          b.Text("Назад");
+          b.OnClick("goBack");
+          return b;
+        });
+          items.Add()
+        .Name("exportButton")
+        .Location(ToolbarItemLocation.After);
+
+          items.Add()
+        .Name("columnChooserButton")
+        .Location(ToolbarItemLocation.After);
+        });
+      })
      .LoadPanel(loadPanel => loadPanel.Enabled(true))
      .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
      .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
@@ -52,9 +127,5 @@
      .Selection(s => s.Mode(SelectionMode.Single))
      .FilterRow(f => f.Visible(true))
      .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true))))
-}
-else
-{
-  
-}
+
 

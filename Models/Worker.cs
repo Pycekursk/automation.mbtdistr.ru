@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -17,6 +19,7 @@ namespace automation.mbtdistr.ru.Models
 
     public NotificationOptions NotificationOptions { get; set; } = new NotificationOptions();
 
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public ICollection<Cabinet> AssignedCabinets { get; set; }
            = new List<Cabinet>();
   }

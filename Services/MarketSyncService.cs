@@ -24,7 +24,7 @@ using System.Text.Unicode;
 using automation.mbtdistr.ru.Services.Wildberries.Models;
 using System.Collections.Generic;
 using automation.mbtdistr.ru.Services.YandexMarket;
-using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
+
 using Return = automation.mbtdistr.ru.Models.Return;
 using ZXing;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
@@ -153,7 +153,7 @@ namespace automation.mbtdistr.ru.Services
       {
         try
         {
-          // await SyncAllAsync(stoppingToken);
+           await SyncAllAsync(stoppingToken);
         }
         catch (Exception ex)
         {
@@ -164,7 +164,7 @@ namespace automation.mbtdistr.ru.Services
 
     private async Task SyncAllAsync(CancellationToken ct)
     {
-      //if (Program.Environment.IsDevelopment()) return;
+      if (Program.Environment.IsDevelopment()) return;
 
       using var scope = _scopeFactory.CreateScope();
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
@@ -178,13 +178,6 @@ namespace automation.mbtdistr.ru.Services
                              .ToListAsync(ct);
 
       List<Models.Return> allReturns = new List<Models.Return>();
-
-      if (Program.Environment.IsDevelopment())
-      {
-        cabinets = cabinets.Where(c => c.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase)).ToList();
-      }
-
-
       foreach (var cab in cabinets)
       {
         try
@@ -250,12 +243,9 @@ namespace automation.mbtdistr.ru.Services
                 {
                   var suppleItems = await _yMApiService.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
                   supple.Items = suppleItems?.Result?.Items;
+                  await _yMApiService.AddOrUpdateSupplyRequestAsync(supple, _db);
                 }
-
-
-                await ProcessYMSupplyRequestsAsync(supplies.Result.Requests, cab, _db, ct);
               }
-
               var result = await _yMApiService.GetReturnsListAsync(cab, camp);
               if (result?.Result?.Returns?.Count > 0)
               {
@@ -275,23 +265,6 @@ namespace automation.mbtdistr.ru.Services
           await Extensions.SendDebugMessage($"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Name} ({cab.Marketplace})\n\n{ex.Message}\n{ex.StackTrace}\n\n{ex.InnerException?.Message}");
         }
       }
-      //try
-      //{
-      //  var changes = await _db.SaveChangesAsync(ct);
-      //  //if (log)
-      //  //{
-      //  //  string text = string.Empty;
-      //  //  if (changes > 0)
-      //  //    text = $"Синхронизировано {changes} записей";
-      //  //  else
-      //  //    text = "Нет изменений для сохранения в БД";
-      //  //}
-      //}
-      //catch (Exception ex)
-      //{
-      //  await Extensions.SendDebugMessage($"Ошибка при сохранении изменений в БД\n{ex.Message}");
-      //  throw;
-      //}
     }
 
     private async Task<List<Models.Return>> ProcessOzonReturnsAsync(
@@ -538,7 +511,6 @@ namespace automation.mbtdistr.ru.Services
 
         //получаем все локации из базы данных
         var existingLocations = await db.YMLocations
-          .Include(l => l.SupplyRequests)
           .Include(l => l.Address)
           .ToListAsync(ct);
 

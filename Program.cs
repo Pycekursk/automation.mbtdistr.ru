@@ -47,8 +47,12 @@ namespace automation.mbtdistr.ru
       // Add services to the container
 
       builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
-    new MySqlServerVersion(new Version(8, 0, 21))));
+      {
+        options.EnableDetailedErrors();
+        options.EnableSensitiveDataLogging();
+        options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
+          new MySqlServerVersion(new Version(8, 0, 21)));
+      });
 
 
       builder.Services.AddControllersWithViews();
@@ -165,7 +169,8 @@ namespace automation.mbtdistr.ru
             TelegramId = "1406950293", // Можете сюда поставить фиксированное значение или оставить пустым
             Name = "Руслан",
             Role = Models.RoleType.Admin,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            Id = 3
           };
           dbContext.Workers.Add(adminWorker);
           dbContext.SaveChanges();

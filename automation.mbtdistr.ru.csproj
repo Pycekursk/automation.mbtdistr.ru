@@ -1,5 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -10,10 +9,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="DevExtreme.AspNet.Core" Version="24.1.5" />
-    <PackageReference Include="DevExtreme.AspNet.Data" Version="4.0.0" />
+    <PackageReference Include="DevExtreme.AspNet.Core" Version="24.2.7" />
+    <PackageReference Include="DevExtreme.AspNet.Data" Version="5.0.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
     <PackageReference Include="Google.Apis.Drive.v3" Version="1.69.0.3740" />
     <PackageReference Include="Google.Apis.Sheets.v4" Version="1.69.0.3757" />
@@ -33,21 +31,17 @@
     <PackageReference Include="Telegram.Bot" Version="22.5.2-dev.3" />
     <PackageReference Include="ZXing.Net" Version="0.16.10" />
   </ItemGroup>
-
   <ItemGroup>
     <Folder Include="Services\OpenAI\Models\" />
     <Folder Include="Services\Megamarket\" />
     <Folder Include="wwwroot\data\" />
-    <Folder Include="wwwroot\lib\dx\" />
     <Folder Include="wwwroot\logs\tg\" />
     <Folder Include="wwwroot\logs\ozon\" />
   </ItemGroup>
-
   <ItemGroup>
     <Content Update="Views\Home\BotMenuCabinetsList.cshtml">
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
-
 </Project>

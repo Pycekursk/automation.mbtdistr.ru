@@ -1,3 +1,5 @@
+
+
 $(function () {
     $(window).scroll(function () {
         $('.navbar-collapse').collapse('hide');

@@ -9,24 +9,37 @@ namespace automation.mbtdistr.ru.Models
 {
   public class Return
   {
-    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity), DataGrid(false)]
+    [Display(Name = "ID")]
     public int Id { get; set; }
 
+    [DataGrid(false)]
+    [Display(Name = "Кабинет")]
     public int CabinetId { get; set; } // кабинет/бренд/ООО
 
-    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+  
+    [Display(Name = "Кабинет")]
     public Cabinet Cabinet { get; set; }
 
+    [Display(Name = "Дата создания")]
     public DateTime CreatedAt { get; set; }
+
+    [Display(Name = "Дата завершения")]
     public DateTime? ResolvedAt { get; set; }
+
+    [Display(Name = "Дата изменения")]
     public DateTime? ChangedAt { get; set; }
+
+    [Display(Name = "Дата заказа")]
     public DateTime OrderedAt { get; internal set; }
 
+    [Display(Name = "Компенсация")]
     public Compensation? Compensation { get; set; }
 
+    [Display(Name = "Информация о возврате")]
     public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате
 
-
+    [Display(Name = "Причина возврата")]
     public string ReturnReason { get; set; } = string.Empty; // причина возврата
   }
 

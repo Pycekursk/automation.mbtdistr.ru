@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text;
 
 using Telegram.Bot.Types;
 
@@ -16,7 +17,16 @@ namespace automation.mbtdistr.ru.Models
     public string Name { get; set; }         // например, "Основной", "Резервный" и т.п.
     public CabinetSettings Settings { get; set; } = new CabinetSettings();
 
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
     public ICollection<Worker> AssignedWorkers { get; set; }
             = new List<Worker>();
+
+    public override string ToString()
+    {
+      StringBuilder sb = new StringBuilder();
+      sb.AppendLine($"{Name}");
+      sb.AppendLine($"Marketplace: {Marketplace}");
+      return sb.ToString();
+    }
   }
 }

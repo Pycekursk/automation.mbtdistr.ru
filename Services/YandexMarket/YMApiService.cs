@@ -1,4 +1,5 @@
-﻿using automation.mbtdistr.ru.Models;
+﻿using automation.mbtdistr.ru.Data;
+using automation.mbtdistr.ru.Models;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
 
@@ -10,13 +11,14 @@ using Newtonsoft.Json.Converters;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
+using System.Text;
+
 
 
 //using System.Text.Json.Serialization;
 
 //using System.Text.Json.Serialization;
 
-using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 
 using JsonConverter = Newtonsoft.Json.JsonConverter;
 
@@ -241,7 +243,535 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         return default;
       }
     }
+
+
+    //public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(YMSupplyRequest incoming, ApplicationDbContext context)
+    //{
+    //  var existing = await context.YMSupplyRequests
+    //      .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+    //      .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+    //      .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
+
+    //  // ─── Обеспечить привязку к существующим или новым локациям ──────────────
+
+    //  async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation inputLocation)
+    //  {
+    //    var existingLoc = await context.YMSupplyRequestLocations
+    //        .Include(l => l.Address)
+    //        .FirstOrDefaultAsync(l => l.ServiceId == inputLocation.ServiceId);
+
+    //    if (existingLoc != null)
+    //    {
+    //      // Обновить
+    //      existingLoc.Name = inputLocation.Name;
+    //      existingLoc.RequestedDate = inputLocation.RequestedDate;
+    //      existingLoc.Type = inputLocation.Type;
+
+    //      if (inputLocation.Address != null)
+    //      {
+    //        var existingAddr = await context.YMLocationAddresses
+    //            .FirstOrDefaultAsync(a => a.Id == inputLocation.Address.Id);
+
+    //        if (existingAddr != null)
+    //        {
+    //          existingAddr.FullAddress = inputLocation.Address.FullAddress;
+    //          existingAddr.Gps = inputLocation.Address.Gps;
+    //        }
+    //        else
+    //        {
+    //          context.YMLocationAddresses.Add(inputLocation.Address);
+    //          existingLoc.Address = inputLocation.Address;
+    //        }
+    //      }
+
+    //      return existingLoc;
+    //    }
+    //    else
+    //    {
+    //      // Новая локация
+    //      if (inputLocation.Address != null)
+    //      {
+    //        var addressExists = await context.YMLocationAddresses
+    //            .AnyAsync(a => a.Id == inputLocation.Address.Id);
+
+    //        if (!addressExists)
+    //        {
+    //          context.YMLocationAddresses.Add(inputLocation.Address);
+    //        }
+    //      }
+
+    //      context.YMSupplyRequestLocations.Add(inputLocation);
+    //      return inputLocation;
+    //    }
+    //  }
+
+    //  // ─── Обработка TargetLocation ─────────────
+    //  var targetLocation = await ResolveLocationAsync(incoming.TargetLocation);
+    //  var transitLocation = incoming.TransitLocation != null
+    //      ? await ResolveLocationAsync(incoming.TransitLocation)
+    //      : null;
+
+    //  if (existing == null)
+    //  {
+    //    // ─── Новая заявка ─────────────
+    //    incoming.TargetLocation = targetLocation;
+    //    incoming.TargetLocationServiceId = targetLocation.ServiceId;
+
+    //    if (transitLocation != null)
+    //    {
+    //      incoming.TransitLocation = transitLocation;
+    //      incoming.TransitLocationServiceId = transitLocation.ServiceId;
+    //    }
+
+    //    context.YMSupplyRequests.Add(incoming);
+    //  }
+    //  else
+    //  {
+    //    // ─── Обновление существующей ─────────────
+    //    existing.Status = incoming.Status;
+    //    existing.Type = incoming.Type;
+    //    existing.Subtype = incoming.Subtype;
+    //    existing.UpdatedAt = DateTime.UtcNow;
+
+    //    existing.TargetLocation = targetLocation;
+    //    existing.TargetLocationServiceId = targetLocation.ServiceId;
+
+    //    if (transitLocation != null)
+    //    {
+    //      existing.TransitLocation = transitLocation;
+    //      existing.TransitLocationServiceId = transitLocation.ServiceId;
+    //    }
+    //    else
+    //    {
+    //      existing.TransitLocation = null;
+    //      existing.TransitLocationServiceId = null;
+    //    }
+    //  }
+
+    //  await context.SaveChangesAsync();
+
+    //  return incoming;
+    //}
+    //public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(
+    //YMSupplyRequest incoming,
+    //ApplicationDbContext context)
+    //{
+    //  // 1. Подгружаем существующую заявку вместе со всем необходимым
+    //  var existing = await context.YMSupplyRequests
+    //      .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+    //      .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+    //      .Include(r => r.Items).ThenInclude(i => i.Price)
+    //      .Include(r => r.Items).ThenInclude(i => i.Counters)
+    //      .Include(r => r.ChildrenLinks)
+    //      .Include(r => r.ParentLink)
+    //      .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
+
+    //  // 2. Локальные функции для «разрешения» вложенных сущностей
+
+    //  // 2.1. Location
+    //  async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation loc)
+    //  {
+    //    var dbLoc = await context.YMSupplyRequestLocations
+    //        .Include(l => l.Address)
+    //        .FirstOrDefaultAsync(l => l.ServiceId == loc.ServiceId);
+
+    //    if (dbLoc != null)
+    //    {
+    //      // обновляем поля
+    //      dbLoc.Name = loc.Name;
+    //      dbLoc.Type = loc.Type;
+    //      dbLoc.RequestedDate = loc.RequestedDate;
+
+    //      if (loc.Address != null)
+    //      {
+    //        var dbAddr = await context.YMLocationAddresses
+    //            .FirstOrDefaultAsync(a => a.Id == loc.Address.Id);
+
+    //        if (dbAddr != null)
+    //        {
+    //          dbAddr.FullAddress = loc.Address.FullAddress;
+    //          dbAddr.Gps = loc.Address.Gps;
+    //        }
+    //        else
+    //        {
+    //          context.YMLocationAddresses.Add(loc.Address);
+    //          dbLoc.Address = loc.Address;
+    //        }
+    //      }
+
+    //      return dbLoc;
+    //    }
+    //    else
+    //    {
+    //      // новая локация
+    //      if (loc.Address != null)
+    //        context.YMLocationAddresses.Add(loc.Address);
+
+    //      context.YMSupplyRequestLocations.Add(loc);
+    //      return loc;
+    //    }
+    //  }
+
+    //  // 2.2. Item (+ Counters + Price)
+    //  async Task<YMSupplyRequestItem> ResolveItemAsync(YMSupplyRequestItem item, YMSupplyRequest parent)
+    //  {
+    //    return await Task.Run<YMSupplyRequestItem>(() =>
+    //    {
+    //      // пытаемся найти по OfferId внутри этой заявки
+    //      var dbItem = existing?.Items?
+    //          .FirstOrDefault(i => i.OfferId == item.OfferId);
+
+    //      if (dbItem != null)
+    //      {
+    //        // обновляем простые поля
+    //        dbItem.Name = item.Name;
+
+    //        // обновляем цену
+    //        dbItem.Price.CurrencyId = item.Price.CurrencyId;
+    //        dbItem.Price.Value = item.Price.Value;
+
+    //        // обновляем счётчики
+    //        dbItem.Counters.DefectCount = item.Counters.DefectCount;
+    //        dbItem.Counters.FactCount = item.Counters.FactCount;
+    //        dbItem.Counters.PlanCount = item.Counters.PlanCount;
+    //        dbItem.Counters.ShortageCount = item.Counters.ShortageCount;
+    //        dbItem.Counters.SurplusCount = item.Counters.SurplusCount;
+
+    //        return dbItem;
+    //      }
+    //      else
+    //      {
+    //        // новый товар
+    //        item.SupplyRequest = parent;
+    //        context.YMSupplyRequestItems.Add(item);
+    //        return item;
+    //      }
+    //    });
+    //  }
+
+    //  // 2.3. Reference (ChildrenLinks / ParentLink)
+    //  YMSupplyRequestReference ResolveReference(YMSupplyRequestReference link, YMSupplyRequest parent, bool isParentLink)
+    //  {
+    //    if (isParentLink)
+    //    {
+    //      // одиночная связь
+    //      link.RequestId = parent.Id;
+    //      link.RelatedRequestId = link.YMSupplyRequestId!.Id;
+    //      link.Request = parent;
+    //      context.YMSupplyRequestReferences.Add(link);
+    //      return link;
+    //    }
+    //    else
+    //    {
+    //      // коллекция
+    //      link.RequestId = parent.Id;
+    //      link.RelatedRequestId = link.YMSupplyRequestId!.Id;
+    //      link.Request = parent;
+    //      context.YMSupplyRequestReferences.Add(link);
+    //      return link;
+    //    }
+    //  }
+
+    //  // 3. «Разрешаем» все вложенные объекты
+    //  var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+    //  var transitLoc = incoming.TransitLocation != null
+    //      ? await ResolveLocationAsync(incoming.TransitLocation)
+    //      : null;
+
+    //  // 4. Если это новая заявка — просто добавляем всё «вместе»
+    //  if (existing == null)
+    //  {
+    //    incoming.TargetLocation = targetLoc;
+    //    incoming.TargetLocationServiceId = targetLoc.ServiceId;
+    //    if (transitLoc != null)
+    //    {
+    //      incoming.TransitLocation = transitLoc;
+    //      incoming.TransitLocationServiceId = transitLoc.ServiceId;
+    //    }
+
+    //    // Items
+    //    if (incoming.Items != null)
+    //    {
+    //      foreach (var it in incoming.Items.ToList())
+    //        await ResolveItemAsync(it, incoming);
+    //    }
+
+    //    // ChildrenLinks
+    //    if (incoming.ChildrenLinks != null)
+    //    {
+    //      foreach (var link in incoming.ChildrenLinks.ToList())
+    //        ResolveReference(link, incoming, isParentLink: false);
+    //    }
+
+    //    // ParentLink
+    //    if (incoming.ParentLink != null)
+    //      ResolveReference(incoming.ParentLink, incoming, isParentLink: true);
+
+    //    context.YMSupplyRequests.Add(incoming);
+    //    await context.SaveChangesAsync();
+    //    return incoming;
+    //  }
+
+    //  // 5. Обновляем существующую
+    //  existing.Status = incoming.Status;
+    //  existing.Subtype = incoming.Subtype;
+    //  existing.Type = incoming.Type;
+    //  existing.UpdatedAt = DateTime.UtcNow;
+
+    //  existing.TargetLocation = targetLoc;
+    //  existing.TargetLocationServiceId = targetLoc.ServiceId;
+
+    //  if (transitLoc != null)
+    //  {
+    //    existing.TransitLocation = transitLoc;
+    //    existing.TransitLocationServiceId = transitLoc.ServiceId;
+    //  }
+    //  else
+    //  {
+    //    existing.TransitLocation = null;
+    //    existing.TransitLocationServiceId = null;
+    //  }
+
+    //  // — обновляем список товаров —
+    //  if (incoming.Items != null)
+    //  {
+    //    // удаляем те, которых больше нет
+    //    var incomingOffers = incoming.Items.Select(i => i.OfferId).ToHashSet();
+    //    foreach (var toRemove in existing.Items.Where(i => !incomingOffers.Contains(i.OfferId)).ToList())
+    //      context.YMSupplyRequestItems.Remove(toRemove);
+
+    //    // добавляем/обновляем остальные
+    //    foreach (var it in incoming.Items)
+    //      await ResolveItemAsync(it, existing);
+    //  }
+
+    //  // — обновляем связи ChildrenLinks —
+    //  if (incoming.ChildrenLinks != null)
+    //  {
+    //    // удаляем старые
+    //    foreach (var old in existing.ChildrenLinks.ToList())
+    //      context.YMSupplyRequestReferences.Remove(old);
+
+    //    // добавляем новые
+    //    foreach (var link in incoming.ChildrenLinks)
+    //      ResolveReference(link, existing, isParentLink: false);
+    //  }
+
+    //  // — обновляем ParentLink —
+    //  if (incoming.ParentLink != null)
+    //  {
+    //    if (existing.ParentLink != null)
+    //      context.YMSupplyRequestReferences.Remove(existing.ParentLink);
+
+    //    ResolveReference(incoming.ParentLink, existing, isParentLink: true);
+    //  }
+
+    //  await context.SaveChangesAsync();
+    //  return existing;
+    //}
+
+    public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(
+    YMSupplyRequest incoming,
+    ApplicationDbContext context)
+    {
+      // 1) Подгружаем существующую заявку без ссылок
+      var existing = await context.YMSupplyRequests
+          .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+          .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+          .Include(r => r.Items).ThenInclude(i => i.Price)
+          .Include(r => r.Items).ThenInclude(i => i.Counters)
+          .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
+
+      // 2.1) Локальная функция для Location
+      async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation loc)
+      {
+        var dbLoc = await context.YMSupplyRequestLocations
+            .Include(l => l.Address)
+            .FirstOrDefaultAsync(l => l.ServiceId == loc.ServiceId);
+
+        if (dbLoc != null)
+        {
+          dbLoc.Name = loc.Name;
+          dbLoc.Type = loc.Type;
+          dbLoc.RequestedDate = loc.RequestedDate;
+
+          if (loc.Address != null)
+          {
+            var dbAddr = await context.YMLocationAddresses
+                .FirstOrDefaultAsync(a => a.Id == loc.Address.Id);
+
+            if (dbAddr != null)
+            {
+              dbAddr.FullAddress = loc.Address.FullAddress;
+              dbAddr.Gps = loc.Address.Gps;
+            }
+            else
+            {
+              context.YMLocationAddresses.Add(loc.Address);
+              dbLoc.Address = loc.Address;
+            }
+          }
+
+          return dbLoc;
+        }
+        else
+        {
+          if (loc.Address != null)
+            context.YMLocationAddresses.Add(loc.Address);
+
+          context.YMSupplyRequestLocations.Add(loc);
+          return loc;
+        }
+      }
+
+      // 2.2) Локальная функция для Item (+ Counters + Price)
+      async Task<YMSupplyRequestItem> ResolveItemAsync(YMSupplyRequestItem item, YMSupplyRequest parent)
+      {
+        var dbItem = existing?.Items?
+            .FirstOrDefault(i => i.OfferId == item.OfferId);
+
+        if (dbItem != null)
+        {
+          dbItem.Name = item.Name;
+          dbItem.Price.CurrencyId = item.Price.CurrencyId;
+          dbItem.Price.Value = item.Price.Value;
+          dbItem.Counters.DefectCount = item.Counters.DefectCount;
+          dbItem.Counters.FactCount = item.Counters.FactCount;
+          dbItem.Counters.PlanCount = item.Counters.PlanCount;
+          dbItem.Counters.ShortageCount = item.Counters.ShortageCount;
+          dbItem.Counters.SurplusCount = item.Counters.SurplusCount;
+          return dbItem;
+        }
+        else
+        {
+          item.SupplyRequest = parent;
+          context.YMSupplyRequestItems.Add(item);
+          return item;
+        }
+      }
+
+      // 3) Сохраняем заявку + вложенные Locations и Items
+      if (existing == null)
+      {
+        // Новая заявка
+        var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+        var transitLoc = incoming.TransitLocation != null
+            ? await ResolveLocationAsync(incoming.TransitLocation)
+            : null;
+
+        incoming.TargetLocation = targetLoc;
+        incoming.TargetLocationServiceId = targetLoc.ServiceId;
+
+        if (transitLoc != null)
+        {
+          incoming.TransitLocation = transitLoc;
+          incoming.TransitLocationServiceId = transitLoc.ServiceId;
+        }
+
+        if (incoming.Items != null)
+          foreach (var it in incoming.Items.ToList())
+            await ResolveItemAsync(it, incoming);
+
+        context.YMSupplyRequests.Add(incoming);
+        await context.SaveChangesAsync();  // чтобы получить incoming.Id
+        existing = incoming;
+      }
+      else
+      {
+        // Обновление
+        existing.Status = incoming.Status;
+        existing.Subtype = incoming.Subtype;
+        existing.Type = incoming.Type;
+        existing.UpdatedAt = DateTime.UtcNow;
+
+        var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+        var transitLoc = incoming.TransitLocation != null
+            ? await ResolveLocationAsync(incoming.TransitLocation)
+            : null;
+
+        existing.TargetLocation = targetLoc;
+        existing.TargetLocationServiceId = targetLoc.ServiceId;
+
+        if (transitLoc != null)
+        {
+          existing.TransitLocation = transitLoc;
+          existing.TransitLocationServiceId = transitLoc.ServiceId;
+        }
+        else
+        {
+          existing.TransitLocation = null;
+          existing.TransitLocationServiceId = null;
+        }
+
+        if (incoming.Items != null)
+        {
+          // удаляем отсутствующие
+          var toRemove = existing.Items
+              .Where(i => !incoming.Items.Any(ii => ii.OfferId == i.OfferId))
+              .ToList();
+          context.YMSupplyRequestItems.RemoveRange(toRemove);
+
+          // добавляем/обновляем
+          foreach (var it in incoming.Items)
+            await ResolveItemAsync(it, existing);
+        }
+
+        await context.SaveChangesAsync();
+      }
+
+      // 4) Обновляем ссылки: сначала удаляем все старые
+      var oldRefs = await context.YMSupplyRequestReferences
+          .Where(rf => rf.RequestId == existing.Id || rf.RelatedRequestId == existing.Id)
+          .ToListAsync();
+      context.YMSupplyRequestReferences.RemoveRange(oldRefs);
+      await context.SaveChangesAsync();
+
+      // 5) Локальная функция для добавления одной ссылки, пропуская отсутствующие
+      async Task AddReferenceAsync(YMSupplyRequestReference link, bool isParentLink)
+      {
+        var related = await context.YMSupplyRequests
+            .FirstOrDefaultAsync(r => r.ExternalIdId == link.YMSupplyRequestId!.Id);
+        if (related == null)
+          return; // пропускаем, чтобы не нарушить FK
+
+        if (isParentLink)
+        {
+          link.RequestId = related.Id;
+          link.RelatedRequestId = existing.Id;
+        }
+        else
+        {
+          link.RequestId = existing.Id;
+          link.RelatedRequestId = related.Id;
+        }
+        context.YMSupplyRequestReferences.Add(link);
+      }
+
+      // 6) Добавляем новые ссылки
+      if (incoming.ChildrenLinks != null)
+        foreach (var link in incoming.ChildrenLinks)
+          await AddReferenceAsync(link, isParentLink: false);
+
+      if (incoming.ParentLink != null)
+        await AddReferenceAsync(incoming.ParentLink, isParentLink: true);
+
+      await context.SaveChangesAsync();
+
+      // 7) Возвращаем полностью загруженную заявку
+      return await context.YMSupplyRequests
+          .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+          .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+          .Include(r => r.Items).ThenInclude(i => i.Price)
+          .Include(r => r.Items).ThenInclude(i => i.Counters)
+          .Include(r => r.ChildrenLinks)
+          .Include(r => r.ParentLink)
+          .FirstAsync(r => r.Id == existing.Id);
+    }
+
+
   }
+
+
 
   #region Request Models
 
@@ -504,6 +1034,14 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
     [JsonProperty("counters")]
     public YMSupplyRequestItemCounters Counters { get; set; }
+
+
+    [ForeignKey(nameof(SupplyRequest))]
+    [JsonIgnore]
+    public long SupplyRequestId { get; set; }
+
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public YMSupplyRequest SupplyRequest { get; set; }
   }
 
   /// <summary>
@@ -548,6 +1086,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [Display(Name = "Количество лишних товаров")]
     [JsonProperty("surplusCount")]
     public int SurplusCount { get; set; }
+
+    // обратная связь, если нужно (можно отключить):
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public YMSupplyRequestItem? Item { get; set; }
   }
 
   /// <summary>
@@ -559,11 +1101,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   {
     [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }  // для EF Core
-
-    [ForeignKey(nameof(SupplyRequestItem))]
-    public int YMSupplyRequestItemId { get; set; }  // для EF Core
-
-    public YMSupplyRequestItem SupplyRequestItem { get; set; }  // для EF Core
 
     /// <summary>
     /// Код валюты.
@@ -578,6 +1115,15 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [Display(Name = "Значение")]
     [JsonProperty("value")]
     public long Value { get; set; }
+
+    // ─── Ссылка на товар ──────
+
+    [ForeignKey(nameof(SupplyRequestItem))]
+    [JsonIgnore]
+    public int YMSupplyRequestItemId { get; set; }
+
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public YMSupplyRequestItem SupplyRequestItem { get; set; }
   }
 
   #endregion
@@ -763,82 +1309,162 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     public string? WarehouseRequestId { get; set; }
   }
 
+  ///// <summary>
+  ///// Адрес склада или пункта выдачи.
+  ///// </summary>
+  //public class YMSupplyRequestLocationAddress
+  //{
+  //  [Key]
+  //  public long Id { get; set; }  // для EF Core
+
+  //  /// <summary>Полный адрес склада или ПВЗ.</summary>
+  //  [JsonProperty("fullAddress")]
+  //  [Display(Name = "Полный адрес")]
+  //  public string? FullAddress { get; set; }
+
+  //  /// <summary>GPS-координаты склада или ПВЗ.</summary>
+  //  [JsonProperty("gps")]
+  //  [Display(Name = "GPS-координаты")]
+  //  public YMGps Gps { get; set; }
+
+  //  public ICollection<YMSupplyRequestLocation>? LocationAddresses { get; set; }
+  //}
+
   /// <summary>
   /// Адрес склада или пункта выдачи.
   /// </summary>
   public class YMSupplyRequestLocationAddress
   {
     [Key]
-    public int Id { get; set; }  // для EF Core
+    public long Id { get; set; }
 
-    public decimal Latitude { get; set; }
-    public decimal Longitude { get; set; }
-
-    [NotMapped]
-    [JsonProperty("id")]
-    public string CoordinateKey => $"{Latitude},{Longitude}";
-
-    /// <summary>Полный адрес склада или ПВЗ.</summary>
     [JsonProperty("fullAddress")]
     [Display(Name = "Полный адрес")]
     public string? FullAddress { get; set; }
 
-    /// <summary>GPS-координаты склада или ПВЗ.</summary>
     [JsonProperty("gps")]
     [Display(Name = "GPS-координаты")]
     public YMGps Gps { get; set; }
+
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public ICollection<YMSupplyRequestLocation>? LocationAddresses { get; set; }
   }
+
+
+  ///// <summary>
+  ///// Информация о складе хранения или ПВЗ.
+  ///// </summary>
+  //public class YMSupplyRequestLocation
+  //{
+  //  /// <summary>Название склада или ПВЗ.</summary>
+  //  [JsonProperty("name")]
+  //  [Display(Name = "Название")]
+  //  public string? Name { get; set; }
+
+  //  /// <summary>Идентификатор склада или логистического партнёра.</summary>
+  //  [JsonProperty("serviceId"), Key]
+  //  [Display(Name = "Идентификатор склада/партнёра")]
+  //  public long ServiceId { get; set; }
+
+  //  public long AddressId { get; set; }
+
+  //  /// <summary>Адрес склада или ПВЗ.</summary>
+  //  [JsonProperty("address")]
+  //  [Display(Name = "Адрес")]
+  //  [ForeignKey(nameof(AddressId))]
+  //  public YMSupplyRequestLocationAddress Address { get; set; }
+
+  //  /// <summary>Тип склада или ПВЗ.</summary>
+  //  [JsonProperty("type")]
+  //  [Display(Name = "Тип склада/ПВЗ")]
+  //  public YMSupplyRequestLocationType Type { get; set; }
+
+  //  /// <summary>Дата и время поставки на склад или в ПВЗ.</summary>
+  //  [JsonProperty("requestedDate")]
+  //  [Display(Name = "Дата и время поставки")]
+  //  public DateTime? RequestedDate { get; set; }
+
+  //  public ICollection<YMSupplyRequest>? AsTargetInRequests { get; set; }
+  //  public ICollection<YMSupplyRequest>? AsTransitInRequests { get; set; }
+  //}
 
   /// <summary>
   /// Информация о складе хранения или ПВЗ.
   /// </summary>
   public class YMSupplyRequestLocation
   {
-    //коллекция для связи с YMSupplyRequest в EF Core как один ко многим
-    [JsonIgnore]
-    public ICollection<YMSupplyRequestLocation>? SupplyRequests { get; set; }
+    [Key]
+    [JsonProperty("serviceId")]
+    [Display(Name = "Идентификатор склада/партнёра")]
+    public long ServiceId { get; set; }
 
-    
-    /// <summary>Адрес склада или ПВЗ.</summary>
-    [JsonProperty("address")]
-    [Display(Name = "Адрес")]
-    public YMSupplyRequestLocationAddress Address { get; set; }
-
-    /// <summary>Название склада или ПВЗ.</summary>
     [JsonProperty("name")]
     [Display(Name = "Название")]
     public string? Name { get; set; }
 
-    /// <summary>Идентификатор склада или логистического партнёра.</summary>
-    [JsonProperty("serviceId"), Key]
-    [Display(Name = "Идентификатор склада/партнёра")]
-    public long ServiceId { get; set; }
-
-    /// <summary>Тип склада или ПВЗ.</summary>
     [JsonProperty("type")]
     [Display(Name = "Тип склада/ПВЗ")]
     public YMSupplyRequestLocationType Type { get; set; }
 
-    /// <summary>Дата и время поставки на склад или в ПВЗ.</summary>
     [JsonProperty("requestedDate")]
     [Display(Name = "Дата и время поставки")]
     public DateTime? RequestedDate { get; set; }
+
+    // ─── Адрес ──────────────────────────────
+
+    public long AddressId { get; set; }
+
+    [ForeignKey(nameof(AddressId))]
+    [JsonProperty("address")]
+    [Display(Name = "Адрес")]
+    public YMSupplyRequestLocationAddress Address { get; set; }
+
+    // ─── Обратные связи ─────────────────────
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public ICollection<YMSupplyRequest>? AsTargetInRequests { get; set; }
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public ICollection<YMSupplyRequest>? AsTransitInRequests { get; set; }
+
+    public override string ToString()
+    {
+      StringBuilder sb = new StringBuilder();
+      sb.AppendLine($"Склад/ПВЗ: {Name}");
+      sb.AppendLine($"Тип: {Type}");
+      sb.AppendLine($"Адрес: {Address?.FullAddress}");
+      return sb.ToString();
+    }
   }
+
 
   /// <summary>
   /// Ссылка на связанную заявку.
   /// </summary>
   public class YMSupplyRequestReference
   {
-    [JsonIgnore, Key]
-    public int Id { get; set; }  // для EF Core
+    [Key]
+    public long Id { get; set; }
 
-    [JsonIgnore, ForeignKey(nameof(YMSupplyRequestId))]
-    public long? YMSupplyRequestReferenceId { get; set; }  // для EF Core
+
+    // ─── Ссылка «от кого» (Request → ChildrenLinks) ────────────────────────
+
+    [ForeignKey(nameof(Request))]
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public long RequestId { get; set; }
+
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public YMSupplyRequest Request { get; set; }
+
+    // ─── Ссылка «на кого» (RelatedRequest ← ParentLink) ────────────────────
+
+    [ForeignKey(nameof(RelatedRequest))]
+    public long RelatedRequestId { get; set; }
+
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public YMSupplyRequest RelatedRequest { get; set; }
 
     /// <summary>Идентификаторы связанной заявки.</summary>
     [JsonProperty("id")]
-    [Display(Name = "Идентификаторы связанной заявки")]
+    [Display(Name = "Идентификаторы связанной заявки"), NotMapped]
     public YMSupplyRequestId? YMSupplyRequestId { get; set; }
 
     /// <summary>Тип связи между заявками.</summary>

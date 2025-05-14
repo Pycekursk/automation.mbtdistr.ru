@@ -20,7 +20,6 @@ using automation.mbtdistr.ru.Services.BarcodeService;
 using automation.mbtdistr.ru.Services.LLM;
 using automation.mbtdistr.ru.Services.YandexMarket;
 using ZXing;
-using static automation.mbtdistr.ru.Services.YandexMarket.Models.DTOs;
 using automation.mbtdistr.ru.Services;
 using System.Text.Json.Serialization;
 using static automation.mbtdistr.ru.Services.MarketSyncService;
