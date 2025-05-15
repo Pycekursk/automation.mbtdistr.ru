@@ -143,10 +143,10 @@ namespace automation.mbtdistr.ru.Controllers
           {
             if (campaign.PlacementType != "FBY") continue;
             var supplyResponse = await _ym.GetSupplyRequests(c, campaign);
-            if (supplyResponse?.Result?.Requests?.Count > 0)
+            if (supplyResponse?.Result?.Items?.Count > 0)
             {
-              supplyResponse.Result.Requests.ForEach(r => r.CabinetId = c.Id);
-              var supplies = supplyResponse.Result.Requests;
+              supplyResponse.Result.Items.ForEach(r => r.CabinetId = c.Id);
+              var supplies = supplyResponse.Result.Items;
               foreach (var supply in supplies)
               {
                 if (supply.Status == YMSupplyRequestStatusType.Finished || supply.Status == YMSupplyRequestStatusType.Cancelled) continue;
@@ -161,7 +161,7 @@ namespace automation.mbtdistr.ru.Controllers
                   supply.Items = new List<YMSupplyRequestItem>();
                 }
               }
-              supplyRequests.AddRange(supplyResponse.Result.Requests);
+              supplyRequests.AddRange(supplyResponse.Result.Items);
             }
           }
         }
@@ -206,6 +206,11 @@ namespace automation.mbtdistr.ru.Controllers
         .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
         .ToListAsync();
 
+      if (Program.Environment.IsDevelopment())
+      {
+        cabinets = new List<Cabinet> { cabinets.FirstOrDefault(c => c.Id == 14) };
+      }
+
       List<YMReturn> returnRequests = new List<YMReturn>();
       foreach (var c in cabinets)
       {
@@ -215,9 +220,29 @@ namespace automation.mbtdistr.ru.Controllers
           foreach (var campaign in campaignsResponse.Campaigns)
           {
             var returnResponse = await _ym.GetReturnsListAsync(c, campaign);
-            if (returnResponse?.Result?.Returns?.Count > 0)
+
+            if (returnResponse?.Result?.Items?.Count > 0)
             {
-              
+              foreach (var ret in returnResponse.Result.Items)
+              {
+                if (ret.Id == 22508324)
+                {
+                  if (ret.Items?.Count > 0)
+                  {
+                    foreach (var item in ret.Items)
+                    {
+                      var decision = item.Decisions.FirstOrDefault();
+
+                      if (decision != null && decision.Images?.Count > 0)
+                        foreach (var img in decision.Images)
+                        {
+                          var image = await _ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+                        }
+                      //_ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, item.);
+                    }
+                  }
+                }
+              }
             }
           }
         }

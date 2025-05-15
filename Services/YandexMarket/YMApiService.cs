@@ -13,12 +13,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
 using System.Text;
 
-
-
-//using System.Text.Json.Serialization;
-
-//using System.Text.Json.Serialization;
-
+using static automation.mbtdistr.ru.Extensions;
 
 using JsonConverter = Newtonsoft.Json.JsonConverter;
 
@@ -32,7 +27,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       _yMApiHttpClient = yMApiHttpClient;
     }
 
-    public async Task<CampaignsResponse> GetCampaignsAsync(Cabinet cabinet)
+    public async Task<YMCampaignsResponse> GetCampaignsAsync(Cabinet cabinet)
     {
       try
       {
@@ -42,7 +37,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = json.FromJson<CampaignsResponse>();
+        var obj = json.FromJson<YMCampaignsResponse>();
         return obj;
       }
       catch (Exception)
@@ -51,60 +46,93 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-    public async Task<ReturnsListResponse?> GetReturnsListAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 100, string? pageToken = null)
+
+
+
+    /// <summary>
+    /// Получает полный список возвратов, рекурсивно проходя все страницы.
+    /// </summary>
+    public async Task<YMApiResponse<YMListResult<YMReturn>>?> GetReturnsListAsync(
+        Cabinet cabinet,
+        YMCampaign campaign,
+        YMFilter? filter = null,
+        int limit = 100,
+        string? pageToken = null)
     {
-      if (filter == null)
+      // ─── Фильтр по умолчанию ──────────────────────────────────────────────────
+      filter ??= new YMFilter
       {
-        filter = new YMFilter
-        {
-          FromDate = DateTime.Now.AddDays(-20).ToString("yyyy-MM-dd"),
-          ToDate = DateTime.Now.ToString("yyyy-MM-dd"),
-          Limit = limit,
-          //Type = YMReturnType.Unredeemed,
-          //Statuses = new List<YMRefundStatusType> { YMRefundStatusType.StartedByUser, YMRefundStatusType.RefundInProgress, YMRefundStatusType.RefundedWithBonuses, YMRefundStatusType.DecisionMade, YMRefundStatusType.RefundedByShop, YMRefundStatusType.WaitingForDecision }
-        };
-      }
+        FromDate = DateTime.UtcNow.AddDays(-20).ToString("yyyy-MM-dd"),
+        ToDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+        Limit = limit,
+      };
+
+      // На каждой итерации явно прописываем PageToken в копию фильтра,
+      // чтобы ToQueryParams() отправил его в запрос.
+      if (!string.IsNullOrEmpty(pageToken))
+        filter.PageToken = pageToken;
       try
       {
         var response = await _yMApiHttpClient.SendRequestAsync(
             MarketApiRequestType.ReturnsList,
             cabinet,
-            null,
             query: filter.ToQueryParams(),
-            pathParams: new Dictionary<string, object>
-            {
-              { "campaignId", campaign.Id }
-            }
-        );
+            pathParams: new Dictionary<string, object> { { "campaignId", campaign.Id } });
+
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
+        SerializerSettings.Converters.Add(new YMListResultConverter<YMReturn>("returns"));
 
-        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<ReturnsListResponse>(json, new JsonSerializerSettings()
+        var pageResult = JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMReturn>>>(json, SerializerSettings);
+
+        // ─── Есть ли следующая страница? ──────────────────────────────────────
+        var nextToken = pageResult?.Result?.Paging?.NextPageToken;
+        if (!string.IsNullOrEmpty(nextToken))
         {
-          Converters = new List<JsonConverter>
+          var nextPage = await GetReturnsListAsync(
+                             cabinet,
+                             campaign,
+                             filter,   // исходный диапазон дат, лимит и т.д.
+                             limit,
+                             nextToken);
+
+          if (nextPage?.Result is { } np)
           {
-            new StringEnumConverter()
+            pageResult!.Result.Items.AddRange(np.Items);
+            pageResult.Result.Paging.NextPageToken = np.Paging.NextPageToken;
           }
-        });
+        }
 
-        if (obj?.Result?.Paging?.NextPageToken is string e && !string.IsNullOrEmpty(e))
-          await Extensions.SendDebugMessage($"В компании {campaign.Domain} ({campaign.Id}) с кабинетом {cabinet.Id} найдено {obj.Result.Paging.Total} возвратов. Нужна обработка постаничной загрузки");
-
-        return obj;
+        return pageResult;
       }
       catch (Exception ex)
       {
         await Extensions.SendDebugMessage($"Ошибка получения списка возвратов: {ex.Message}");
-        return default;
+
+        return new YMApiResponse<YMListResult<YMReturn>>
+        {
+          Status = YMApiResponseStatusType.ERROR,
+          Errors = new List<YMApiError>
+            {
+                new() { Code = "LOCAL_EXCEPTION", Message = ex.Message }
+            }
+        };
       }
     }
 
+    // Единые настройки сериализации
+    private static readonly JsonSerializerSettings SerializerSettings = new()
+    {
+      StringEscapeHandling = StringEscapeHandling.Default,
+      Culture = System.Globalization.CultureInfo.CurrentCulture,
+      Converters = { new StringEnumConverter() }
+    };
 
     /// <summary>
     /// Получение информации о невыкупе или возврате
     /// https://api.partner.market.yandex.ru/campaigns/{campaignId}/orders/{orderId}/returns/{returnId}
     /// </summary> 
-     public async Task<YMApiResponse<YMReturn>> GetReturnInfoAsync(Cabinet cabinet, Campaign campaign, long orderId, long returnId)
+    public async Task<YMApiResponse<YMReturn>> GetReturnInfoAsync(Cabinet cabinet, YMCampaign campaign, long orderId, long returnId)
     {
       try
       {
@@ -139,10 +167,81 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
+
+    /// <summary>
+    /// Метод получения фотографии товара в возврате.
+    /// <para/>
+    /// GET /campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision/{itemId}/image/{imageHash}
+    /// </summary>
+    /// <param name="cabinet">Кабинет продавца.</param>
+    /// <param name="campaign">Кампания Маркета.</param>
+    /// <param name="orderId">Идентификатор заказа.</param>
+    /// <param name="returnId">Идентификатор возврата / невыкупа.</param>
+    /// <param name="itemId">Идентификатор товара в возврате.</param>
+    /// <param name="imageHash">Хеш-код фотографии.</param>
+    /// <returns>Фотография в Base-64, обёрнутая в <see cref="YMApiResponse{T}"/>.</returns>
+    public async Task<YMApiResponse<YMReturnPhoto>> GetReturnImageAsync(
+        Cabinet cabinet,
+        YMCampaign campaign,
+        long orderId,
+        long returnId,
+        long itemId,
+        string imageHash)
+    {
+      try
+      {
+        var response = await _yMApiHttpClient.SendRequestAsync(
+            MarketApiRequestType.Image,
+            cabinet,
+            null,
+            pathParams: new Dictionary<string, object>
+            {
+          { "campaignId", campaign.Id },
+          { "orderId",    orderId     },
+          { "returnId",   returnId    },
+          { "itemId",     itemId      },
+          { "imageHash",  imageHash   }
+            });
+
+        response.EnsureSuccessStatusCode();
+
+        // ─── Бинарный поток ► Base64 ────────────────────────────────────────────────
+        var rawBytes = await response.Content.ReadAsByteArrayAsync();
+        var photoDto = new YMReturnPhoto
+        {
+          ContentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream",
+          ImageData = Convert.ToBase64String(rawBytes)
+        };
+
+        return new YMApiResponse<YMReturnPhoto>
+        {
+          Status = YMApiResponseStatusType.OK,
+          Result = photoDto
+        };
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка получения фотографии возврата: {ex.Message}");
+
+        return new YMApiResponse<YMReturnPhoto>
+        {
+          Status = YMApiResponseStatusType.ERROR,
+          Errors = new List<YMApiError>
+      {
+        new YMApiError
+        {
+          Code    = "LOCAL_EXCEPTION",
+          Message = ex.Message
+        }
+      }
+        };
+      }
+    }
+
     /// <summary>
     /// Метод получения информации о заказах
     /// </summary>
-    public async Task<YMApiResponse<YMOrder>> GetOrdersAsync(Cabinet cabinet, Campaign campaign, YMFilter? filter = null, int limit = 100, string? pageToken = null)
+    public async Task<YMApiResponse<YMOrder>> GetOrdersAsync(Cabinet cabinet, YMCampaign campaign, YMFilter? filter = null, int limit = 100, string? pageToken = null)
     {
       if (filter == null)
       {
@@ -186,11 +285,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-
-
-
-
-    public async Task<YMApiResponse<YMGetSupplyRequests>> GetSupplyRequests(Cabinet cabinet, Campaign campaign, int limit = 100, YMFilter? filter = null, string? pageToken = null)
+    /// <summary>
+    /// Получение списка заявок на поставку.
+    /// </summary>
+    public async Task<YMApiResponse<YMListResult<YMSupplyRequest>>> GetSupplyRequests(Cabinet cabinet, YMCampaign campaign, int limit = 100, YMFilter? filter = null, string? pageToken = null)
     {
       try
       {
@@ -209,12 +307,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMGetSupplyRequests>>(json, new JsonSerializerSettings()
+        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMSupplyRequest>>>(json, new JsonSerializerSettings()
         {
           StringEscapeHandling = StringEscapeHandling.Default,
           Culture = System.Globalization.CultureInfo.CurrentCulture,
           Converters = new List<Newtonsoft.Json.JsonConverter>
           {
+            new YMListResultConverter<YMSupplyRequest>("requests"),
             new StringEnumConverter()
           }
         });
@@ -238,9 +337,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <param name="limit">Максимальное число записей на странице.</param>
     /// <param name="pageToken">Токен следующей страницы для пагинации.</param>
     /// <returns>Десериализованный ответ с товарами в заявке.</returns>
-    public async Task<YMApiResponse<YMSupplyRequestItemsResult>> GetSupplyRequestItemsAsync(
+    public async Task<YMApiResponse<YMListResult<YMSupplyRequestItem>>> GetSupplyRequestItemsAsync(
         Cabinet cabinet,
-        Campaign campaign,
+        YMCampaign campaign,
         long requestId,
         int limit = 100,
         string? pageToken = null)
@@ -255,7 +354,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         var response = await _yMApiHttpClient.SendRequestAsync(
             MarketApiRequestType.SupplyItems,
             cabinet,
-            body: new YMSupplyRequestItemsRequest
+            body: new YMRequest
             {
               RequestId = requestId
             },
@@ -269,12 +368,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        var result = JsonConvert.DeserializeObject<YMApiResponse<YMSupplyRequestItemsResult>>(json, new JsonSerializerSettings
+        var result = JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMSupplyRequestItem>>>(json, new JsonSerializerSettings
         {
           StringEscapeHandling = StringEscapeHandling.Default,
           Culture = System.Globalization.CultureInfo.CurrentCulture,
           Converters = new List<JsonConverter>()
                     {
+                       new YMListResultConverter<YMSupplyRequestItem>("items"),
                        new StringEnumConverter()
                     }
         });
@@ -297,7 +397,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <returns>Десериализованный ответ с документами по заявке.</returns>
     public async Task<YMApiResponse<YMSupplyRequestDocumentsResult>> GetSupplyRequestDocumentsAsync(
         Cabinet cabinet,
-        Campaign campaign,
+        YMCampaign campaign,
         long requestId)
     {
       try
@@ -305,7 +405,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         var response = await _yMApiHttpClient.SendRequestAsync(
             MarketApiRequestType.SupplyDocuments,
             cabinet,
-            body: new YMSupplyRequestDocumentsRequest
+            body: new YMRequest
             {
               RequestId = requestId
             },
@@ -335,332 +435,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-
-    //public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(YMSupplyRequest incoming, ApplicationDbContext context)
-    //{
-    //  var existing = await context.YMSupplyRequests
-    //      .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
-    //      .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
-    //      .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
-
-    //  // ─── Обеспечить привязку к существующим или новым локациям ──────────────
-
-    //  async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation inputLocation)
-    //  {
-    //    var existingLoc = await context.YMSupplyRequestLocations
-    //        .Include(l => l.Address)
-    //        .FirstOrDefaultAsync(l => l.ServiceId == inputLocation.ServiceId);
-
-    //    if (existingLoc != null)
-    //    {
-    //      // Обновить
-    //      existingLoc.Name = inputLocation.Name;
-    //      existingLoc.RequestedDate = inputLocation.RequestedDate;
-    //      existingLoc.Type = inputLocation.Type;
-
-    //      if (inputLocation.Address != null)
-    //      {
-    //        var existingAddr = await context.YMLocationAddresses
-    //            .FirstOrDefaultAsync(a => a.Id == inputLocation.Address.Id);
-
-    //        if (existingAddr != null)
-    //        {
-    //          existingAddr.FullAddress = inputLocation.Address.FullAddress;
-    //          existingAddr.Gps = inputLocation.Address.Gps;
-    //        }
-    //        else
-    //        {
-    //          context.YMLocationAddresses.Add(inputLocation.Address);
-    //          existingLoc.Address = inputLocation.Address;
-    //        }
-    //      }
-
-    //      return existingLoc;
-    //    }
-    //    else
-    //    {
-    //      // Новая локация
-    //      if (inputLocation.Address != null)
-    //      {
-    //        var addressExists = await context.YMLocationAddresses
-    //            .AnyAsync(a => a.Id == inputLocation.Address.Id);
-
-    //        if (!addressExists)
-    //        {
-    //          context.YMLocationAddresses.Add(inputLocation.Address);
-    //        }
-    //      }
-
-    //      context.YMSupplyRequestLocations.Add(inputLocation);
-    //      return inputLocation;
-    //    }
-    //  }
-
-    //  // ─── Обработка TargetLocation ─────────────
-    //  var targetLocation = await ResolveLocationAsync(incoming.TargetLocation);
-    //  var transitLocation = incoming.TransitLocation != null
-    //      ? await ResolveLocationAsync(incoming.TransitLocation)
-    //      : null;
-
-    //  if (existing == null)
-    //  {
-    //    // ─── Новая заявка ─────────────
-    //    incoming.TargetLocation = targetLocation;
-    //    incoming.TargetLocationServiceId = targetLocation.ServiceId;
-
-    //    if (transitLocation != null)
-    //    {
-    //      incoming.TransitLocation = transitLocation;
-    //      incoming.TransitLocationServiceId = transitLocation.ServiceId;
-    //    }
-
-    //    context.YMSupplyRequests.Add(incoming);
-    //  }
-    //  else
-    //  {
-    //    // ─── Обновление существующей ─────────────
-    //    existing.Status = incoming.Status;
-    //    existing.Type = incoming.Type;
-    //    existing.Subtype = incoming.Subtype;
-    //    existing.UpdatedAt = DateTime.UtcNow;
-
-    //    existing.TargetLocation = targetLocation;
-    //    existing.TargetLocationServiceId = targetLocation.ServiceId;
-
-    //    if (transitLocation != null)
-    //    {
-    //      existing.TransitLocation = transitLocation;
-    //      existing.TransitLocationServiceId = transitLocation.ServiceId;
-    //    }
-    //    else
-    //    {
-    //      existing.TransitLocation = null;
-    //      existing.TransitLocationServiceId = null;
-    //    }
-    //  }
-
-    //  await context.SaveChangesAsync();
-
-    //  return incoming;
-    //}
-    //public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(
-    //YMSupplyRequest incoming,
-    //ApplicationDbContext context)
-    //{
-    //  // 1. Подгружаем существующую заявку вместе со всем необходимым
-    //  var existing = await context.YMSupplyRequests
-    //      .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
-    //      .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
-    //      .Include(r => r.Items).ThenInclude(i => i.Price)
-    //      .Include(r => r.Items).ThenInclude(i => i.Counters)
-    //      .Include(r => r.ChildrenLinks)
-    //      .Include(r => r.ParentLink)
-    //      .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
-
-    //  // 2. Локальные функции для «разрешения» вложенных сущностей
-
-    //  // 2.1. Location
-    //  async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation loc)
-    //  {
-    //    var dbLoc = await context.YMSupplyRequestLocations
-    //        .Include(l => l.Address)
-    //        .FirstOrDefaultAsync(l => l.ServiceId == loc.ServiceId);
-
-    //    if (dbLoc != null)
-    //    {
-    //      // обновляем поля
-    //      dbLoc.Name = loc.Name;
-    //      dbLoc.Type = loc.Type;
-    //      dbLoc.RequestedDate = loc.RequestedDate;
-
-    //      if (loc.Address != null)
-    //      {
-    //        var dbAddr = await context.YMLocationAddresses
-    //            .FirstOrDefaultAsync(a => a.Id == loc.Address.Id);
-
-    //        if (dbAddr != null)
-    //        {
-    //          dbAddr.FullAddress = loc.Address.FullAddress;
-    //          dbAddr.Gps = loc.Address.Gps;
-    //        }
-    //        else
-    //        {
-    //          context.YMLocationAddresses.Add(loc.Address);
-    //          dbLoc.Address = loc.Address;
-    //        }
-    //      }
-
-    //      return dbLoc;
-    //    }
-    //    else
-    //    {
-    //      // новая локация
-    //      if (loc.Address != null)
-    //        context.YMLocationAddresses.Add(loc.Address);
-
-    //      context.YMSupplyRequestLocations.Add(loc);
-    //      return loc;
-    //    }
-    //  }
-
-    //  // 2.2. Item (+ Counters + Price)
-    //  async Task<YMSupplyRequestItem> ResolveItemAsync(YMSupplyRequestItem item, YMSupplyRequest parent)
-    //  {
-    //    return await Task.Run<YMSupplyRequestItem>(() =>
-    //    {
-    //      // пытаемся найти по OfferId внутри этой заявки
-    //      var dbItem = existing?.Items?
-    //          .FirstOrDefault(i => i.OfferId == item.OfferId);
-
-    //      if (dbItem != null)
-    //      {
-    //        // обновляем простые поля
-    //        dbItem.Name = item.Name;
-
-    //        // обновляем цену
-    //        dbItem.Price.CurrencyId = item.Price.CurrencyId;
-    //        dbItem.Price.Value = item.Price.Value;
-
-    //        // обновляем счётчики
-    //        dbItem.Counters.DefectCount = item.Counters.DefectCount;
-    //        dbItem.Counters.FactCount = item.Counters.FactCount;
-    //        dbItem.Counters.PlanCount = item.Counters.PlanCount;
-    //        dbItem.Counters.ShortageCount = item.Counters.ShortageCount;
-    //        dbItem.Counters.SurplusCount = item.Counters.SurplusCount;
-
-    //        return dbItem;
-    //      }
-    //      else
-    //      {
-    //        // новый товар
-    //        item.SupplyRequest = parent;
-    //        context.YMSupplyRequestItems.Add(item);
-    //        return item;
-    //      }
-    //    });
-    //  }
-
-    //  // 2.3. Reference (ChildrenLinks / ParentLink)
-    //  YMSupplyRequestReference ResolveReference(YMSupplyRequestReference link, YMSupplyRequest parent, bool isParentLink)
-    //  {
-    //    if (isParentLink)
-    //    {
-    //      // одиночная связь
-    //      link.RequestId = parent.Id;
-    //      link.RelatedRequestId = link.YMSupplyRequestId!.Id;
-    //      link.Request = parent;
-    //      context.YMSupplyRequestReferences.Add(link);
-    //      return link;
-    //    }
-    //    else
-    //    {
-    //      // коллекция
-    //      link.RequestId = parent.Id;
-    //      link.RelatedRequestId = link.YMSupplyRequestId!.Id;
-    //      link.Request = parent;
-    //      context.YMSupplyRequestReferences.Add(link);
-    //      return link;
-    //    }
-    //  }
-
-    //  // 3. «Разрешаем» все вложенные объекты
-    //  var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
-    //  var transitLoc = incoming.TransitLocation != null
-    //      ? await ResolveLocationAsync(incoming.TransitLocation)
-    //      : null;
-
-    //  // 4. Если это новая заявка — просто добавляем всё «вместе»
-    //  if (existing == null)
-    //  {
-    //    incoming.TargetLocation = targetLoc;
-    //    incoming.TargetLocationServiceId = targetLoc.ServiceId;
-    //    if (transitLoc != null)
-    //    {
-    //      incoming.TransitLocation = transitLoc;
-    //      incoming.TransitLocationServiceId = transitLoc.ServiceId;
-    //    }
-
-    //    // Items
-    //    if (incoming.Items != null)
-    //    {
-    //      foreach (var it in incoming.Items.ToList())
-    //        await ResolveItemAsync(it, incoming);
-    //    }
-
-    //    // ChildrenLinks
-    //    if (incoming.ChildrenLinks != null)
-    //    {
-    //      foreach (var link in incoming.ChildrenLinks.ToList())
-    //        ResolveReference(link, incoming, isParentLink: false);
-    //    }
-
-    //    // ParentLink
-    //    if (incoming.ParentLink != null)
-    //      ResolveReference(incoming.ParentLink, incoming, isParentLink: true);
-
-    //    context.YMSupplyRequests.Add(incoming);
-    //    await context.SaveChangesAsync();
-    //    return incoming;
-    //  }
-
-    //  // 5. Обновляем существующую
-    //  existing.Status = incoming.Status;
-    //  existing.Subtype = incoming.Subtype;
-    //  existing.Type = incoming.Type;
-    //  existing.UpdatedAt = DateTime.UtcNow;
-
-    //  existing.TargetLocation = targetLoc;
-    //  existing.TargetLocationServiceId = targetLoc.ServiceId;
-
-    //  if (transitLoc != null)
-    //  {
-    //    existing.TransitLocation = transitLoc;
-    //    existing.TransitLocationServiceId = transitLoc.ServiceId;
-    //  }
-    //  else
-    //  {
-    //    existing.TransitLocation = null;
-    //    existing.TransitLocationServiceId = null;
-    //  }
-
-    //  // — обновляем список товаров —
-    //  if (incoming.Items != null)
-    //  {
-    //    // удаляем те, которых больше нет
-    //    var incomingOffers = incoming.Items.Select(i => i.OfferId).ToHashSet();
-    //    foreach (var toRemove in existing.Items.Where(i => !incomingOffers.Contains(i.OfferId)).ToList())
-    //      context.YMSupplyRequestItems.Remove(toRemove);
-
-    //    // добавляем/обновляем остальные
-    //    foreach (var it in incoming.Items)
-    //      await ResolveItemAsync(it, existing);
-    //  }
-
-    //  // — обновляем связи ChildrenLinks —
-    //  if (incoming.ChildrenLinks != null)
-    //  {
-    //    // удаляем старые
-    //    foreach (var old in existing.ChildrenLinks.ToList())
-    //      context.YMSupplyRequestReferences.Remove(old);
-
-    //    // добавляем новые
-    //    foreach (var link in incoming.ChildrenLinks)
-    //      ResolveReference(link, existing, isParentLink: false);
-    //  }
-
-    //  // — обновляем ParentLink —
-    //  if (incoming.ParentLink != null)
-    //  {
-    //    if (existing.ParentLink != null)
-    //      context.YMSupplyRequestReferences.Remove(existing.ParentLink);
-
-    //    ResolveReference(incoming.ParentLink, existing, isParentLink: true);
-    //  }
-
-    //  await context.SaveChangesAsync();
-    //  return existing;
-    //}
-
+    /// <summary>
+    /// Добавление или обновление заявки в БД на поставку.
+    /// </summary>
     public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(
     YMSupplyRequest incoming,
     ApplicationDbContext context)
@@ -862,39 +639,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
           .Include(r => r.ParentLink)
           .FirstAsync(r => r.Id == existing.Id);
     }
-
-
-
-
   }
-
-  #region Orders Models
-
-
-
-  #endregion
-
-
-  #region Request Models
-
-  /// <summary>
-  /// Модель запроса для получения документов по заявке.
-  /// </summary>
-  public class YMSupplyRequestDocumentsRequest
-  {
-    /// <summary>
-    /// Идентификатор заявки.
-    /// </summary>
-    [Display(Name = "Идентификатор заявки")]
-    [JsonProperty("requestId")]
-    [Required]
-    public long RequestId { get; set; }
-  }
-
-  #endregion
 
   #region Response Models
-
 
 
   /// <summary>
@@ -910,195 +657,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     public List<YMSupplyRequestDocument> Documents { get; set; }
   }
 
-  /// <summary>
-  /// Информация о документе по заявке.
-  /// </summary>
-  public class YMSupplyRequestDocument
-  {
-    /// <summary>
-    /// Дата и время создания документа.
-    /// </summary>
-    [Display(Name = "Дата и время создания документа")]
-    [JsonProperty("createdAt")]
-    [Required]
-    public DateTime CreatedAt { get; set; }
 
-    /// <summary>
-    /// Тип документа.
-    /// </summary>
-    [Display(Name = "Тип документа")]
-    [JsonProperty("type")]
-    [JsonConverter(typeof(StringEnumConverter))]
-    [Required]
-    public YMSupplyRequestDocumentType Type { get; set; }
-
-    /// <summary>
-    /// Ссылка на документ.
-    /// </summary>
-    [Display(Name = "Ссылка на документ")]
-    [JsonProperty("url")]
-    [Required]
-    public string Url { get; set; }
-  }
-
-  #endregion
-
-  #region Enums
-
-  /// <summary>
-  /// Тип документа по заявке.
-  /// </summary>
-  [JsonConverter(typeof(StringEnumConverter))]
-  public enum YMSupplyRequestDocumentType
-  {
-    // Документы, которые загружает магазин
-    /// <summary>Список товаров.</summary>
-    [EnumMember(Value = "SUPPLY")]
-    SUPPLY,
-
-    /// <summary>Список товаров в дополнительной поставке.</summary>
-    [EnumMember(Value = "ADDITIONAL_SUPPLY")]
-    ADDITIONAL_SUPPLY,
-
-    /// <summary>Список товаров в мультипоставке.</summary>
-    [EnumMember(Value = "VIRTUAL_DISTRIBUTION_CENTER_SUPPLY")]
-    VIRTUAL_DISTRIBUTION_CENTER_SUPPLY,
-
-    /// <summary>Список товаров для утилизации.</summary>
-    [EnumMember(Value = "TRANSFER")]
-    TRANSFER,
-
-    /// <summary>Список товаров для вывоза.</summary>
-    [EnumMember(Value = "WITHDRAW")]
-    WITHDRAW,
-
-    // Поставка товаров
-    /// <summary>Ошибки по товарам в поставке.</summary>
-    [EnumMember(Value = "VALIDATION_ERRORS")]
-    VALIDATION_ERRORS,
-
-    /// <summary>Ярлыки для грузомест.</summary>
-    [EnumMember(Value = "CARGO_UNITS")]
-    CARGO_UNITS,
-
-    // Дополнительная поставка и непринятые товары
-    /// <summary>Товары, которые подходят для дополнительной поставки.</summary>
-    [EnumMember(Value = "ADDITIONAL_SUPPLY_ACCEPTABLE_GOODS")]
-    ADDITIONAL_SUPPLY_ACCEPTABLE_GOODS,
-
-    /// <summary>Вывоз непринятых товаров.</summary>
-    [EnumMember(Value = "ADDITIONAL_SUPPLY_UNACCEPTABLE_GOODS")]
-    ADDITIONAL_SUPPLY_UNACCEPTABLE_GOODS,
-
-    // Маркировка товаров
-    /// <summary>Входящий УПД.</summary>
-    [EnumMember(Value = "INBOUND_UTD")]
-    INBOUND_UTD,
-
-    /// <summary>Исходящий УПД.</summary>
-    [EnumMember(Value = "OUTBOUND_UTD")]
-    OUTBOUND_UTD,
-
-    /// <summary>Коды маркировки товаров.</summary>
-    [EnumMember(Value = "IDENTIFIERS")]
-    IDENTIFIERS,
-
-    /// <summary>Принятые товары с кодами маркировки.</summary>
-    [EnumMember(Value = "CIS_FACT")]
-    CIS_FACT,
-
-    /// <summary>Товары, для которых нужна маркировка.</summary>
-    [EnumMember(Value = "ITEMS_WITH_CISES")]
-    ITEMS_WITH_CISES,
-
-    /// <summary>Отчет по маркированным товарам для вывоза со склада.</summary>
-    [EnumMember(Value = "REPORT_OF_WITHDRAW_WITH_CISES")]
-    REPORT_OF_WITHDRAW_WITH_CISES,
-
-    /// <summary>Маркированные товары, которые приняты после вторичной приемки.</summary>
-    [EnumMember(Value = "SECONDARY_ACCEPTANCE_CISES")]
-    SECONDARY_ACCEPTANCE_CISES,
-
-    /// <summary>Принятые товары с регистрационным номером партии (РНПТ).</summary>
-    [EnumMember(Value = "RNPT_FACT")]
-    RNPT_FACT,
-
-    // Акты
-    /// <summary>Акт возврата.</summary>
-    [EnumMember(Value = "ACT_OF_WITHDRAW")]
-    ACT_OF_WITHDRAW,
-
-    /// <summary>Акт изъятия непринятого товара.</summary>
-    [EnumMember(Value = "ANOMALY_CONTAINERS_WITHDRAW_ACT")]
-    ANOMALY_CONTAINERS_WITHDRAW_ACT,
-
-    /// <summary>Акт списания с ответственного хранения.</summary>
-    [EnumMember(Value = "ACT_OF_WITHDRAW_FROM_STORAGE")]
-    ACT_OF_WITHDRAW_FROM_STORAGE,
-
-    /// <summary>Акт приема-передачи.</summary>
-    [EnumMember(Value = "ACT_OF_RECEPTION_TRANSFER")]
-    ACT_OF_RECEPTION_TRANSFER,
-
-    /// <summary>Акт о расхождениях.</summary>
-    [EnumMember(Value = "ACT_OF_DISCREPANCY")]
-    ACT_OF_DISCREPANCY,
-
-    /// <summary>Акт вторичной приемки.</summary>
-    [EnumMember(Value = "SECONDARY_RECEPTION_ACT")]
-    SECONDARY_RECEPTION_ACT
-  }
-
-  #endregion
-
-  #region Request Models
-
-  /// <summary>
-  /// Модель запроса для получения товаров в заявке.
-  /// </summary>
-  public class YMSupplyRequestItemsRequest
-  {
-    /// <summary>
-    /// Идентификатор заявки.
-    /// </summary>
-    [Display(Name = "Идентификатор заявки")]
-    [JsonProperty("requestId"), System.Text.Json.Serialization.JsonPropertyName("requestId")]
-    [Required]
-    public long RequestId { get; set; }
-  }
-
-  #endregion
-
-  #region Response Models
-
-
-
-  /// <summary>
-  /// Результат получения товаров в заявке.
-  /// </summary>
-  public class YMSupplyRequestItemsResult
-  {
-    /// <summary>
-    /// Список товаров.
-    /// </summary>
-    [Display(Name = "Список товаров")]
-    [JsonProperty("items")]
-    public List<YMSupplyRequestItem> Items { get; set; }
-
-    /// <summary>
-    /// Пейджинг по результатам.
-    /// </summary>
-    [Display(Name = "Пейджинг по результатам")]
-    [JsonProperty("paging")]
-    public YMForwardScrollingPager Paging { get; set; }
-
-    ///// <summary>
-    ///// Количество товаров в заявке.
-    ///// </summary>
-    //[Display(Name = "Количество товаров в заявке")]
-    //[JsonProperty("counters"), System.Text.Json.Serialization.JsonPropertyName("counters")]
-    //public YMSupplyRequestItemCounters Counters { get; set; }
-  }
 
   /// <summary>
   /// Информация о товаре в заявке.
@@ -1194,115 +753,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     public YMSupplyRequestItem? Item { get; set; }
   }
 
-  /// <summary>
-  /// Валюта и ее значение.
-  /// </summary>
-
-
-  public class YMCurrencyValue
-  {
-    [JsonIgnore, Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }  // для EF Core
-
-    /// <summary>
-    /// Код валюты.
-    /// </summary>
-    [Display(Name = "Код валюты")]
-    [JsonProperty("currencyId")]
-    public YMCurrencyType CurrencyId { get; set; }
-
-    /// <summary>
-    /// Значение.
-    /// </summary>
-    [Display(Name = "Значение")]
-    [JsonProperty("value")]
-    public long Value { get; set; }
-
-    // ─── Ссылка на товар ──────
-
-    [ForeignKey(nameof(SupplyRequestItem))]
-    [JsonIgnore]
-    public int YMSupplyRequestItemId { get; set; }
-
-    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
-    public YMSupplyRequestItem SupplyRequestItem { get; set; }
-  }
-
-  #endregion
-
-  #region Enums
-
-  /// <summary>
-  /// Тип ответа API. Возможные значения: OK — ошибок нет, ERROR — при обработке запроса произошла ошибка.
-  /// </summary>
-  [JsonConverter(typeof(StringEnumConverter))]
-  public enum YMApiResponseStatusType
-  {
-    /// <summary>
-    /// Ошибок нет.
-    /// </summary>
-    [EnumMember(Value = "OK")]
-    OK,
-
-    /// <summary>
-    /// При обработке запроса произошла ошибка.
-    /// </summary>
-    [EnumMember(Value = "ERROR")]
-    ERROR
-  }
-
-  /// <summary>
-  /// Пейджинг с прокруткой вперед.
-  /// </summary>
-  public class YMForwardScrollingPager
-  {
-    /// <summary>
-    /// Идентификатор следующей страницы результатов.
-    /// </summary>
-    [Display(Name = "Идентификатор следующей страницы результатов")]
-    [JsonProperty("nextPageToken")]
-    public string NextPageToken { get; set; }
-  }
-
-  /// <summary>
-  /// Коды валют.
-  /// </summary>
-  [JsonConverter(typeof(StringEnumConverter))]
-  public enum YMCurrencyType
-  {
-    /// <summary>
-    /// Российский рубль.
-    /// </summary>
-    [EnumMember(Value = "RUR")]
-    RUR,
-
-    /// <summary>
-    /// Украинская гривна.
-    /// </summary>
-    [EnumMember(Value = "UAH")]
-    UAH,
-
-    /// <summary>
-    /// Белорусский рубль.
-    /// </summary>
-    [EnumMember(Value = "BYR")]
-    BYR,
-
-    /// <summary>
-    /// Казахстанский тенге.
-    /// </summary>
-    [EnumMember(Value = "KZT")]
-    KZT,
-
-    /// <summary>
-    /// Узбекский сум.
-    /// </summary>
-    [EnumMember(Value = "UZS")]
-    UZS
-
-    // при необходимости добавить другие валюты
-  }
-
   #endregion
 
   #region Yandex Market supplies DTOs
@@ -1327,25 +777,25 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     public YMSortOrderType Direction { get; set; }
   }
 
-  /// <summary>
-  /// Модель ответа с данными заявок.
-  /// </summary>
-  public class YMGetSupplyRequests
-  {
-    /// <summary>
-    /// Список заявок.
-    /// </summary>
-    [JsonProperty("requests")]
-    [Display(Name = "Список заявок")]
-    public List<YMSupplyRequest> Requests { get; set; }
+  ///// <summary>
+  ///// Модель ответа с данными заявок.
+  ///// </summary>
+  //public class YMGetSupplyRequests
+  //{
+  //  /// <summary>
+  //  /// Список заявок.
+  //  /// </summary>
+  //  [JsonProperty("requests")]
+  //  [Display(Name = "Список заявок")]
+  //  public List<YMSupplyRequest> Requests { get; set; }
 
-    /// <summary>
-    /// Пагинация — идентификатор следующей страницы.
-    /// </summary>
-    [JsonProperty("paging")]
-    [Display(Name = "Идентификатор следующей страницы")]
-    public YMForwardScrollingPager Paging { get; set; }
-  }
+  //  /// <summary>
+  //  /// Пагинация — идентификатор следующей страницы.
+  //  /// </summary>
+  //  [JsonProperty("paging")]
+  //  [Display(Name = "Идентификатор следующей страницы")]
+  //  public YMForwardScrollingPager Paging { get; set; }
+  //}
 
   /// <summary>
   /// Счетчики товаров, коробок и палет в заявке.
@@ -1411,27 +861,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     public string? WarehouseRequestId { get; set; }
   }
 
-  ///// <summary>
-  ///// Адрес склада или пункта выдачи.
-  ///// </summary>
-  //public class YMSupplyRequestLocationAddress
-  //{
-  //  [Key]
-  //  public long Id { get; set; }  // для EF Core
-
-  //  /// <summary>Полный адрес склада или ПВЗ.</summary>
-  //  [JsonProperty("fullAddress")]
-  //  [Display(Name = "Полный адрес")]
-  //  public string? FullAddress { get; set; }
-
-  //  /// <summary>GPS-координаты склада или ПВЗ.</summary>
-  //  [JsonProperty("gps")]
-  //  [Display(Name = "GPS-координаты")]
-  //  public YMGps Gps { get; set; }
-
-  //  public ICollection<YMSupplyRequestLocation>? LocationAddresses { get; set; }
-  //}
-
   /// <summary>
   /// Адрес склада или пункта выдачи.
   /// </summary>
@@ -1451,44 +880,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public ICollection<YMSupplyRequestLocation>? LocationAddresses { get; set; }
   }
-
-
-  ///// <summary>
-  ///// Информация о складе хранения или ПВЗ.
-  ///// </summary>
-  //public class YMSupplyRequestLocation
-  //{
-  //  /// <summary>Название склада или ПВЗ.</summary>
-  //  [JsonProperty("name")]
-  //  [Display(Name = "Название")]
-  //  public string? Name { get; set; }
-
-  //  /// <summary>Идентификатор склада или логистического партнёра.</summary>
-  //  [JsonProperty("serviceId"), Key]
-  //  [Display(Name = "Идентификатор склада/партнёра")]
-  //  public long ServiceId { get; set; }
-
-  //  public long AddressId { get; set; }
-
-  //  /// <summary>Адрес склада или ПВЗ.</summary>
-  //  [JsonProperty("address")]
-  //  [Display(Name = "Адрес")]
-  //  [ForeignKey(nameof(AddressId))]
-  //  public YMSupplyRequestLocationAddress Address { get; set; }
-
-  //  /// <summary>Тип склада или ПВЗ.</summary>
-  //  [JsonProperty("type")]
-  //  [Display(Name = "Тип склада/ПВЗ")]
-  //  public YMSupplyRequestLocationType Type { get; set; }
-
-  //  /// <summary>Дата и время поставки на склад или в ПВЗ.</summary>
-  //  [JsonProperty("requestedDate")]
-  //  [Display(Name = "Дата и время поставки")]
-  //  public DateTime? RequestedDate { get; set; }
-
-  //  public ICollection<YMSupplyRequest>? AsTargetInRequests { get; set; }
-  //  public ICollection<YMSupplyRequest>? AsTransitInRequests { get; set; }
-  //}
 
   /// <summary>
   /// Информация о складе хранения или ПВЗ.
@@ -1559,10 +950,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     // ─── Ссылка «на кого» (RelatedRequest ← ParentLink) ────────────────────
 
     [ForeignKey(nameof(RelatedRequest))]
-    public long RelatedRequestId { get; set; }
+    public long? RelatedRequestId { get; set; }
 
     [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
-    public YMSupplyRequest RelatedRequest { get; set; }
+    public YMSupplyRequest? RelatedRequest { get; set; }
 
     /// <summary>Идентификаторы связанной заявки.</summary>
     [JsonProperty("id")]

@@ -84,9 +84,6 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-
-
-
     public MarketSyncService(
 
         IServiceScopeFactory scopeFactory,
@@ -108,25 +105,26 @@ namespace automation.mbtdistr.ru.Services
       MarketSyncService.SupplyStatusChanged += OnSupplyStatusChanged;
 
 
-      if (Program.Environment.IsDevelopment())
-        SyncAllAsync(CancellationToken.None);
+      //if (Program.Environment.IsDevelopment())
+      //  SyncAllAsync(CancellationToken.None);
     }
 
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
     {
-
       if (e.ApiDTO != null)
         await Extensions.SendDebugObject(e.ApiDTO, $"Обьект возврата: {e.Return.Id}");
-
-
       using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
-
-
-      // Null-check для cab и связанных работников
-      var workers = context.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
+      var workers = context.Cabinets
+        .Include(c => c.AssignedWorkers)
+        .ThenInclude(w => w.NotificationOptions)
+        .FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
       if (workers == null)
         return;
-      // Отправляем сообщение всем рабочим
+      if (Program.Environment.IsDevelopment())
+      {
+        await _botClient.SendMessage("1406950293", e.Message, ParseMode.Html);
+        return;
+      }
       foreach (var worker in workers)
       {
         if (worker.NotificationOptions.IsReceiveNotification)
@@ -143,7 +141,12 @@ namespace automation.mbtdistr.ru.Services
       var workers = context.Cabinets.Include(c => c.AssignedWorkers).ThenInclude(w => w.NotificationOptions).FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
       if (workers == null)
         return;
-      // Отправляем сообщение всем рабочим
+
+      if (Program.Environment.IsDevelopment())
+      {
+        await _botClient.SendMessage("1406950293", e.Message, ParseMode.Html);
+        return;
+      }
       foreach (var worker in workers)
       {
         if (worker.NotificationOptions.IsReceiveNotification)
@@ -237,14 +240,14 @@ namespace automation.mbtdistr.ru.Services
 
           else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
           {
-            List<Services.YandexMarket.Models.ReturnsListResponse> _ymReturns = new List<Services.YandexMarket.Models.ReturnsListResponse>();
+            List<YMReturn> _ymReturns = new List<YMReturn>();
             var _campaigns = await _yMApiService.GetCampaignsAsync(cab);
             foreach (var camp in _campaigns.Campaigns)
             {
               var supplies = await _yMApiService.GetSupplyRequests(cab, camp);
-              if (supplies?.Result?.Requests?.Count > 0)
+              if (supplies?.Result?.Items?.Count > 0)
               {
-                foreach (var supple in supplies.Result.Requests)
+                foreach (var supple in supplies.Result.Items)
                 {
                   var suppleItems = await _yMApiService.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
                   supple.Items = suppleItems?.Result?.Items;
@@ -252,17 +255,14 @@ namespace automation.mbtdistr.ru.Services
                 }
               }
               var result = await _yMApiService.GetReturnsListAsync(cab, camp);
-              if (result?.Result?.Returns?.Count > 0)
+
+
+
+              if (result?.Result.Items.Count > 0)
               {
-                var ids = result.Result?.Returns.Select((r) => new { orderId = r.OrderId, returnId = r.Id }).ToList();
+                //var ids = result.Result?.Items.Select((r) => new { orderId = r.OrderId, returnId = r.Id }).ToList();
 
-                ids?.ForEach(async i =>
-                {
-
-                  //var response = await _yMApiService.GetReturnInfoAsync(cab, camp, i.orderId, i.returnId);
-                });
-
-                _ymReturns.Add(result);
+                // _ymReturns.AddRange(result.Result.Items);
 
               }
 
@@ -448,7 +448,7 @@ namespace automation.mbtdistr.ru.Services
     }
 
     public async Task<List<Models.Return>> ProcessYMReturnsAsync(
-        List<Services.YandexMarket.Models.ReturnsListResponse> returns,
+        List<Services.YandexMarket.Models.YMReturn> returns,
         Cabinet cab,
         ApplicationDbContext db,
         CancellationToken ct
@@ -459,55 +459,54 @@ namespace automation.mbtdistr.ru.Services
       try
       {
 
-        foreach (var yaRetun in returns)
+        foreach (var r in returns)
         {
-          foreach (var r in yaRetun.Result.Returns)
+
+          var existingReturn = await db.Returns
+            .Include(r => r.Info)
+            .Include(r => r.Compensation)
+            .Include(r => r.Cabinet)
+            .ThenInclude(c => c.AssignedWorkers)
+            .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.ReturnInfoId == r.Id, ct);
+          if (existingReturn != null)
           {
-            var existingReturn = await db.Returns
-              .Include(r => r.Info)
-              .Include(r => r.Compensation)
-              .Include(r => r.Cabinet)
-              .ThenInclude(c => c.AssignedWorkers)
-              .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.ReturnInfoId == r.Id, ct);
-            if (existingReturn != null)
+            var oldChangedAt = existingReturn.ChangedAt;
+            var newChangedAt = r.UpdateDate;
+
+            if (newChangedAt != oldChangedAt)
             {
-              var oldChangedAt = existingReturn.ChangedAt;
-              var newChangedAt = r.UpdateDate;
-
-              if (newChangedAt != oldChangedAt)
-              {
-                existingReturn.ChangedAt = newChangedAt;
-                db.Returns.Update(existingReturn);
-                returnsList.Add(existingReturn);
-                var message = FormatReturnHtmlMessage(existingReturn, cab, false);
-                ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message, r));
-              }
-            }
-            else
-            {
-              Models.Return @return = new Models.Return();
-              @return.CreatedAt = r.CreationDate;
-              @return.ChangedAt = r.UpdateDate;
-              @return.CabinetId = cab.Id;
-              @return.Info.ReturnReasonName = $"{(string.IsNullOrEmpty(r.Comment) ? "" : $"{r.Comment}. ")}{r.DecisionReason.GetDisplayName()}. {r.DecisionSubreason.GetDisplayName()}";
-
-
-              @return.Info.ProductsSku = r.Items.Select(i => i.MarketSku).ToList();
-              @return.Info.ReturnInfoId = r.Id;
-              @return.Info.OrderId = r.OrderId;
-
-              //@return.Info.ReturnStatus = r.ShipmentStatus;
-
-              db.Returns.Add(@return);
-              returnsList.Add(@return);
-
-              var message = FormatReturnHtmlMessage(@return, cab, true);
-
-
-
-              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message, r));
+              existingReturn.ChangedAt = newChangedAt;
+              db.Returns.Update(existingReturn);
+              returnsList.Add(existingReturn);
+              var message = FormatReturnHtmlMessage(existingReturn, cab, false);
+              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message, r));
             }
           }
+          else
+          {
+            Models.Return @return = new Models.Return();
+            @return.CreatedAt = r.CreationDate;
+            @return.ChangedAt = r.UpdateDate;
+            @return.CabinetId = cab.Id;
+
+
+
+            @return.Info.ProductsSku = r.Items.Select(i => i.MarketSku).ToList();
+            @return.Info.ReturnInfoId = r.Id;
+            @return.Info.OrderId = r.OrderId;
+
+            //@return.Info.ReturnStatus = r.ShipmentStatus;
+
+            db.Returns.Add(@return);
+            returnsList.Add(@return);
+
+            var message = FormatReturnHtmlMessage(@return, cab, true);
+
+
+
+            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message, r));
+          }
+
         }
 
         await db.SaveChangesAsync();

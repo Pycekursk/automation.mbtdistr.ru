@@ -22,5 +22,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [Display(Name = "Результат запроса")]
     [JsonProperty("result")]
     public TResult Result { get; set; }
+
+    /// <summary>
+    /// Ошибки
+    /// </summary>
+    public List<YMApiError>? Errors { get; set; }
   }
 }

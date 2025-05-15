@@ -24,6 +24,23 @@ using automation.mbtdistr.ru.Services;
 using System.Text.Json.Serialization;
 using static automation.mbtdistr.ru.Services.MarketSyncService;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
+using DevExpress.XtraPrinting;
+using DevExtreme.AspNet.Mvc;
+using ZXing.OneD;
+using iText.Kernel.Pdf;
+using iText.Kernel.Colors;
+using iText.Kernel.Geom;
+using iText.Kernel.Font;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using iText.Layout;
+using iText.Layout.Element;
+using Path = System.IO.Path;
+using iText.IO.Font;
+using iText.Kernel.Pdf.Canvas.Parser.Data;
+using OpenAI.Chat;
+using DevExpress.Utils.Text;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -95,6 +112,15 @@ ILogger<TelegramBotController> logger)
         {
           await Extensions.SendDebugMessage($"public async Task<IActionResult> Post([FromBody] object obj)\n{ex.Message}");
         }
+
+      //else
+      //{
+      //  string docSavePath = Path.Combine("wwwroot", "data", "1doc_cn.pdf");
+      //  string translatedDocPath = Path.Combine("wwwroot", "data", "1doc_ru.pdf");
+
+
+
+      //}
 
       try
       {
@@ -182,6 +208,43 @@ ILogger<TelegramBotController> logger)
             );
             return Ok();
           }
+
+          if (update?.Message?.Document != null)
+          {
+            string docSavePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", update?.Message?.Document?.FileName);
+            string translatedDocPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "data", $"{update?.Message?.Document?.FileName}_ru.pdf");
+            var fileId = update?.Message.Document.FileId;
+            var file = await _botClient.GetFile(fileId, cancellationToken: ct);
+            using var ms = new MemoryStream();
+            await _botClient.DownloadFile(file.FilePath, ms, cancellationToken: ct);
+            ms.Position = 0;
+            await using var fileStream = new FileStream(docSavePath, FileMode.Create, FileAccess.Write);
+            await ms.CopyToAsync(fileStream, ct);
+            fileStream.Position = 0;
+            fileStream.Dispose();
+
+            await TranslatePdfInPlaceBatchedAsync(
+          docSavePath,
+          translatedDocPath,
+          @"wwwroot/css/devextreme/fonts/Roboto-500.ttf",
+          "Russian",
+          CancellationToken.None);
+
+
+            //загруженный файл для отправки
+            using var outFileStream = new FileStream(translatedDocPath, FileMode.Open, FileAccess.Read);
+            await _botClient.SendDocument(update.Message.Chat.Id, new InputFileStream(outFileStream, translatedDocPath), cancellationToken: ct);
+
+            //удаляем оба файла с диска
+            if (System.IO.File.Exists(docSavePath))
+            {
+              System.IO.File.Delete(docSavePath);
+            }
+            if (System.IO.File.Exists(translatedDocPath))
+            {
+              System.IO.File.Delete(translatedDocPath);
+            }
+          }
         }
       }
       catch (Exception ex)
@@ -226,6 +289,7 @@ ILogger<TelegramBotController> logger)
 
       return Ok();
     }
+
 
     [HttpPost("webappdata")]
     public async Task<IActionResult> WebAppData([FromBody] object obj)
@@ -479,38 +543,6 @@ ILogger<TelegramBotController> logger)
               obj.Add(await _wb.GetReturnsListAsync(cab, true));
             }
             //  await Extensions.SendDebugObject<List<Services.Wildberries.Models.ReturnsListResponse>>(obj, $"{obj.GetType().AssemblyQualifiedName?.Replace("automation_mbtdistr_ru_", "")}");
-            break;
-          case "/ym":
-            if (worker.Role != RoleType.Admin)
-            {
-              await _botClient.SendMessage(msg.Chat.Id, "У вас нет прав для просмотра кабинетов.");
-              return;
-            }
-
-            List<Services.YandexMarket.Models.ReturnsListResponse> returns = new List<Services.YandexMarket.Models.ReturnsListResponse>();
-
-            //получаем обьект кабинета на вб
-            cabinets = await _db.Cabinets
-                 .Include(c => c.Settings)
-                     .ThenInclude(s => s.ConnectionParameters).Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET").ToListAsync();
-
-            List<CampaignsResponse> campaigns = new List<CampaignsResponse>();
-
-            foreach (var cab in cabinets)
-            {
-              var _campaigns = await _yMApiService.GetCampaignsAsync(cab);
-              campaigns.Add(_campaigns);
-              foreach (var camp in _campaigns.Campaigns)
-              {
-                var result = await _yMApiService.GetReturnsListAsync(cab, camp);
-                returns.Add(result);
-              }
-            }
-
-            // await Extensions.SendDebugObject<List<CampaignsResponse>>(campaigns);
-            //await Extensions.SendDebugObject<List<Services.YandexMarket.Models.ReturnsListResponse>>(returns, $"{returns.GetType().FullName?.Replace("automation_mbtdistr_ru_", "")}");
-
-            //await _botClient.SendMessage(msg.Chat.Id, $"Результат: {returns.ToJson()}");
             break;
           case "/ozon":
             if (worker.Role != RoleType.Admin)
@@ -1000,6 +1032,362 @@ ILogger<TelegramBotController> logger)
 
       await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(keyboard));
     }
+
+    #region Pdf translate
+
+    private string OpenAiTranslate(string text, string fromLang, string toLang)
+    {
+      _openAiApiService.TranslateText(text, toLang).ContinueWith(t => text = t.Result).Wait();
+      return text;
+    }
+
+    //record TextChunk(int Page, Rectangle Rect, string Text,
+    //             PdfFont Font, float FontSize);
+
+    // добавили Angle и Rect полный
+    record TextChunk(
+        int Page,
+        Rectangle Rect,      // полный бокс (ascent∪descent)
+        string Text,
+        PdfFont Font,
+        float FontSize,
+        float Angle          // угол вывода в радианах
+    );
+
+    class ChunkCollector : IEventListener
+    {
+      private readonly List<TextChunk> _store;
+      private readonly int _page;
+      public ChunkCollector(List<TextChunk> store, int page) =>
+          (_store, _page) = (store, page);
+
+      public void EventOccurred(IEventData data, EventType type)
+      {
+        if (type != EventType.RENDER_TEXT) return;
+        var info = (TextRenderInfo)data;
+
+        // 1) полный бокс текста:
+        // 1. Собираем ascent и descent
+        var ascent = info.GetAscentLine().GetBoundingRectangle();
+        var descent = info.GetDescentLine().GetBoundingRectangle();
+
+        // 2. Вычисляем их объединённый бокс
+        float x1 = Math.Min(ascent.GetX(), descent.GetX());
+        float y1 = Math.Min(ascent.GetY(), descent.GetY());
+        float x2 = Math.Max(ascent.GetX() + ascent.GetWidth(),
+                            descent.GetX() + descent.GetWidth());
+        float y2 = Math.Max(ascent.GetY() + ascent.GetHeight(),
+                            descent.GetY() + descent.GetHeight());
+        var fullBox = new Rectangle(x1, y1, x2 - x1, y2 - y1);
+
+        // 2) угол между start→end baseline:
+        var bs = info.GetBaseline();
+        var p0 = bs.GetStartPoint();
+        var p1 = bs.GetEndPoint();
+        float angle = MathF.Atan2(
+            p1.Get(Vector.I2) - p0.Get(Vector.I2),
+            p1.Get(Vector.I1) - p0.Get(Vector.I1)
+        );
+
+        // далее сохраняем fullBox в TextChunk вместо .Union(...)
+        _store.Add(new TextChunk(
+            _page,
+            fullBox,
+            info.GetText(),
+            info.GetFont(),
+            info.GetFontSize(),
+            angle
+        ));
+      }
+
+      public ICollection<EventType> GetSupportedEvents() =>
+          new HashSet<EventType> { EventType.RENDER_TEXT };
+    }
+
+
+    static float FitFontSize(PdfFont font, float orig, string text, float width)
+    {
+      float w = font.GetWidth(text, orig);
+      return w > width ? orig * width / w : orig;
+    }
+
+    public static void TranslatePdfInPlace(
+     string srcPath,
+     string dstPath,
+     Func<string, string> translate,
+     string fallbackFontPath)
+    {
+      // 1. Сбор текста + геометрии
+
+
+
+      var chunks = new List<TextChunk>();
+      using (var pdfR = new PdfReader(srcPath))
+      using (var pdfW = new PdfWriter(dstPath))
+      using (var pdfDoc = new PdfDocument(pdfR, pdfW))
+      {
+        for (int p = 1; p <= pdfDoc.GetNumberOfPages(); p++)
+        {
+          var proc = new PdfCanvasProcessor(new ChunkCollector(chunks, p));
+          proc.ProcessPageContent(pdfDoc.GetPage(p));
+        }
+      }
+
+      // 2. Перезапись в новом документе
+      using var pdf = new PdfDocument(new PdfReader(srcPath), new PdfWriter(dstPath));
+      var fallback = PdfFontFactory.CreateFont(fallbackFontPath, PdfEncodings.IDENTITY_H);
+
+      foreach (var chunk in chunks)
+      {
+        var page = pdf.GetPage(chunk.Page);
+        var canvas = new PdfCanvas(page);
+
+        // 1. закрашиваем весь старый бокс
+        canvas.SaveState()
+              .SetFillColor(ColorConstants.WHITE)
+              .Rectangle(chunk.Rect)
+              .Fill()
+              .RestoreState();
+
+        // 2. перевод
+        string newText = translate(chunk.Text);
+
+        // 3. шрифт
+        var fontToUse = chunk.Font.Supports(newText) ? chunk.Font : fallback;
+        float size = FitFontSize(fontToUse, chunk.FontSize, newText, chunk.Rect.GetWidth());
+
+        // 4. отрисовка с тем же углом
+        new Canvas(canvas, chunk.Rect)
+            .SetFont(fontToUse)
+            .SetFontSize(size)
+            .ShowTextAligned(
+                newText,
+                chunk.Rect.GetLeft(),
+                chunk.Rect.GetBottom(),
+              iText.Layout.Properties.TextAlignment.LEFT,
+              iText.Layout.Properties.VerticalAlignment.BOTTOM,
+                chunk.Angle     // здесь угол
+            )
+            .Close();
+      }
+
+      pdf.Close();
+    }
+
+
+    private const int MaxTokensPerRequest = 6000;
+
+    /* Перерисовка PDF с учётом словаря переводов */
+    //[ApiExplorerSettings(IgnoreApi = true)]
+    //private static void RewritePdfWithTranslations(
+    //        string srcPath,
+    //        string dstPath,
+    //        IEnumerable<TextChunk> chunks,
+    //        IReadOnlyDictionary<string, string> dict,
+    //        string fallbackFontPath)
+    //{
+    //  using var pdf = new PdfDocument(new PdfReader(srcPath), new PdfWriter(dstPath));
+    //  var fallback = PdfFontFactory.CreateFont(fallbackFontPath, PdfEncodings.IDENTITY_H);
+    //  /*  Кеш: «оригинальный шрифт из A» → «его копия в B»  */
+    //  var fontCache = new Dictionary<PdfFont, PdfFont>(
+    //                      ReferenceEqualityComparer.Instance);
+    //  foreach (var chunk in chunks)
+    //  {
+    //    try
+    //    {
+    //      /* 1. Заменяем текст, если перевод найден; иначе — оставляем оригинал */
+    //      if (!dict.TryGetValue(chunk.Text, out var newText))
+    //        newText = chunk.Text;
+
+    //      /* 2. Подбираем подходящий шрифт */
+    //      /* 2.  Подбираем шрифт */
+    //      PdfFont fontToUse;
+    //      if (chunk.Font.Supports(newText))
+    //      {
+    //        /* 2.a  Нужен тот же шрифт → копируем (или берём из кеша) */
+    //        if (!fontCache.TryGetValue(chunk.Font, out fontToUse))
+    //        {
+    //          fontToUse = chunk.Font.CopyTo(pdf);      // <<<
+    //          fontCache[chunk.Font] = fontToUse;
+    //        }
+    //      }
+    //      else
+    //      {
+    //        /* 2.b  Не хватает глифов → fallback */
+    //        fontToUse = fallback;
+    //      }
+
+    //      float size = FitFontSize(fontToUse, chunk.FontSize, newText, chunk.Rect.GetWidth());
+
+    //      /* 3. Протираем старый бокс и печатаем перевод */
+    //      var page = pdf.GetPage(chunk.Page);
+    //      var canvas = new PdfCanvas(page);
+
+    //      canvas.SaveState()
+    //            .SetFillColor(ColorConstants.WHITE)
+    //            .Rectangle(chunk.Rect)
+    //            .Fill()
+    //            .RestoreState();
+
+    //      new Canvas(canvas, chunk.Rect)
+    //          .SetFont(fontToUse)
+    //          .SetFontSize(size)
+    //          .ShowTextAligned(
+    //              newText,
+    //              chunk.Rect.GetLeft(),
+    //              chunk.Rect.GetBottom(),
+    //              iText.Layout.Properties.TextAlignment.LEFT,
+    //              iText.Layout.Properties.VerticalAlignment.BOTTOM,
+    //              chunk.Angle)
+    //          .Close();
+    //    }
+    //    catch (Exception ex)
+    //    {
+
+    //    }
+
+
+    //  }
+    //}
+
+    /* Сбор текстовых чанков (логика 1-го этапа вынесена в отдельный метод) */
+    [ApiExplorerSettings(IgnoreApi = true)]
+    private static List<TextChunk> CollectChunks(string srcPath)
+    {
+      var chunks = new List<TextChunk>();
+      using var pdfR = new PdfReader(srcPath);
+      using var pdfDoc = new PdfDocument(pdfR);
+
+      for (int p = 1; p <= pdfDoc.GetNumberOfPages(); p++)
+      {
+        var proc = new PdfCanvasProcessor(new ChunkCollector(chunks, p));
+        proc.ProcessPageContent(pdfDoc.GetPage(p));
+      }
+      return chunks;
+    }
+
+    /* Строит словарь «оригинал → перевод», используя пакетную обработку */
+    [ApiExplorerSettings(IgnoreApi = true)]
+    private async Task<Dictionary<string, string>> BuildTranslationDictionaryAsync(
+            IEnumerable<string> texts,
+            string targetLanguage,
+            CancellationToken ct = default)
+    {
+      var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+      var batches = SplitIntoBatches(texts);
+
+      /* Запускаем партии параллельно, но при желании можно ограничить DegreeOfParallelism */
+      var tasks = batches.Select(b => _openAiApiService.TranslateBatchAsync(b, targetLanguage, ct)).ToArray();
+      var results = await Task.WhenAll(tasks);
+
+      for (int i = 0; i < batches.Count; i++)
+      {
+        var src = batches[i];
+        var dst = results[i];
+        for (int j = 0; j < src.Length; j++)
+          dict[src[j]] = dst[j];
+      }
+      return dict;
+    }
+
+
+
+    /* Разбиваем исходные строки на серии, укладывающиеся в лимит токенов */
+    [ApiExplorerSettings(IgnoreApi = true)]
+    private static List<string[]> SplitIntoBatches(IEnumerable<string> texts)
+    {
+      var result = new List<string[]>();
+      var current = new List<string>();
+      int currentTokens = 0;
+
+      foreach (var t in texts)
+      {
+        int tTokens = t.Length / 3 + 10;          // грубая оценка «символы → токены»
+        if (currentTokens + tTokens > MaxTokensPerRequest && current.Count > 0)
+        {
+          result.Add(current.ToArray());
+          current = new List<string>();
+          currentTokens = 0;
+        }
+        current.Add(t);
+        currentTokens += tTokens;
+      }
+      if (current.Count > 0) result.Add(current.ToArray());
+      return result;
+    }
+
+
+    /* --- Публичная точка входа: пакетный перевод + перерисовка PDF ------------ */
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public async Task TranslatePdfInPlaceBatchedAsync(
+        string srcPath,
+        string dstPath,
+        string fallbackFontPath,
+        string targetLanguage,
+        CancellationToken ct = default)
+    {
+      /* 1.  Открываем PDF ОДИН раз: read+write */
+      using var pdf = new PdfDocument(
+          new PdfReader(srcPath),
+          new PdfWriter(dstPath));
+
+      /* 1-a.  Сбор текста + геометрии */
+      var chunks = new List<TextChunk>();
+      for (int p = 1; p <= pdf.GetNumberOfPages(); p++)
+      {
+        var proc = new PdfCanvasProcessor(new ChunkCollector(chunks, p));
+        proc.ProcessPageContent(pdf.GetPage(p));
+      }
+
+      /* 2.  Пакетный перевод */
+      var distinctTexts = chunks.Select(c => c.Text)
+                                .Distinct(StringComparer.Ordinal)
+                                .ToList();
+
+      var dict = await BuildTranslationDictionaryAsync(
+                      distinctTexts, targetLanguage, ct);
+
+      /* 3.  Перерисовка */
+      var fallback = PdfFontFactory.CreateFont(
+          fallbackFontPath, PdfEncodings.IDENTITY_H);
+
+      foreach (var chunk in chunks)
+      {
+        /* 3-a.  Берём перевод (или оригинал) */
+        var newText = dict.TryGetValue(chunk.Text, out var t) ? t : chunk.Text;
+
+        /* 3-b.  Шрифт уже «родной» для pdf, можно пользоваться напрямую */
+        var fontToUse = chunk.Font.Supports(newText) ? chunk.Font : fallback;
+        float size = FitFontSize(
+                            fontToUse, chunk.FontSize,
+                            newText, chunk.Rect.GetWidth());
+
+        /* 3-c.  Стираем старый бокс и печатаем текст */
+        var page = pdf.GetPage(chunk.Page);
+        var canvas = new PdfCanvas(page);
+
+        canvas.SaveState()
+              .SetFillColor(ColorConstants.WHITE)
+              .Rectangle(chunk.Rect)
+              .Fill()
+              .RestoreState();
+
+        new Canvas(canvas, chunk.Rect)
+            .SetFont(fontToUse)
+            .SetFontSize(size)
+            .ShowTextAligned(
+                newText,
+                chunk.Rect.GetLeft(),
+                chunk.Rect.GetBottom(),
+               iText.Layout.Properties.TextAlignment.LEFT,
+                iText.Layout.Properties.VerticalAlignment.BOTTOM,
+                chunk.Angle)
+            .Close();
+      }                 // using/Dispose закроет документ ровно один раз
+    }
+
+
+    #endregion
 
     #region Cabinet Settings Handlers
 

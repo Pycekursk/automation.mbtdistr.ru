@@ -102,12 +102,12 @@ namespace automation.mbtdistr.ru.Data
           .HasForeignKey(rf => rf.RequestId)
           .OnDelete(DeleteBehavior.Cascade);
 
-      // 2. Один-к-одному: заявка → родительская ссылка
       modelBuilder.Entity<YMSupplyRequestReference>()
-          .HasOne(rf => rf.RelatedRequest)
-          .WithOne(r => r.ParentLink)
-          .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
-          .OnDelete(DeleteBehavior.Cascade);
+      .HasOne(rf => rf.RelatedRequest)
+      .WithOne(r => r.ParentLink)
+      .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
+      .IsRequired(false)                            // optional
+      .OnDelete(DeleteBehavior.Cascade);
 
       modelBuilder.Entity<YMSupplyRequestItem>()
           .HasOne(i => i.Price)
@@ -208,11 +208,19 @@ namespace automation.mbtdistr.ru.Data
         optionsBuilder.EnableDetailedErrors();
         optionsBuilder.EnableSensitiveDataLogging();
 
-
-        optionsBuilder.UseMySql(Program.Configuration.GetConnectionString("DefaultConnection"),
+        if (Program.Environment.IsDevelopment())
+        {
+          optionsBuilder.UseMySql(Program.Configuration.GetConnectionString("DebugConnection"),
+            new MySqlServerVersion(new Version(8, 0, 21)));
+        }
+        else
+        // получаем строку подключения DefaultConnection
+        {
+          optionsBuilder.UseMySql(Program.Configuration.GetConnectionString("DefaultConnection"),
         new MySqlServerVersion(new Version(8, 0, 21)));
+        }
       }
-    }
 
+    }
   }
 }

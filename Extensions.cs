@@ -1,8 +1,15 @@
 ﻿using automation.mbtdistr.ru.Data;
 using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
+
+using iText.Kernel.Font;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
+using Newtonsoft.Json.Linq;
+
+using Newtonsoft.Json;
 
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
@@ -23,6 +30,29 @@ using Telegram.Bot.Types.Enums;
 
 namespace automation.mbtdistr.ru
 {
+  public static class PdfFontExtensions
+  {
+    /// <summary>
+    /// Проверяет, содержит ли PdfFont глифы для ВСЕХ код-поинтов строки.
+    /// Работает с суррогатными парами (emoji, CJK, символы за пределами BMP).
+    /// </summary>
+    public static bool Supports(this PdfFont font, string text)
+    {
+      // StringInfo корректно итерирует text-elements
+      var enumerator = StringInfo.GetTextElementEnumerator(text);
+      while (enumerator.MoveNext())
+      {
+        string element = (string)enumerator.Current!;
+        int codePoint = char.ConvertToUtf32(element, 0);
+
+        if (!font.ContainsGlyph(codePoint))
+          return false;
+      }
+      return true;
+    }
+  }
+
+
   public static class Extensions
   {
     /// <summary>
@@ -34,7 +64,49 @@ namespace automation.mbtdistr.ru
       public string Text { get; set; }
     }
 
- 
+    public class YMListResultConverter<T> : Newtonsoft.Json.JsonConverter<YMListResult<T>>
+    {
+      private readonly string _itemsFieldName;
+
+      public YMListResultConverter(string itemsFieldName)
+      {
+        _itemsFieldName = itemsFieldName;
+      }
+
+      public override YMListResult<T> ReadJson(JsonReader reader, Type objectType, YMListResult<T>? existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+      {
+        var result = new YMListResult<T>();
+
+        var jsonObject = JObject.Load(reader);
+
+        var pagingToken = jsonObject["paging"];
+        if (pagingToken != null)
+        {
+          result.Paging = pagingToken.ToObject<YMPaging>(serializer)!;
+        }
+
+        var itemsToken = jsonObject[_itemsFieldName];
+        if (itemsToken != null)
+        {
+          result.Items = itemsToken.ToObject<List<T>>(serializer)!;
+        }
+
+        return result;
+      }
+
+      public override void WriteJson(JsonWriter writer, YMListResult<T> value, Newtonsoft.Json.JsonSerializer serializer)
+      {
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("paging");
+        serializer.Serialize(writer, value.Paging);
+
+        writer.WritePropertyName(_itemsFieldName);
+        serializer.Serialize(writer, value.Items);
+
+        writer.WriteEndObject();
+      }
+    }
 
     /// <summary>
     /// Возвращает список LookupItem для произвольного enum-типа.
@@ -108,17 +180,17 @@ namespace automation.mbtdistr.ru
       /// <param name="type">Тип, для которого создаётся конвертер.</param>  
       /// <param name="options">Опции сериализации JSON.</param>  
       /// <returns>Экземпляр JsonConverter для указанного типа.</returns>  
-      public override JsonConverter CreateConverter(Type type, JsonSerializerOptions options)
+      public override System.Text.Json.Serialization.JsonConverter CreateConverter(Type type, JsonSerializerOptions options)
       {
         var converterType = typeof(JsonEnumMemberAndNumberConverterInner<>).MakeGenericType(type);
-        return (JsonConverter)Activator.CreateInstance(converterType)!;
+        return (System.Text.Json.Serialization.JsonConverter)Activator.CreateInstance(converterType)!;
       }
 
       /// <summary>  
       /// Внутренний класс конвертера для работы с перечислениями.  
       /// </summary>  
       /// <typeparam name="T">Тип перечисления.</typeparam>  
-      private class JsonEnumMemberAndNumberConverterInner<T> : JsonConverter<T>
+      private class JsonEnumMemberAndNumberConverterInner<T> : System.Text.Json.Serialization.JsonConverter<T>
           where T : struct, Enum
       {
         private static readonly ConcurrentDictionary<string, T> _fromString;
@@ -155,7 +227,7 @@ namespace automation.mbtdistr.ru
             {
               return (T)Enum.ToObject(typeof(T), longVal);
             }
-            throw new JsonException($"Не удалось прочитать числовое значение для enum {typeof(T).Name}");
+            throw new System.Text.Json.JsonException($"Не удалось прочитать числовое значение для enum {typeof(T).Name}");
           }
 
           if (reader.TokenType == JsonTokenType.String)
@@ -170,11 +242,11 @@ namespace automation.mbtdistr.ru
               System.Diagnostics.Debug.WriteLine($"[Enum Parse Warning] Невозможно преобразовать \"{str}\" в {typeof(T).Name}");
 #endif
 
-              throw new JsonException($"Невозможно преобразовать \"{str}\" в {typeof(T).Name}");
+              throw new System.Text.Json.JsonException($"Невозможно преобразовать \"{str}\" в {typeof(T).Name}");
             }
           }
 
-          throw new JsonException($"Ожидался токен String или Number, а пришёл {reader.TokenType}");
+          throw new System.Text.Json.JsonException($"Ожидался токен String или Number, а пришёл {reader.TokenType}");
         }
 
         /// <summary>  
@@ -214,7 +286,7 @@ namespace automation.mbtdistr.ru
     /// <returns>Строка JSON, представляющая объект.</returns>  
     public static string ToJson(this object obj, JsonSerializerOptions? options = null)
     {
-      var result = JsonSerializer.Serialize(obj, options ?? Options);
+      var result = System.Text.Json.JsonSerializer.Serialize(obj, options ?? Options);
       return result;
     }
 
@@ -227,14 +299,14 @@ namespace automation.mbtdistr.ru
     /// <returns>Объект типа T, полученный из JSON, или null, если десериализация не удалась.</returns>  
     public static T? FromJson<T>(this string json, JsonSerializerOptions? options = null)
     {
-      var result = JsonSerializer.Deserialize<T>(json, options ?? Options);
+      var result = System.Text.Json.JsonSerializer.Deserialize<T>(json, options ?? Options);
       return result;
     }
 
     /// <summary>  
     /// Конвертер JSON для работы с объектами DateTime в формате "yyyy-MM-ddTHH:mm:ss.fffZ".  
     /// </summary>  
-    public class DateTimeJsonConverter : JsonConverter<DateTime>
+    public class DateTimeJsonConverter : System.Text.Json.Serialization.JsonConverter<DateTime>
     {
       private const string Format = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
@@ -439,7 +511,7 @@ namespace automation.mbtdistr.ru
         if ((s.StartsWith("{") && s.EndsWith("}")) || (s.StartsWith("[") && s.EndsWith("]")))
         {
           try { JsonDocument.Parse(s); return true; }
-          catch (JsonException) { }
+          catch (System.Text.Json.JsonException) { }
         }
         return false;
       }

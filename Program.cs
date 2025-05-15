@@ -50,7 +50,13 @@ namespace automation.mbtdistr.ru
       {
         options.EnableDetailedErrors();
         options.EnableSensitiveDataLogging();
-        options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
+
+        //есои приложение в режиме разработки то получаем строку подключения DebugConnectionString
+        if (builder.Environment.IsDevelopment())
+          options.UseMySql(builder.Configuration.GetConnectionString("DebugConnection"),
+            new MySqlServerVersion(new Version(8, 0, 21)));
+        else
+          options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
           new MySqlServerVersion(new Version(8, 0, 21)));
       });
 

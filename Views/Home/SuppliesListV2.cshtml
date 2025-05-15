@@ -15,7 +15,7 @@
 }
 
 
-<div class="container">
+
 
   @using System.ComponentModel.DataAnnotations
   @{
@@ -70,7 +70,7 @@
                                                     .CssClass("wrap-text-cell")
                                                     .DataType(GridColumnDataType.String)
                                                   .CalculateCellValue("function(data) { return data.TargetLocation ? data.TargetLocation.Name + ' ' + data.TargetLocation.Address.FullAddress : ''; }").AllowFiltering(true)
-            .AllowSorting(false);
+                                                  .AllowSorting(false);
                                                 }
                                                 else if (col.Field == "TransitLocation")
                                                 {
@@ -215,10 +215,3 @@
 
                                               .SearchPanel(s => s.Visible(true))
                               )
-
-
-</div>
-
-<script>
-
-</script>

@@ -14,11 +14,9 @@
   .Where(p =>
   {
     if (!p.CanRead) return false;
-
     var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
   .Cast<DataGridAttribute>()
   .FirstOrDefault();
-
     return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
   })
   .Select(p => new
@@ -38,7 +36,7 @@
   .ToList();
 }
 @(
-       Html.DevExtreme().DataGrid<Return>()
+Html.DevExtreme().DataGrid<Return>()
      .ID("gridContainer")
      .KeyExpr("Id")
      .ColumnAutoWidth(true)
@@ -49,25 +47,39 @@
       {
         foreach (var col in columns)
         {
-          var column = columnsBuilder.Add()
-          .DataField(col.Field)
-          .Caption(col.Caption);
 
-          if (col.IsEnum)
+          DevExtreme.AspNet.Mvc.Builders.DataGridColumnBuilder<Return>? column = null;
+
+          if (col.Field == "TargetLocation")
           {
-            var enumValues = Enum.GetValues(col.EnumType)
-            .Cast<Enum>()
-            .Select(e => new
+            column = columnsBuilder.Add()
+                .Caption(col.Caption)
+                .CssClass("wrap-text-cell")
+                .DataType(GridColumnDataType.String)
+                .CalculateCellValue("function(data) { return data.TargetLocation ? data.TargetLocation.Name + ' ' + data.TargetLocation.Address.FullAddress : ''; }").AllowFiltering(true)
+                .AllowSorting(false);
+          }
+          else
+          {
+            column = columnsBuilder.Add()
+                .DataField(col.Field)
+                .Caption(col.Caption);
+            if (col.IsEnum)
             {
-              Id = Convert.ToInt32(e),
-              Name = e.GetDisplayName()
-            })
-            .ToList();
+              var enumValues = Enum.GetValues(col.EnumType)
+              .Cast<Enum>()
+              .Select(e => new
+              {
+                Id = Convert.ToInt32(e),
+                Name = e.GetDisplayName()
+              })
+              .ToList();
 
-            column.Lookup(lookup => lookup
-            .DataSource(enumValues)
-            .ValueExpr("Id")
-            .DisplayExpr("Name"));
+              column.Lookup(lookup => lookup
+              .DataSource(enumValues)
+              .ValueExpr("Id")
+              .DisplayExpr("Name"));
+            }
           }
         }
       })
