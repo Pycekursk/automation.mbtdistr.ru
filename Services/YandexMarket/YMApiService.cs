@@ -4,14 +4,19 @@ using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Globalization;
+using System.Net.Http;
 using System.Runtime.Serialization;
 using System.Text;
+
+using Telegram.Bot.Types;
 
 using static automation.mbtdistr.ru.Extensions;
 
@@ -22,9 +27,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   public class YMApiService
   {
     private readonly YMApiHttpClient _yMApiHttpClient;
+  
+  
+
     public YMApiService(YMApiHttpClient yMApiHttpClient)
     {
-      _yMApiHttpClient = (YMApiHttpClient?)yMApiHttpClient;
+     
+      _yMApiHttpClient = yMApiHttpClient;
     }
 
     public async Task<YMCampaignsResponse> GetCampaignsAsync(Cabinet cabinet)
@@ -46,9 +55,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
     }
 
-
-
-
     /// <summary>
     /// Получает полный список возвратов, рекурсивно проходя все страницы.
     /// </summary>
@@ -56,7 +62,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         Cabinet cabinet,
         YMCampaign campaign,
         YMFilter? filter = null,
-        int limit = 100,
         string? pageToken = null)
     {
       // ─── Фильтр по умолчанию ──────────────────────────────────────────────────
@@ -64,8 +69,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       {
         FromDate = DateTime.UtcNow.AddDays(-20).ToString("yyyy-MM-dd"),
         ToDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-        Limit = limit,
+        PageToken = pageToken,
+        Limit = 100
       };
+
+
 
       // На каждой итерации явно прописываем PageToken в копию фильтра,
       // чтобы ToQueryParams() отправил его в запрос.
@@ -93,7 +101,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                              cabinet,
                              campaign,
                              filter,   // исходный диапазон дат, лимит и т.д.
-                             limit,
                              nextToken);
 
           if (nextPage?.Result is { } np)
@@ -702,6 +709,47 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         return default;
       }
     }
+
+    #region Warehouses
+
+    /// <summary>
+    /// Получает список складов Маркета (FBY).
+    /// </summary>
+    public async Task<YMApiResponse<YMListResult<YMFulfillmentWarehouse>>> GetWarehousesAsync(Cabinet cabinet)
+    {
+      var response = await _yMApiHttpClient.SendRequestAsync(
+          MarketApiRequestType.Warehouses,
+          cabinet);
+      response.EnsureSuccessStatusCode();
+      var json = await response.Content.ReadAsStringAsync();
+      var settings = new JsonSerializerSettings
+      {
+        StringEscapeHandling = StringEscapeHandling.Default,
+        Culture = CultureInfo.CurrentCulture,
+        Converters = { new StringEnumConverter(), new YMListResultConverter<YMFulfillmentWarehouse>("warehouses") }
+      };
+      return JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMFulfillmentWarehouse>>>(json, settings);
+    }
+
+    /// <summary>
+    /// Получает информацию по складу Маркета (FBY) по идентификатору.
+    /// </summary>
+    public async Task<YMFulfillmentWarehouse?> GetWarehouseByIdAsync(Cabinet cabinet, long warehouseId)
+    {
+      var allResponse = await GetWarehousesAsync(cabinet);
+      if (allResponse.Status == YMApiResponseStatusType.OK && allResponse.Result != null)
+      {
+        var warehouse = allResponse.Result.Items.FirstOrDefault(w => w.Id == warehouseId);
+        return warehouse;
+      }
+      else
+      {
+        return default;
+      }
+    }
+
+    #endregion
+
   }
 
 

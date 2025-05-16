@@ -491,6 +491,113 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 
 
   /// <summary>
+  /// Список складов Маркета (FBY).
+  /// </summary>
+  public class YMfulfillmentWarehouses
+  {
+    /// <summary>
+    /// Список складов Маркета (FBY).
+    /// </summary>
+    [Display(Name = "Список складов Маркета (FBY)")]
+    [JsonProperty("warehouses")]
+    [Required]
+    public List<YMFulfillmentWarehouse> Warehouses { get; set; }
+
+    /// <summary>
+    /// Тип ответа. Возможные значения: OK — ошибок нет, ERROR — при обработке запроса произошла ошибка.
+    /// </summary>
+    [Display(Name = "Тип ответа")]
+    [JsonProperty("status")]
+    [Required]
+    public YMApiResponseStatusType Status { get; set; }
+  }
+
+  /// <summary>
+  /// Склад Маркета (FBY).
+  /// </summary>
+  public class YMFulfillmentWarehouse
+  {
+    /// <summary>
+    /// Идентификатор склада.
+    /// </summary>
+    [Display(Name = "Идентификатор склада")]
+    [JsonProperty("id")]
+    [Required]
+    public long Id { get; set; }
+
+    /// <summary>
+    /// Название склада.
+    /// </summary>
+    [Display(Name = "Название склада")]
+    [JsonProperty("name")]
+    [Required]
+    [MaxLength(512)]
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Адрес склада.
+    /// </summary>
+    [Display(Name = "Адрес склада")]
+    [JsonProperty("address")]
+    public YMWarehouseAddress Address { get; set; }
+  }
+
+  /// <summary>
+  /// Адрес склада.
+  /// </summary>
+  public class YMWarehouseAddress
+  {
+    /// <summary>
+    /// Город.
+    /// </summary>
+    [Display(Name = "Город")]
+    [JsonProperty("city")]
+    [Required]
+    [MaxLength(200)]
+    public string City { get; set; }
+
+    /// <summary>
+    /// Номер корпуса.
+    /// </summary>
+    [Display(Name = "Номер корпуса")]
+    [JsonProperty("block")]
+    [MaxLength(16)]
+    public string Block { get; set; }
+
+    /// <summary>
+    /// Номер строения.
+    /// </summary>
+    [Display(Name = "Номер строения")]
+    [JsonProperty("building")]
+    [MaxLength(16)]
+    public string Building { get; set; }
+
+    /// <summary>
+    /// Номер дома.
+    /// </summary>
+    [Display(Name = "Номер дома")]
+    [JsonProperty("number")]
+    [MaxLength(256)]
+    public string Number { get; set; }
+
+    /// <summary>
+    /// Улица.
+    /// </summary>
+    [Display(Name = "Улица")]
+    [JsonProperty("street")]
+    [MaxLength(512)]
+    public string Street { get; set; }
+
+    /// <summary>
+    /// GPS-координаты склада.
+    /// </summary>
+    [Display(Name = "GPS-координаты склада")]
+    [JsonProperty("gps")]
+    public YMGps Gps { get; set; }
+  }
+
+
+  /// <summary>
   /// Экземпляр товара.
   /// </summary>
   public class Instance

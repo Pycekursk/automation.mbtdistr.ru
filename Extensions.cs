@@ -52,6 +52,11 @@ namespace automation.mbtdistr.ru
     }
   }
 
+  public class AppSettings
+  {
+    public string DebugUrl { get; set; }
+    public string ProductionUrl { get; set; }
+  }
 
   public static class Extensions
   {

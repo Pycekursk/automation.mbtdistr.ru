@@ -63,6 +63,8 @@ namespace automation.mbtdistr.ru
 
       builder.Services.AddControllersWithViews();
 
+      builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
+
       // 2. Генерация XML-комментариев
       var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
       var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);

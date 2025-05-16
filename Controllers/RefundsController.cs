@@ -211,7 +211,7 @@ namespace automation.mbtdistr.ru.Controllers
         cabinets = new List<Cabinet> { cabinets.FirstOrDefault(c => c.Id == 14) };
       }
 
-      List<YMReturn> returnRequests = new List<YMReturn>();
+      List<Return> returns = new List<Return>();
       foreach (var c in cabinets)
       {
         var campaignsResponse = await _ym.GetCampaignsAsync(c);
@@ -232,6 +232,8 @@ namespace automation.mbtdistr.ru.Controllers
                 ret.Order = (await _ym.GetOrdersAsync(c, campaign, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
                 if (ret.Items?.Count > 0)
                 {
+                  var warehouse = await _ym.GetWarehouseByIdAsync(c, ret.LogisticPickupPoint.Id);
+
                   foreach (var item in ret.Items)
                   {
                     var decision = item?.Decisions?.FirstOrDefault();
@@ -240,7 +242,6 @@ namespace automation.mbtdistr.ru.Controllers
                       List<string> imagesUrl = new List<string>();
                       foreach (var img in decision.Images)
                       {
-                        //записываем изображения из base64 на диск
                         var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
                         var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
                         var fileDir = Path.GetDirectoryName(filePath);
@@ -259,16 +260,18 @@ namespace automation.mbtdistr.ru.Controllers
                       decision.Images = imagesUrl;
                     }
                   }
-                }
 
+                }
                 var @return = Return.Parse<YMReturn>(ret);
+                @return.CabinetId = c.Id;
+                returns.Add(@return);
               }
             }
           }
         }
       }
 
-      var json = Newtonsoft.Json.JsonConvert.SerializeObject(returnRequests, Formatting.Indented, new JsonSerializerSettings()
+      var json = Newtonsoft.Json.JsonConvert.SerializeObject(returns, Formatting.Indented, new Newtonsoft.Json.JsonSerializerSettings()
       {
         Culture = System.Globalization.CultureInfo.CurrentCulture,
         StringEscapeHandling = StringEscapeHandling.Default,

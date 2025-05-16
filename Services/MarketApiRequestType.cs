@@ -21,7 +21,8 @@
     ReturnApplication,
     ReturnDecision,
     SubmitReturnDecision,
-    OfferCardsContentStatus
+    OfferCardsContentStatus,
+    Warehouses
     // и так далее...
   }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250516075553_smallReturnFixes")]
+    partial class smallReturnFixes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -462,7 +465,11 @@ namespace automation.mbtdistr.ru.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CabinetId")
+                    b.Property<string>("CabinetId")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("CabinetId1")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ChangedAt")
@@ -507,7 +514,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CabinetId");
+                    b.HasIndex("CabinetId1");
 
                     b.HasIndex("WarehouseId");
 
@@ -1172,7 +1179,7 @@ namespace automation.mbtdistr.ru.Migrations
                 {
                     b.HasOne("automation.mbtdistr.ru.Models.Cabinet", "Cabinet")
                         .WithMany("Returns")
-                        .HasForeignKey("CabinetId")
+                        .HasForeignKey("CabinetId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

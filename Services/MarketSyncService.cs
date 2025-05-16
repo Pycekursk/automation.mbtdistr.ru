@@ -29,6 +29,7 @@ using ZXing;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 using automation.mbtdistr.ru.Services.YandexMarket;
+using Microsoft.Extensions.Options;
 
 namespace automation.mbtdistr.ru.Services
 {
@@ -43,8 +44,10 @@ namespace automation.mbtdistr.ru.Services
     private readonly ITelegramBotClient _botClient;
     private const int _telegramMaxMessageLength = 4096;
     private readonly ApplicationDbContext _db;
-
+    private readonly IOptions<AppSettings> _options;
     private readonly YMApiService _yMApiService;
+    private string baseUrl;
+
 
     public delegate void ReturnStatusChangedEventHandler(ReturnStatusChangedEventArgs e);
     public delegate void SupplyStatusChangedEventHandler(SupplyStatusChangedEventArgs e);
@@ -89,7 +92,8 @@ namespace automation.mbtdistr.ru.Services
         IServiceScopeFactory scopeFactory,
         ILogger<MarketSyncService> logger,
         ITelegramBotClient botClient,
-        IConfiguration config)
+        IConfiguration config,
+        IOptions<AppSettings> options)
     {
 
       _db = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -99,6 +103,12 @@ namespace automation.mbtdistr.ru.Services
       _logger = logger;
       var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
+
+      _options = options;
+      if (Program.Environment.IsDevelopment())
+        baseUrl = _options.Value.DebugUrl;
+      else
+        baseUrl = _options.Value.ProductionUrl;
 
       MarketSyncService.ReturnStatusChanged += OnReturnStatusChanged;
       MarketSyncService.SupplyStatusChanged += OnSupplyStatusChanged;
@@ -243,27 +253,59 @@ namespace automation.mbtdistr.ru.Services
                   await _yMApiService.AddOrUpdateSupplyRequestAsync(supple, _db);
                 }
               }
-              var result = await _yMApiService.GetReturnsListAsync(cab, camp);
 
-
-
-              if (result?.Result.Items.Count > 0)
+              var returnResponse = await _yMApiService.GetReturnsListAsync(cab, camp);
+              if (returnResponse?.Result?.Items?.Count > 0)
               {
-                //var ids = result.Result?.Items.Select((r) => new { orderId = r.OrderId, returnId = r.Id }).ToList();
+                List<Return> returns = new List<Return>();
+                foreach (var ret in returnResponse.Result.Items)
+                {
+                  var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+                  if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
+                    continue;
 
-                // _ymReturns.AddRange(result.Result.Items);
+                  ret.Order = (await _yMApiService.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+                  if (ret.Items?.Count > 0)
+                  {
+                    var warehouse = await _yMApiService.GetWarehouseByIdAsync(cab, ret.LogisticPickupPoint.Id);
 
+                    foreach (var item in ret.Items)
+                    {
+                      var decision = item?.Decisions?.FirstOrDefault();
+                      if (decision != null && decision.Images?.Count > 0)
+                      {
+                        List<string> imagesUrl = new List<string>();
+                        foreach (var img in decision.Images)
+                        {
+                          var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
+                          var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
+                          var fileDir = Path.GetDirectoryName(filePath);
+                          if (!Directory.Exists(fileDir))
+                            Directory.CreateDirectory(fileDir);
+
+                          if (System.IO.File.Exists(filePath))
+                            continue;
+
+                          var image = await _yMApiService.GetReturnImageAsync(cab, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+                          var imageBytes = Convert.FromBase64String(image.Result.ImageData);
+                          await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
+                          var fileUrl = $"{baseUrl}/images/returns/{fileName}";
+                          imagesUrl.Add(fileUrl);
+                        }
+                        decision.Images = imagesUrl;
+                      }
+                    }
+
+                  }
+                  var @return = Return.Parse<YMReturn>(ret);
+                  @return.CabinetId = cab.Id;
+                  returns.Add(@return);
+                }
               }
-
-              //TODO: вызов метода получения информации о возврате
-
-              //TODO: вызов метода получения информации о заказе
-
-
             }
             if (_ymReturns.Count > 0)
             {
-              await ProcessYMReturnsAsync(_ymReturns, cab, _db, ct);
+              //await ProcessYMReturnsAsync(_ymReturns, cab, _db, ct);
 
               await Extensions.SendDebugObject<List<YMReturn>>(_ymReturns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
             }
@@ -298,7 +340,7 @@ namespace automation.mbtdistr.ru.Services
             .Include(r => r.Compensation)
             .Include(r => r.Cabinet)
             .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefaultAsync(r => r.Info.ReturnInfoId == x.Id && r.CabinetId == cab.Id.ToString(), ct);
+            .FirstOrDefaultAsync(r => r.Info.ReturnInfoId == x.Id && r.CabinetId == cab.Id, ct);
           if (existingReturn != null)
           {
             if (existingReturn.Info.Id == 0)
@@ -332,7 +374,7 @@ namespace automation.mbtdistr.ru.Services
             try
             {
               Models.Return @return = new Models.Return();
-              @return.CabinetId = cab.Id.ToString();
+              @return.CabinetId = cab.Id;
               @return.ChangedAt = x.Visual?.ChangeMoment;
               @return.Info.ReturnInfoId = x.Id;
               //if (x.Logistic.ReturnDate.HasValue)
@@ -387,7 +429,7 @@ namespace automation.mbtdistr.ru.Services
        .Include(r => r.Compensation)
        .Include(r => r.Cabinet)
            .ThenInclude(c => c.AssignedWorkers)
-       .FirstOrDefault(r => r.Info.ClaimId == claim.Id && r.CabinetId == cab.Id.ToString());
+       .FirstOrDefault(r => r.Info.ClaimId == claim.Id && r.CabinetId == cab.Id);
 
           if (existingReturn != null)
           {
@@ -411,7 +453,7 @@ namespace automation.mbtdistr.ru.Services
           else
           {
             Models.Return @return = new Models.Return();
-            @return.CabinetId = cab.Id.ToString();
+            @return.CabinetId = cab.Id;
             @return.Info.ClaimId = claim.Id;
             @return.ChangedAt = claim.DtUpdate;
             @return.CreatedAt = claim.Dt;
@@ -455,7 +497,7 @@ namespace automation.mbtdistr.ru.Services
             .Include(r => r.Compensation)
             .Include(r => r.Cabinet)
             .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id.ToString() && _r.Info.ReturnInfoId == r.Id, ct);
+            .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.ReturnInfoId == r.Id, ct);
           if (existingReturn != null)
           {
             var oldChangedAt = existingReturn.ChangedAt;
@@ -475,7 +517,7 @@ namespace automation.mbtdistr.ru.Services
             Models.Return @return = new Models.Return();
             @return.CreatedAt = r.CreationDate;
             @return.ChangedAt = r.UpdateDate;
-            @return.CabinetId = cab.Id.ToString();
+            @return.CabinetId = cab.Id;
 
 
 

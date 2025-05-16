@@ -42,28 +42,15 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                 { MarketApiRequestType.SupplyItems,
                   new EndpointDefinition("campaigns/{campaignId}/supply-requests/items", HttpMethod.Post) },
                 { MarketApiRequestType.SupplyDocuments,
-                  new EndpointDefinition("campaigns/{campaignId}/supply-requests/documents", HttpMethod.Post) }
+                  new EndpointDefinition("campaigns/{campaignId}/supply-requests/documents", HttpMethod.Post) },
+                  { MarketApiRequestType.Warehouses,         // ← новая запись
+              new EndpointDefinition("warehouses", HttpMethod.Get) },
         };
 
 
 
     public YMApiHttpClient()
     {
-      // если в дальнейшем понадобится менять права — сразу инициализируем DriveService
-      //var credential = GoogleCredential
-      //    .FromFile(config["GoogleApi:Sheets:ServiceAccountKeyFile"])
-      //    .CreateScoped(new[]
-      //    {
-      //              DriveService.Scope.Drive,
-      //      // здесь же можно добавить другие scope’ы, если нужно
-      //    });
-
-      //_drive = new DriveService(new BaseClientService.Initializer
-      //{
-      //  HttpClientInitializer = credential,
-      //  ApplicationName = config["GoogleApi:Drive:ApplicationName"]
-      //});
-
       _httpClient = new HttpClient();
     }
 
@@ -117,8 +104,5 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
       return await _httpClient.SendAsync(request);
     }
-
-    // public Task<HttpResponseMessage> SendRequestAsync(MarketApiRequestType type, Cabinet cabinet, Dictionary<string, object> queryParams, Dictionary<string, object> body)
-    //=> SendRequestAsync(type, cabinet, body, queryParams, body);
   }
 }

@@ -2,14 +2,13 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Models
 {
   /// <summary>
   /// Схема продажи товара.
   /// </summary>
-  [Newtonsoft.Json.JsonConverter(typeof(JsonStringEnumConverter)), System.Text.Json.Serialization.JsonConverter(typeof(JsonStringEnumConverter))]
+  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
   public enum SellScheme
   {
     /// <summary>
@@ -17,7 +16,6 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [EnumMember(Value = "fbo")]
     [Display(Name = "ФБО")]
-    [JsonPropertyName("fbo")]
     [JsonProperty("fbo")]
     FBO, // Продавец на складе Ozon
 
@@ -26,7 +24,6 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [EnumMember(Value = "fbs")]
     [Display(Name = "ФБС")]
-    [JsonPropertyName("fbs")]
     [JsonProperty("fbs")]
     FBS, // Продавец на своём складе
 
@@ -35,7 +32,6 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [EnumMember(Value = "unknown")]
     [Display(Name = "Неизвестно")]
-    [JsonPropertyName("unknown")]
     [JsonProperty("unknown")]
     Unknown = 0 // Неизвестно
   }

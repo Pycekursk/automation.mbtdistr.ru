@@ -6,7 +6,6 @@ using Newtonsoft.Json;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Models
 {
@@ -19,8 +18,8 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "ID")]
     public int Id { get; set; }
 
-    [Display(Name = "ID Кабинета")]
-    public string CabinetId { get; set; } // кабинет/бренд/ООО
+    [Display(Name = "ID Кабинета"), ForeignKey(nameof(Cabinet)), DataGrid(false)]
+    public int CabinetId { get; set; } // кабинет/бренд/ООО
 
     [Display(Name = "Кабинет")]
     public Cabinet Cabinet { get; set; }
@@ -29,7 +28,7 @@ namespace automation.mbtdistr.ru.Models
     /// ID возврата в системе Claim.Id/ReturnInfo.Id/ReturnId
     /// </summary>
     [JsonProperty("returnId")]
-    [JsonPropertyName("returnId")]
+
     [Display(Name = "ID возврата")]
     public string? ReturnId { get; set; } // идентификатор возврата в системе Ozon/Wildberries/ЯндексМаркет
 
@@ -37,7 +36,7 @@ namespace automation.mbtdistr.ru.Models
     /// Id возврвата в системе Ozon/Wildberries/ЯндексМаркет
     /// </summary>
     [JsonProperty("orderId")]
-    [JsonPropertyName("orderId")]
+
     [Display(Name = "ID заказа")]
     public string? OrderId { get; set; } // идентификатор заказа в системе Ozon/Wildberries/ЯндексМаркет
 
@@ -45,7 +44,7 @@ namespace automation.mbtdistr.ru.Models
     /// Номер заказа в системе Ozon/Wildberries/ЯндексМаркет
     /// </summary>
     [JsonProperty("orderNumber")]
-    [JsonPropertyName("orderNumber")]
+
     [Display(Name = "Номер заказа")]
     public string? OrderNumber { get; set; } // номер заказа в системе Ozon/Wildberries/ЯндексМаркет
 
@@ -144,6 +143,7 @@ namespace automation.mbtdistr.ru.Models
       @return.CreatedAt = ymReturn?.CreationDate;
       @return.ReturnId = ymReturn?.Id.ToString();
       @return.OrderId = ymReturn?.OrderId.ToString();
+      @return.OrderNumber = ymReturn?.OrderId.ToString();
       @return.ReturnType = ymReturn?.ReturnType;
       @return.Scheme = ymReturn?.ShipmentRecipientType == YMShipmentRecipientType.Shop ? SellScheme.FBS : SellScheme.FBO;
 
@@ -165,22 +165,20 @@ namespace automation.mbtdistr.ru.Models
             returnProduct.Images = item?.Decisions?.SelectMany(d => d.Images)?.Select(i => new ReturnImage() { Url = i })?.ToList();
           }
         }
-
-      //@return.Products = ymReturn?.Items?.Select(p => new ReturnProduct
-      //{
-
-      //}).ToList();
-      //@return.ReturnReason = 
     }
   }
 
+  /// <summary>
+  /// Тип возврата.
+  /// </summary>
+  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
   public enum ReturnType
   {
     /// <summary>
     /// Невыкуп.
     /// </summary>
     [EnumMember(Value = "UNREDEEMED")]
-    [JsonPropertyName("UNREDEEMED")]
+
     [JsonProperty("UNREDEEMED")]
     [Display(Name = "Невыкуп")]
     Unredeemed,
@@ -189,7 +187,7 @@ namespace automation.mbtdistr.ru.Models
     /// Возврат.
     /// </summary>
     [EnumMember(Value = "RETURN")]
-    [JsonPropertyName("RETURN")]
+
     [JsonProperty("RETURN")]
     [Display(Name = "Возврат")]
     Return,
@@ -198,7 +196,7 @@ namespace automation.mbtdistr.ru.Models
     /// Неизвестный тип.
     /// </summary>
     [EnumMember(Value = "UNKNOWN")]
-    [JsonPropertyName("UNKNOWN")]
+
     [JsonProperty("UNKNOWN")]
     [Display(Name = "Неизвестный тип")]
     Unknown = 0
@@ -222,7 +220,7 @@ namespace automation.mbtdistr.ru.Models
     [ForeignKey("Return")]
     public int ReturnId { get; set; }
 
-    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
     public Return Return { get; set; }
   }
 
@@ -234,7 +232,7 @@ namespace automation.mbtdistr.ru.Models
     [ForeignKey("ReturnProduct")]
     public int ReturnProductId { get; set; }
 
-    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
     public ReturnProduct ReturnProduct { get; set; }
 
     public string Url { get; set; } = string.Empty;
@@ -253,7 +251,7 @@ namespace automation.mbtdistr.ru.Models
     public Address? Address { get; set; }
     public string? Phone { get; set; }
 
-    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
     public ICollection<Return>? Returns { get; set; } = new List<Return>();
   }
 
@@ -295,7 +293,7 @@ namespace automation.mbtdistr.ru.Models
     [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
     public Return Return { get; set; }
   }
-
+  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
   public enum ReturnStatus
   {
     [EnumMember(Value = "DisputeOpened")]
@@ -437,73 +435,64 @@ namespace automation.mbtdistr.ru.Models
     #region yandex market statuses
 
     [EnumMember(Value = "CREATED")]
-    [JsonPropertyName("CREATED")]
     [JsonProperty("CREATED")]
     [Display(Name = "Возврат создан")]
     Created,
 
     [EnumMember(Value = "RECEIVED")]
-    [JsonPropertyName("RECEIVED")]
     [JsonProperty("RECEIVED")]
     [Display(Name = "Возврат принят у отправителя")]
     Received,
 
     [EnumMember(Value = "IN_TRANSIT")]
-    [JsonPropertyName("IN_TRANSIT")]
     [JsonProperty("IN_TRANSIT")]
     [Display(Name = "На пути к продавцу")]
     InTransit,
 
     [EnumMember(Value = "READY_FOR_PICKUP")]
-    [JsonPropertyName("READY_FOR_PICKUP")]
     [JsonProperty("READY_FOR_PICKUP")]
     [Display(Name = "Возврат готов к выдаче магазину")]
     ReadyForPickup,
 
     [EnumMember(Value = "PICKED")]
-    [JsonPropertyName("PICKED")]
     [JsonProperty("PICKED")]
     [Display(Name = "Возврат выдан магазину")]
     Picked,
 
     [EnumMember(Value = "RECEIVED_ON_FULFILLMENT")]
-    [JsonPropertyName("RECEIVED_ON_FULFILLMENT")]
     [JsonProperty("RECEIVED_ON_FULFILLMENT")]
     [Display(Name = "Возврат принят на складе Маркета")]
     ReceivedOnFulfillment,
 
     [EnumMember(Value = "CANCELLED")]
-    [JsonPropertyName("CANCELLED")]
+
     [JsonProperty("CANCELLED")]
     [Display(Name = "Возврат отменен")]
     YMCancelled,
 
     [EnumMember(Value = "LOST")]
-    [JsonPropertyName("LOST")]
+
     [JsonProperty("LOST")]
     [Display(Name = "Возврат утерян")]
     Lost,
 
     [EnumMember(Value = "UTILIZED")]
-    [JsonPropertyName("UTILIZED")]
+
     [JsonProperty("UTILIZED")]
     [Display(Name = "Возврат утилизирован")]
     YMUtilized,
 
     [EnumMember(Value = "PREPARED_FOR_UTILIZATION")]
-    [JsonPropertyName("PREPARED_FOR_UTILIZATION")]
     [JsonProperty("PREPARED_FOR_UTILIZATION")]
     [Display(Name = "Возврат готов к утилизации")]
     PreparedForUtilization,
 
     [EnumMember(Value = "EXPROPRIATED")]
-    [JsonPropertyName("EXPROPRIATED")]
     [JsonProperty("EXPROPRIATED")]
     [Display(Name = "Товары в возврате направлены на перепродажу")]
     Expropriated,
 
     [EnumMember(Value = "NOT_IN_DEMAND")]
-    [JsonPropertyName("NOT_IN_DEMAND")]
     [JsonProperty("NOT_IN_DEMAND")]
     [Display(Name = "Возврат не забрали с почты")]
     NotInDemand,
@@ -512,6 +501,6 @@ namespace automation.mbtdistr.ru.Models
 
     [EnumMember(Value = "Unknown")]
     [Display(Name = "Неизвестен")]
-    Unknown
+    Unknown = 0
   }
 }
