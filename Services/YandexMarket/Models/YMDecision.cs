@@ -15,8 +15,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonProperty("amount")]
     public YMCurrencyValue? Amount { get; set; }
 
-
-
     /// <summary>Идентификатор товара в возврате.</summary>
     [Display(Name = "Идентификатор товара в возврате")]
     [JsonProperty("returnItemId")]
@@ -34,20 +32,20 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonProperty("decisionType")]
     [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
     [Required]
-    public YMReturnDecisionType DecisionType { get; set; }
+    public YMDecisionType DecisionType { get; set; }
 
     /// <summary>Причина возврата (группа).</summary>
     [Display(Name = "Причина возврата")]
     [JsonProperty("reasonType")]
     [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
     [Required]
-    public YMReturnDecisionReasonType ReasonType { get; set; }
+    public YMDecisionReasonType ReasonType { get; set; }
 
     /// <summary>Детализация причины возврата.</summary>
     [Display(Name = "Детализация причины возврата")]
     [JsonProperty("subreasonType")]
     [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
-    public YMReturnDecisionSubreasonType? SubreasonType { get; set; }
+    public YMDecisionSubreasonType? SubreasonType { get; set; }
 
     /// <summary>Хеш-коды фотографий, приложенных покупателем.</summary>
     [Display(Name = "Фотографии")]

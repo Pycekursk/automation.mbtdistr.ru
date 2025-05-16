@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 /// <summary>
 /// Причины возврата.
 /// </summary>
-public enum YMReturnDecisionReasonType
+public enum YMDecisionReasonType
 {
   /// <summary>
   /// Бракованный товар (есть недостатки).

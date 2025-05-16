@@ -5,6 +5,8 @@ VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "automation.mbtdistr.ru", "automation.mbtdistr.ru.csproj", "{B86DEB82-7AED-4164-A101-B80582AF826A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "automation.mbtdistr.Tests", "..\automation.mbtdistr.Tests\automation.mbtdistr.Tests.csproj", "{399E38E6-2FAF-44E6-989A-6BB52916CEF9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,8 +17,15 @@ Global
 		{B86DEB82-7AED-4164-A101-B80582AF826A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B86DEB82-7AED-4164-A101-B80582AF826A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B86DEB82-7AED-4164-A101-B80582AF826A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{399E38E6-2FAF-44E6-989A-6BB52916CEF9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{399E38E6-2FAF-44E6-989A-6BB52916CEF9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{399E38E6-2FAF-44E6-989A-6BB52916CEF9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{399E38E6-2FAF-44E6-989A-6BB52916CEF9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8084573B-385C-41BE-A619-89C274CF6556}
 	EndGlobalSection
 EndGlobal

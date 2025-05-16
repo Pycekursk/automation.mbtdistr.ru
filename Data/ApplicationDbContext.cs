@@ -27,6 +27,13 @@ namespace automation.mbtdistr.ru.Data
     public DbSet<Cabinet> Cabinets { get; set; }
     public DbSet<CabinetSettings> CabinetSettings { get; set; }
     public DbSet<ConnectionParameter> ConnectionParameters { get; set; }
+
+    public DbSet<ReturnImage> ReturnImages { get; set; }
+
+    public DbSet<ReturnProduct> ReturnProducts { get; set; }
+
+    public DbSet<Warehouse> Warehouses { get; set; }
+
     public DbSet<Compensation> Compensations { get; set; }
 
     public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }

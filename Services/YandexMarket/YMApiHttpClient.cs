@@ -23,25 +23,20 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                   new EndpointDefinition("campaigns", HttpMethod.Get) },
                 { MarketApiRequestType.ReturnsList,
                   new EndpointDefinition("campaigns/{campaignId}/returns", HttpMethod.Get) },
-
                 { MarketApiRequestType.ReturnInfo,
                   new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}", HttpMethod.Get) },
-
                 { MarketApiRequestType.Orders,
                   new EndpointDefinition("campaigns/{campaignId}/orders", HttpMethod.Get) },
-
                 { MarketApiRequestType.Image,
                   new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision/{itemId}/image/{imageHash}", HttpMethod.Get) },
-
                 { MarketApiRequestType.ReturnApplication,
                   new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/application", HttpMethod.Get)},
-
                 { MarketApiRequestType.ReturnDecision,
                   new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision", HttpMethod.Get) },
-
                 { MarketApiRequestType.SubmitReturnDecision,
                   new EndpointDefinition("campaigns/{campaignId}/orders/{orderId}/returns/{returnId}/decision/submit", HttpMethod.Post)},
-
+                { MarketApiRequestType.OfferCardsContentStatus,
+                    new EndpointDefinition("businesses/{businessId}/offer-cards", HttpMethod.Post) },
                 { MarketApiRequestType.SupplyRequests,
                   new EndpointDefinition("campaigns/{campaignId}/supply-requests", HttpMethod.Post) },
                 { MarketApiRequestType.SupplyItems,
@@ -50,22 +45,24 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
                   new EndpointDefinition("campaigns/{campaignId}/supply-requests/documents", HttpMethod.Post) }
         };
 
-    public YMApiHttpClient(IConfiguration config)
+
+
+    public YMApiHttpClient()
     {
       // если в дальнейшем понадобится менять права — сразу инициализируем DriveService
-      var credential = GoogleCredential
-          .FromFile(config["GoogleApi:Sheets:ServiceAccountKeyFile"])
-          .CreateScoped(new[]
-          {
-                    DriveService.Scope.Drive,
-            // здесь же можно добавить другие scope’ы, если нужно
-          });
+      //var credential = GoogleCredential
+      //    .FromFile(config["GoogleApi:Sheets:ServiceAccountKeyFile"])
+      //    .CreateScoped(new[]
+      //    {
+      //              DriveService.Scope.Drive,
+      //      // здесь же можно добавить другие scope’ы, если нужно
+      //    });
 
-      _drive = new DriveService(new BaseClientService.Initializer
-      {
-        HttpClientInitializer = credential,
-        ApplicationName = config["GoogleApi:Drive:ApplicationName"]
-      });
+      //_drive = new DriveService(new BaseClientService.Initializer
+      //{
+      //  HttpClientInitializer = credential,
+      //  ApplicationName = config["GoogleApi:Drive:ApplicationName"]
+      //});
 
       _httpClient = new HttpClient();
     }
@@ -120,5 +117,8 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
       return await _httpClient.SendAsync(request);
     }
+
+    // public Task<HttpResponseMessage> SendRequestAsync(MarketApiRequestType type, Cabinet cabinet, Dictionary<string, object> queryParams, Dictionary<string, object> body)
+    //=> SendRequestAsync(type, cabinet, body, queryParams, body);
   }
 }

@@ -3,7 +3,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace automation.mbtdistr.ru.Services.YandexMarket
+namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
   /// <summary>
   /// Валюта и ее значение.

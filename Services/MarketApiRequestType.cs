@@ -20,7 +20,8 @@
     OrderInfo,
     ReturnApplication,
     ReturnDecision,
-    SubmitReturnDecision
+    SubmitReturnDecision,
+    OfferCardsContentStatus
     // и так далее...
   }
 }

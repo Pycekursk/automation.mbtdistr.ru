@@ -10,6 +10,210 @@ using JsonConverterAttribute = Newtonsoft.Json.JsonConverterAttribute;
 
 namespace automation.mbtdistr.ru.Services.Ozon.Models
 {
+
+
+  #region ProductRating
+
+  #region Request Models
+
+  /// <summary>
+  /// Запрос на получение контент-рейтинга товаров по SKU.
+  /// </summary>
+  public class OZGetProductRatingBySkuRequest
+  {
+    /// <summary>
+    /// Идентификаторы товаров в системе Ozon — SKU, для которых нужно вернуть контент‑рейтинг.
+    /// </summary>
+    [Display(Name = "Идентификаторы товаров (SKU)")]
+    [JsonProperty("skus")]
+    [Required]
+    public List<long> Skus { get; set; }
+  }
+
+  #endregion
+
+  #region Response Models
+
+  /// <summary>
+  /// Контент‑рейтинг одного товара.
+  /// </summary>
+  public class OZProductRating
+  {
+    /// <summary>
+    /// Идентификатор товара на Ozon.
+    /// </summary>
+    [Display(Name = "Идентификатор товара на Ozon")]
+    [JsonProperty("sku")]
+    public long Sku { get; set; }
+
+    /// <summary>
+    /// Контент‑рейтинг товара: от 0 до 100.
+    /// </summary>
+    [Display(Name = "Контент‑рейтинг товара")]
+    [JsonProperty("rating")]
+    [Range(0, 100)]
+    public double Rating { get; set; }
+
+    /// <summary>
+    /// Группы характеристик, из которых складывается контент‑рейтинг.
+    /// </summary>
+    [Display(Name = "Группы характеристик")]
+    [JsonProperty("groups")]
+    public List<OZRatingGroup> Groups { get; set; }
+  }
+
+  /// <summary>
+  /// Оценка одной группы характеристик.
+  /// </summary>
+  public class OZRatingGroup
+  {
+    /// <summary>
+    /// Ключ группы характеристик.
+    /// </summary>
+    [Display(Name = "Ключ группы характеристик")]
+    [JsonProperty("key")]
+    public OZProductRatingGroupKey Key { get; set; }
+
+    /// <summary>
+    /// Название группы характеристик.
+    /// </summary>
+    [Display(Name = "Название группы характеристик")]
+    [JsonProperty("name")]
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Оценка группы: от 0 до 100.
+    /// </summary>
+    [Display(Name = "Оценка группы")]
+    [JsonProperty("rating")]
+    [Range(0, 100)]
+    public int Rating { get; set; }
+
+    /// <summary>
+    /// Вес группы в общей оценке (процент).
+    /// </summary>
+    [Display(Name = "Вес группы")]
+    [JsonProperty("weight")]
+    [Range(0, 100)]
+    public int Weight { get; set; }
+
+    /// <summary>
+    /// Критерии оценки группы.
+    /// </summary>
+    [Display(Name = "Критерии оценки")]
+    [JsonProperty("conditions")]
+    public List<OZRatingCondition> Conditions { get; set; }
+
+    /// <summary>
+    /// Рекомендации по улучшению атрибутов группы.
+    /// </summary>
+    [Display(Name = "Рекомендации по улучшению")]
+    [JsonProperty("improve_attributes")]
+    public List<OZImproveAttribute> ImproveAttributes { get; set; }
+  }
+
+  /// <summary>
+  /// Условие (критерий) оценки в группе.
+  /// </summary>
+  public class OZRatingCondition
+  {
+    /// <summary>
+    /// Ключ условия.
+    /// </summary>
+    [Display(Name = "Ключ условия")]
+    [JsonProperty("key")]
+    public string Key { get; set; }
+
+    /// <summary>
+    /// Описание условия.
+    /// </summary>
+    [Display(Name = "Описание условия")]
+    [JsonProperty("description")]
+    public string Description { get; set; }
+
+    /// <summary>
+    /// Стоимость критерия в баллах.
+    /// </summary>
+    [Display(Name = "Стоимость критерия")]
+    [JsonProperty("cost")]
+    public int Cost { get; set; }
+
+    /// <summary>
+    /// Признак выполнения условия.
+    /// </summary>
+    [Display(Name = "Выполнено")]
+    [JsonProperty("fulfilled")]
+    public bool Fulfilled { get; set; }
+  }
+
+  /// <summary>
+  /// Рекомендация по улучшению конкретного атрибута.
+  /// </summary>
+  public class OZImproveAttribute
+  {
+    /// <summary>
+    /// Идентификатор рекомендуемого атрибута.
+    /// </summary>
+    [Display(Name = "Идентификатор атрибута")]
+    [JsonProperty("id")]
+    public int Id { get; set; }
+
+    /// <summary>
+    /// Название рекомендуемого атрибута.
+    /// </summary>
+    [Display(Name = "Название атрибута")]
+    [JsonProperty("name")]
+    public string Name { get; set; }
+  }
+
+  #endregion
+
+  #region Enums
+
+  /// <summary>
+  /// Ключи групп характеристик, влияющих на контент‑рейтинг товара.
+  /// </summary>
+  [JsonConverter(typeof(StringEnumConverter))]
+  public enum OZProductRatingGroupKey
+  {
+    /// <summary>
+    /// Группа медиа‑элементов карточки товара.
+    /// </summary>
+    [EnumMember(Value = "media")]
+    [Display(Name = "Медиа")]
+    Media,
+
+    /// <summary>
+    /// Группа текстового наполнения карточки товара.
+    /// </summary>
+    [EnumMember(Value = "text")]
+    [Display(Name = "Текст")]
+    Text,
+
+    /// <summary>
+    /// Группа важных атрибутов товара.
+    /// </summary>
+    [EnumMember(Value = "important")]
+    [Display(Name = "Важные атрибуты")]
+    Important,
+
+    /// <summary>
+    /// Прочие группы характеристик.
+    /// </summary>
+    [EnumMember(Value = "other")]
+    [Display(Name = "Остальные")]
+    Other
+  }
+
+  #endregion
+
+  #endregion
+
+
+
+
+
+
   /// <summary>  
   /// Запрос для проверки уведомлений Ozon.  
   /// </summary>  
@@ -97,8 +301,6 @@ namespace automation.mbtdistr.ru.Services.Ozon.Models
 
     [JsonPropertyName("data")]
     public List<string>? Data { get; set; }
-
-
   }
   /// <summary>
   /// Информация о пользователе, отправившем уведомление.

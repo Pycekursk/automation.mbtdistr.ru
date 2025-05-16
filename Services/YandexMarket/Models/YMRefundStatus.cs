@@ -23,7 +23,7 @@ using System.Text.Json.Serialization;
 /// CANCELLED — процесс возврата отменен до завершения.
 /// UNKNOWN — статус возврата не определен (например, при ошибке в интеграции или новых, нераспознанных значениях).
 /// </summary>
-public enum YMRefundStatusType
+public enum YMRefundStatus
 {
   /// <summary>
   /// Возврат инициирован пользователем из личного кабинета.

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 /// <summary>
 /// Детали причин возврата.
 /// </summary>
-public enum YMReturnDecisionSubreasonType
+public enum YMDecisionSubreasonType
 {
   [EnumMember(Value = "USER_DID_NOT_LIKE")]
   [JsonPropertyName("USER_DID_NOT_LIKE")]

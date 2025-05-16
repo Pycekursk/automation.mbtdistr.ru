@@ -21,6 +21,8 @@ namespace automation.mbtdistr.ru.Models
     public ICollection<Worker> AssignedWorkers { get; set; }
             = new List<Worker>();
 
+    public ICollection<Return>? Returns { get; set; }
+
     public override string ToString()
     {
       StringBuilder sb = new StringBuilder();

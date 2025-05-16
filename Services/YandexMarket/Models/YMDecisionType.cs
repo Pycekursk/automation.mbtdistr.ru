@@ -8,7 +8,8 @@ using System.Text.Json.Serialization;
 /// <summary>
 /// Решение по возврату.
 /// </summary>
-public enum YMReturnDecisionType
+[Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+public enum YMDecisionType
 {
   /// <summary>
   /// Вернуть деньги покупателю.

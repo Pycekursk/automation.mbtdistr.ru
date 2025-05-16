@@ -283,7 +283,7 @@ namespace automation.mbtdistr.ru.Controllers
         var cabinetReturns = await _db.Returns
           .Include(r => r.Info)
           .Include(r => r.Cabinet)
-          .Where(r => r.CabinetId == cabinet.Id)
+          .Where(r => r.CabinetId == cabinet.Id.ToString())
           .ToListAsync();
         if (cabinetReturns != null)
         {
@@ -298,7 +298,7 @@ namespace automation.mbtdistr.ru.Controllers
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/returnslist")]
     public IActionResult ReturnsList([FromRoute] int id, [FromRoute] int? cabinetId)
     {
-      var returns = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
+      var returns = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId.ToString()).ToList();
 
       if (returns?.Count > 0)
       {

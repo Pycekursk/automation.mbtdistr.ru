@@ -24,7 +24,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     private readonly YMApiHttpClient _yMApiHttpClient;
     public YMApiService(YMApiHttpClient yMApiHttpClient)
     {
-      _yMApiHttpClient = yMApiHttpClient;
+      _yMApiHttpClient = (YMApiHttpClient?)yMApiHttpClient;
     }
 
     public async Task<YMCampaignsResponse> GetCampaignsAsync(Cabinet cabinet)
@@ -107,7 +107,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения списка возвратов: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения списка возвратов: {ex.Message}");
 
         return new YMApiResponse<YMListResult<YMReturn>>
         {
@@ -121,7 +121,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     }
 
     // Единые настройки сериализации
-    private static readonly JsonSerializerSettings SerializerSettings = new()
+    public static readonly JsonSerializerSettings SerializerSettings = new()
     {
       StringEscapeHandling = StringEscapeHandling.Default,
       Culture = System.Globalization.CultureInfo.CurrentCulture,
@@ -149,11 +149,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMReturn>>(json, new JsonSerializerSettings()
+        var obj = JsonConvert.DeserializeObject<YMApiResponse<YMReturn>>(json, new JsonSerializerSettings()
         {
           StringEscapeHandling = StringEscapeHandling.Default,
           Culture = System.Globalization.CultureInfo.CurrentCulture,
-          Converters = new List<Newtonsoft.Json.JsonConverter>
+          Converters = new List<JsonConverter>
           {
             new StringEnumConverter()
           }
@@ -162,7 +162,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения информации о возврате: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения информации о возврате: {ex.Message}");
         return default;
       }
     }
@@ -221,7 +221,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения фотографии возврата: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения фотографии возврата: {ex.Message}");
 
         return new YMApiResponse<YMReturnPhoto>
         {
@@ -241,7 +241,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <summary>
     /// Метод получения информации о заказах
     /// </summary>
-    public async Task<YMApiResponse<YMOrder>> GetOrdersAsync(Cabinet cabinet, YMCampaign campaign, YMFilter? filter = null, int limit = 100, string? pageToken = null)
+    public async Task<YMListResult<YMOrder>> GetOrdersAsync(Cabinet cabinet, YMCampaign campaign, long[] ordersId, YMFilter? filter = null, int limit = 100, string? pageToken = null)
     {
       if (filter == null)
       {
@@ -250,6 +250,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
           FromDate = DateTime.Now.AddDays(-20).ToString("yyyy-MM-dd"),
           ToDate = DateTime.Now.ToString("yyyy-MM-dd"),
           Limit = limit,
+          OrderIds = ordersId.ToList(),
           //Statuses = new List<YMOrderStatusType> { YMOrderStatusType.Unpaid }
         };
       }
@@ -267,12 +268,13 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMOrder>>(json, new JsonSerializerSettings()
+        var obj = JsonConvert.DeserializeObject<YMListResult<YMOrder>>(json, new JsonSerializerSettings()
         {
           StringEscapeHandling = StringEscapeHandling.Default,
           Culture = System.Globalization.CultureInfo.CurrentCulture,
-          Converters = new List<Newtonsoft.Json.JsonConverter>
+          Converters = new List<JsonConverter>
           {
+            new YMListResultConverter<YMOrder>("orders"),
             new StringEnumConverter()
           }
         });
@@ -280,7 +282,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения списка заказов: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения списка заказов: {ex.Message}");
         return default;
       }
     }
@@ -307,23 +309,23 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         );
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
-        var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMSupplyRequest>>>(json, new JsonSerializerSettings()
+        var obj = JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMSupplyRequest>>>(json, new JsonSerializerSettings()
         {
           StringEscapeHandling = StringEscapeHandling.Default,
           Culture = System.Globalization.CultureInfo.CurrentCulture,
-          Converters = new List<Newtonsoft.Json.JsonConverter>
+          Converters = new List<JsonConverter>
           {
             new YMListResultConverter<YMSupplyRequest>("requests"),
             new StringEnumConverter()
           }
         });
         if (obj?.Result?.Paging.NextPageToken is string s && !string.IsNullOrEmpty(s))
-          await Extensions.SendDebugMessage($"В компании {campaign.Domain} ({campaign.Id}) нужна обработка постаничной загрузки");
+          await SendDebugMessage($"В компании {campaign.Domain} ({campaign.Id}) нужна обработка постаничной загрузки");
         return obj;
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения списка возвратов: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения списка возвратов: {ex.Message}");
         return default;
       }
     }
@@ -383,7 +385,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения товаров в заявке: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения товаров в заявке: {ex.Message}");
         return default;
       }
     }
@@ -430,7 +432,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
       }
       catch (Exception ex)
       {
-        await Extensions.SendDebugMessage($"Ошибка получения документов в заявке: {ex.Message}");
+        await SendDebugMessage($"Ошибка получения документов в заявке: {ex.Message}");
         return default;
       }
     }
@@ -639,7 +641,69 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
           .Include(r => r.ParentLink)
           .FirstAsync(r => r.Id == existing.Id);
     }
+
+
+    /// <summary>
+    /// Получение информации о заполненности карточек магазина.
+    /// </summary>
+    /// <param name="cabinet">Параметры авторизации кабинета.</param>
+    /// <param name="businessId">Идентификатор кабинета.</param>
+    /// <param name="request">Параметры запроса: фильтры по статусам карточек, категориям и SKU.</param>
+    /// <param name="limit">Количество значений на одной странице.</param>
+    /// <param name="pageToken">Токен страницы для постраничной навигации.</param>
+    /// <returns>Десериализованный ответ с информацией о состоянии карточек товаров.</returns>
+    public async Task<YMApiResponse<YMOfferCardsContentStatusResult>> GetOfferCardsContentStatusAsync(
+        Cabinet cabinet,
+        long businessId,
+        YMOfferCardsContentStatusRequest request,
+        int limit = 100,
+        string? pageToken = null)
+    {
+      try
+      {
+        // Собираем параметры запроса
+        var query = new Dictionary<string, object>
+                {
+                    { "limit", limit } // Лимит на странице :contentReference[oaicite:0]{index=0}:contentReference[oaicite:1]{index=1}
+                };
+        if (!string.IsNullOrEmpty(pageToken))
+          query.Add("page_token", pageToken); // Токен страницы :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
+
+        // Выполняем POST https://api.partner.market.yandex.ru/businesses/{businessId}/offer-cards :contentReference[oaicite:4]{index=4}:contentReference[oaicite:5]{index=5}
+        var response = await _yMApiHttpClient.SendRequestAsync(
+            MarketApiRequestType.OfferCardsContentStatus,
+            cabinet,
+            body: request,
+            query: query,
+            pathParams: new Dictionary<string, object>
+            {
+                        { "businessId", businessId } // Путь: {businessId} :contentReference[oaicite:6]{index=6}:contentReference[oaicite:7]{index=7}
+            }
+        );
+        response.EnsureSuccessStatusCode();
+
+        // Читаем и десериализуем JSON
+        var json = await response.Content.ReadAsStringAsync();
+        var result = JsonConvert.DeserializeObject<YMApiResponse<YMOfferCardsContentStatusResult>>(json, new JsonSerializerSettings
+        {
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
+          Converters = new List<JsonConverter>
+                    {
+                        new StringEnumConverter()
+                    }
+        });
+
+        return result;
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка получения информации о заполненности карточек: {ex.Message}");
+        return default;
+      }
+    }
   }
+
 
   #region Response Models
 

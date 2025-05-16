@@ -1,4 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using automation.mbtdistr.ru.Services.Wildberries.Models;
+using automation.mbtdistr.ru.Services.YandexMarket.Models;
+
+using Newtonsoft.Json;
 
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -7,41 +10,272 @@ using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Models
 {
+  /// <summary>
+  /// Обобщенная информация о возвратах (для всех кабинетов).
+  /// </summary>
   public class Return
   {
     [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity), DataGrid(false)]
     [Display(Name = "ID")]
     public int Id { get; set; }
 
-    [DataGrid(false)]
-    [Display(Name = "Кабинет")]
-    public int CabinetId { get; set; } // кабинет/бренд/ООО
+    [Display(Name = "ID Кабинета")]
+    public string CabinetId { get; set; } // кабинет/бренд/ООО
 
     [Display(Name = "Кабинет")]
     public Cabinet Cabinet { get; set; }
 
+    /// <summary>
+    /// ID возврата в системе Claim.Id/ReturnInfo.Id/ReturnId
+    /// </summary>
+    [JsonProperty("returnId")]
+    [JsonPropertyName("returnId")]
+    [Display(Name = "ID возврата")]
+    public string? ReturnId { get; set; } // идентификатор возврата в системе Ozon/Wildberries/ЯндексМаркет
+
+    /// <summary>
+    /// Id возврвата в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
+    [JsonProperty("orderId")]
+    [JsonPropertyName("orderId")]
+    [Display(Name = "ID заказа")]
+    public string? OrderId { get; set; } // идентификатор заказа в системе Ozon/Wildberries/ЯндексМаркет
+
+    /// <summary>
+    /// Номер заказа в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
+    [JsonProperty("orderNumber")]
+    [JsonPropertyName("orderNumber")]
+    [Display(Name = "Номер заказа")]
+    public string? OrderNumber { get; set; } // номер заказа в системе Ozon/Wildberries/ЯндексМаркет
+
+    /// <summary>
+    /// Дата создания возврата в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
     [Display(Name = "Дата создания")]
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
 
     [Display(Name = "Дата завершения")]
     public DateTime? ResolvedAt { get; set; }
 
+    /// <summary>
+    /// Дата последнего изменения возврата в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
     [Display(Name = "Дата изменения")]
     public DateTime? ChangedAt { get; set; }
 
+    /// <summary>
+    /// Дата заказа в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
     [Display(Name = "Дата заказа")]
-    public DateTime OrderedAt { get; internal set; }
+    public DateTime? OrderedAt { get; internal set; }
 
+    [DataGrid(false)]
     [Display(Name = "Компенсация")]
     public Compensation? Compensation { get; set; }
 
+    [DataGrid(false)]
     [Display(Name = "Информация о возврате")]
     public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате
 
+    /// <summary>
+    /// Причина возврата в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
     [Display(Name = "Причина возврата")]
-    public string ReturnReason { get; set; } = string.Empty; // причина возврата
+    public string? ReturnReason { get; set; } = string.Empty; // причина возврата в системе Ozon/Wildberries/ЯндексМаркет
+
+    public string ClientComment { get; set; } = string.Empty; // комментарий к возврату
+
+    public SellScheme? Scheme { get; set; }
+
+    public List<ReturnProduct>? Products { get; set; }
+
+    public ReturnType? ReturnType { get; set; }
+
+    /// <summary>
+    /// Метод преобразования объекта возврата в общий объект возврата.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="apiReturnObject"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public static Return Parse<T>(object apiReturnObject)
+    {
+      Return @return = new Return();
+      var type = typeof(T);
+
+      switch (type.Name)
+      {
+        case nameof(Claim):
+          var claim = (Claim)apiReturnObject;
+          ParseClaim(ref @return, claim);
+          break;
+        case nameof(ReturnInfo):
+          var returnInfo = (ReturnInfo)apiReturnObject;
+          ParseReturnInfo(ref @return, returnInfo);
+          break;
+        case nameof(YMReturn):
+          var ymReturn = (YMReturn)apiReturnObject;
+          ParseYMReturn(ref @return, ymReturn);
+          break;
+        default:
+          throw new NotImplementedException($"Неизвестный тип возврата: {type.Name}");
+      }
+
+      return @return;
+    }
+
+    private static void ParseClaim(ref Return @return, Claim claim)
+    {
+      @return.ChangedAt = claim.DtUpdate;
+      @return.OrderedAt = claim.OrderDt;
+      @return.CreatedAt = claim.Dt;
+    }
+
+    private static void ParseReturnInfo(ref Return @return, ReturnInfo returnInfo)
+    {
+
+    }
+
+    private static void ParseYMReturn(ref Return @return, YMReturn ymReturn)
+    {
+      @return.ChangedAt = ymReturn.UpdateDate;
+      @return.OrderedAt = ymReturn?.Order?.CreationDate;
+      @return.CreatedAt = ymReturn?.CreationDate;
+      @return.ReturnId = ymReturn?.Id.ToString();
+      @return.OrderId = ymReturn?.OrderId.ToString();
+      @return.ReturnType = ymReturn?.ReturnType;
+      @return.Scheme = ymReturn?.ShipmentRecipientType == YMShipmentRecipientType.Shop ? SellScheme.FBS : SellScheme.FBO;
+
+      if (ymReturn?.Items?.Count > 0)
+        foreach (var item in ymReturn.Items)
+        {
+
+          ReturnProduct returnProduct = new ReturnProduct()
+          {
+            Count = item.Count,
+            Sku = item.MarketSku.ToString(),
+
+          };
+
+          if (item?.Decisions?.Count > 0)
+          {
+            @return.ClientComment += $"{item?.Decisions?.Select(d => d.Comment)?.FirstOrDefault()}\n";
+            @return.ReturnReason += $"{item?.Decisions?.Select(d => $"{d.ReasonType.GetDisplayName()} {d.SubreasonType?.GetDisplayName()}")?.FirstOrDefault()}\n";
+            returnProduct.Images = item?.Decisions?.SelectMany(d => d.Images)?.Select(i => new ReturnImage() { Url = i })?.ToList();
+          }
+        }
+
+      //@return.Products = ymReturn?.Items?.Select(p => new ReturnProduct
+      //{
+
+      //}).ToList();
+      //@return.ReturnReason = 
+    }
   }
 
+  public enum ReturnType
+  {
+    /// <summary>
+    /// Невыкуп.
+    /// </summary>
+    [EnumMember(Value = "UNREDEEMED")]
+    [JsonPropertyName("UNREDEEMED")]
+    [JsonProperty("UNREDEEMED")]
+    [Display(Name = "Невыкуп")]
+    Unredeemed,
+
+    /// <summary>
+    /// Возврат.
+    /// </summary>
+    [EnumMember(Value = "RETURN")]
+    [JsonPropertyName("RETURN")]
+    [JsonProperty("RETURN")]
+    [Display(Name = "Возврат")]
+    Return,
+
+    /// <summary>
+    /// Неизвестный тип.
+    /// </summary>
+    [EnumMember(Value = "UNKNOWN")]
+    [JsonPropertyName("UNKNOWN")]
+    [JsonProperty("UNKNOWN")]
+    [Display(Name = "Неизвестный тип")]
+    Unknown = 0
+  }
+
+  public class ReturnProduct
+  {
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    public string? Name { get; set; }
+
+    public string? Sku { get; set; }
+
+    public string? OfferId { get; set; }
+
+    public List<ReturnImage>? Images { get; set; }
+
+    public int Count { get; set; }
+
+    [ForeignKey("Return")]
+    public int ReturnId { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    public Return Return { get; set; }
+  }
+
+  public class ReturnImage
+  {
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    [ForeignKey("ReturnProduct")]
+    public int ReturnProductId { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    public ReturnProduct ReturnProduct { get; set; }
+
+    public string Url { get; set; } = string.Empty;
+  }
+
+  /// <summary>
+  /// Класс обьекта склада/пвз
+  /// </summary>
+  public class Warehouse
+  {
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    public string? ExternalId { get; set; }
+    public string? Name { get; set; }
+    public Address? Address { get; set; }
+    public string? Phone { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    public ICollection<Return>? Returns { get; set; } = new List<Return>();
+  }
+
+  public class Address
+  {
+    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+    public string? Country { get; set; }
+    public string? City { get; set; }
+    public string? Street { get; set; }
+    public string? House { get; set; }
+    public string? Office { get; set; }
+    public string? ZipCode { get; set; }
+    public decimal Latitude { get; set; }
+    public decimal Longitude { get; set; }
+
+    [ForeignKey("Warehouse")]
+    public int WarehouseId { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+    public Warehouse Warehouse { get; set; }
+  }
 
   public class ReturnInfo
   {

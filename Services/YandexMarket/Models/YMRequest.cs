@@ -2,7 +2,7 @@
 
 using System.ComponentModel.DataAnnotations;
 
-namespace automation.mbtdistr.ru.Services.YandexMarket
+namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
   /// <summary>
   /// Модель запроса для получения документов по заявке.

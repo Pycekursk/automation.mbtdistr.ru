@@ -1,5 +1,9 @@
-﻿using Newtonsoft.Json;
+﻿using automation.mbtdistr.ru.Models;
 
+using Newtonsoft.Json;
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
@@ -52,6 +56,14 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     public YMShipmentRecipientType? ShipmentRecipientType { get; set; }
 
     /// <summary>
+    /// Тип возврата.
+    /// </summary>
+    [JsonPropertyName("returnType")]
+    [JsonProperty("returnType")]
+    [Display(Name = "Тип возврата")]
+    public ReturnType ReturnType { get; set; } = ReturnType.Unknown;
+
+    /// <summary>
     /// Статус отправления.
     /// </summary>
     [JsonPropertyName("shipmentStatus")]
@@ -63,7 +75,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     /// </summary>
     [JsonPropertyName("refundStatus")]
     [JsonProperty("refundStatus")]
-    public YMRefundStatusType? RefundStatus { get; set; }
+    public YMRefundStatus? RefundStatus { get; set; }
 
     /// <summary>
     /// Сумма и валюта возврата.
@@ -78,5 +90,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("items")]
     [JsonProperty("items")]
     public List<YMItem> Items { get; set; } = new();
+
+    [JsonPropertyName("order")]
+    [JsonProperty("order")]
+    [NotMapped]
+    public YMOrder? Order { get; set; }
   }
 }

@@ -18,12 +18,10 @@ using System.Text.Unicode;
 using automation.mbtdistr.ru.Services.Wildberries.Models;
 using automation.mbtdistr.ru.Services.BarcodeService;
 using automation.mbtdistr.ru.Services.LLM;
-using automation.mbtdistr.ru.Services.YandexMarket;
 using ZXing;
 using automation.mbtdistr.ru.Services;
 using System.Text.Json.Serialization;
 using static automation.mbtdistr.ru.Services.MarketSyncService;
-using automation.mbtdistr.ru.Services.YandexMarket.Models;
 using DevExpress.XtraPrinting;
 using DevExtreme.AspNet.Mvc;
 using ZXing.OneD;
@@ -41,6 +39,9 @@ using iText.IO.Font;
 using iText.Kernel.Pdf.Canvas.Parser.Data;
 using OpenAI.Chat;
 using DevExpress.Utils.Text;
+using iText.Forms.Xfdf;
+using Swashbuckle.AspNetCore.Filters;
+using automation.mbtdistr.ru.Services.YandexMarket;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -112,16 +113,6 @@ ILogger<TelegramBotController> logger)
         {
           await Extensions.SendDebugMessage($"public async Task<IActionResult> Post([FromBody] object obj)\n{ex.Message}");
         }
-
-      //else
-      //{
-      //  string docSavePath = Path.Combine("wwwroot", "data", "1doc_cn.pdf");
-      //  string translatedDocPath = Path.Combine("wwwroot", "data", "1doc_ru.pdf");
-
-
-
-      //}
-
       try
       {
 
@@ -233,7 +224,7 @@ ILogger<TelegramBotController> logger)
 
             //загруженный файл для отправки
             using var outFileStream = new FileStream(translatedDocPath, FileMode.Open, FileAccess.Read);
-            await _botClient.SendDocument(update.Message.Chat.Id, new InputFileStream(outFileStream, translatedDocPath), cancellationToken: ct);
+            await _botClient.SendDocument(update.Message.Chat.Id, new InputFileStream(outFileStream, $"{update?.Message?.Document?.FileName}_ru.pdf"), cancellationToken: ct);
 
             //удаляем оба файла с диска
             if (System.IO.File.Exists(docSavePath))
@@ -1837,5 +1828,47 @@ ILogger<TelegramBotController> logger)
       _logger.LogInformation("Incoming Update: {UpdateJson}", json);
     }
     #endregion
+  }
+
+  public class UpdateExample : IExamplesProvider<Update>
+  {
+    Update IExamplesProvider<Update>.GetExamples()
+    {
+      return new Update
+      {
+        Id = 932963027,
+        Message = new Message
+        {
+          Id = 3834,
+          From = new User
+          {
+            Id = 1406950293,
+            IsBot = false,
+            FirstName = "Ruslan",
+            Username = "Pycek",
+            LanguageCode = "ru",
+            IsPremium = true
+          },
+          Chat = new Chat
+          {
+            Id = 1406950293,
+            FirstName = "Ruslan",
+            Username = "Pycek",
+            Type = ChatType.Private
+          },
+          //Date = 1745897380,
+          Text = "/start",
+          Entities = new List<MessageEntity>
+                {
+                    new MessageEntity
+                    {
+                        Offset = 0,
+                        Length = 6,
+                        Type = MessageEntityType.BotCommand
+                    }
+                }.ToArray()
+        }
+      };
+    }
   }
 }

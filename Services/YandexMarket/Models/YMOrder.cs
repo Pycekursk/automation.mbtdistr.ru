@@ -6,6 +6,7 @@ using Newtonsoft.Json.Converters;
 
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.Serialization;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
@@ -479,52 +480,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     Unknown = 0
   }
 
-  /// <summary>
-  /// Способ оплаты.
-  /// </summary>
-  [JsonConverter(typeof(StringEnumConverter))]
-  public enum YMOrderPaymentMethodType
-  {
-    /// <summary>Наличные при получении.</summary>
-    [Display(Name = "Наличные при получении")]
-    [EnumMember(Value = "CASH_ON_DELIVERY")]
-    CashOnDelivery,
-
-    /// <summary>Карта при получении.</summary>
-    [Display(Name = "Карта при получении")]
-    [EnumMember(Value = "CARD_ON_DELIVERY")]
-    CardOnDelivery,
-
-    /// <summary>Он-лайн оплата через Яндекс Pay / Кассу.</summary>
-    [Display(Name = "Он-лайн оплата (Yandex)")]
-    [EnumMember(Value = "YANDEX")]
-    Yandex,
-
-    /// <summary>Apple Pay.</summary>
-    [Display(Name = "Apple Pay")]
-    [EnumMember(Value = "APPLE_PAY")]
-    ApplePay,
-
-    /// <summary>Google Pay.</summary>
-    [Display(Name = "Google Pay")]
-    [EnumMember(Value = "GOOGLE_PAY")]
-    GooglePay,
-
-    /// <summary>Покупка в кредит / рассрочку.</summary>
-    [Display(Name = "Кредит / рассрочка")]
-    [EnumMember(Value = "CREDIT")]
-    Credit,
-
-    /// <summary>Система быстрых платежей.</summary>
-    [Display(Name = "Система быстрых платежей")]
-    [EnumMember(Value = "SBP")]
-    Sbp,
-
-    /// <summary>Неизвестный способ оплаты.</summary>
-    [Display(Name = "Неизвестно")]
-    [EnumMember(Value = "UNKNOWN")]
-    Unknown = 0
-  }
 
   /// <summary>
   /// Тип оплаты заказа.

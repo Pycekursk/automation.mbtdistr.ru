@@ -23,12 +23,12 @@ using System.Text.Encodings.Web;
 using System.Text.Unicode;
 using automation.mbtdistr.ru.Services.Wildberries.Models;
 using System.Collections.Generic;
-using automation.mbtdistr.ru.Services.YandexMarket;
 
 using Return = automation.mbtdistr.ru.Models.Return;
 using ZXing;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
+using automation.mbtdistr.ru.Services.YandexMarket;
 
 namespace automation.mbtdistr.ru.Services
 {
@@ -100,13 +100,8 @@ namespace automation.mbtdistr.ru.Services
       var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
 
-
       MarketSyncService.ReturnStatusChanged += OnReturnStatusChanged;
       MarketSyncService.SupplyStatusChanged += OnSupplyStatusChanged;
-
-
-      //if (Program.Environment.IsDevelopment())
-      //  SyncAllAsync(CancellationToken.None);
     }
 
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
@@ -130,8 +125,6 @@ namespace automation.mbtdistr.ru.Services
         if (worker.NotificationOptions.IsReceiveNotification)
           await _botClient.SendMessage(worker.TelegramId, e.Message, ParseMode.Html);
       }
-      //if (debug)
-      //  await Extensions.SendDebugObject<Return>(e.Return, $"Обьект уведомления: \n{e.Message}");
     }
 
     private async void OnSupplyStatusChanged(SupplyStatusChangedEventArgs e)
@@ -172,8 +165,6 @@ namespace automation.mbtdistr.ru.Services
 
     private async Task SyncAllAsync(CancellationToken ct)
     {
-      // if (Program.Environment.IsDevelopment()) return;
-
       using var scope = _scopeFactory.CreateScope();
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
       var ozSvc = scope.ServiceProvider.GetRequiredService<OzonApiService>();
@@ -220,10 +211,6 @@ namespace automation.mbtdistr.ru.Services
               }
               lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
             } while (true);
-
-            //string debugMessage = "API Ozon - возвраты";
-            //await Extensions.SendDebugObject<List<ReturnInfo>>(returns, debugMessage);
-
             allReturns.AddRange(await ProcessOzonReturnsAsync(returns, cab, _db, ct));
           }
 
@@ -232,9 +219,11 @@ namespace automation.mbtdistr.ru.Services
             var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
             if (response?.Claims.Count > 0)
             {
+              await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response, $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
+
               //   await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response);
-              var ret = await ProcessWbReturnsAsync(response.Claims, cab, _db, ct);
-              allReturns.AddRange(ret);
+              //var ret = await ProcessWbReturnsAsync(response.Claims, cab, _db, ct);
+              // allReturns.AddRange(ret);
             }
           }
 
@@ -274,10 +263,9 @@ namespace automation.mbtdistr.ru.Services
             }
             if (_ymReturns.Count > 0)
             {
-
-
-
               await ProcessYMReturnsAsync(_ymReturns, cab, _db, ct);
+
+              await Extensions.SendDebugObject<List<YMReturn>>(_ymReturns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
             }
           }
 
@@ -310,7 +298,7 @@ namespace automation.mbtdistr.ru.Services
             .Include(r => r.Compensation)
             .Include(r => r.Cabinet)
             .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefaultAsync(r => r.Info.ReturnInfoId == x.Id && r.CabinetId == cab.Id, ct);
+            .FirstOrDefaultAsync(r => r.Info.ReturnInfoId == x.Id && r.CabinetId == cab.Id.ToString(), ct);
           if (existingReturn != null)
           {
             if (existingReturn.Info.Id == 0)
@@ -344,7 +332,7 @@ namespace automation.mbtdistr.ru.Services
             try
             {
               Models.Return @return = new Models.Return();
-              @return.CabinetId = cab.Id;
+              @return.CabinetId = cab.Id.ToString();
               @return.ChangedAt = x.Visual?.ChangeMoment;
               @return.Info.ReturnInfoId = x.Id;
               //if (x.Logistic.ReturnDate.HasValue)
@@ -399,7 +387,7 @@ namespace automation.mbtdistr.ru.Services
        .Include(r => r.Compensation)
        .Include(r => r.Cabinet)
            .ThenInclude(c => c.AssignedWorkers)
-       .FirstOrDefault(r => r.Info.ClaimId == claim.Id && r.CabinetId == cab.Id);
+       .FirstOrDefault(r => r.Info.ClaimId == claim.Id && r.CabinetId == cab.Id.ToString());
 
           if (existingReturn != null)
           {
@@ -423,7 +411,7 @@ namespace automation.mbtdistr.ru.Services
           else
           {
             Models.Return @return = new Models.Return();
-            @return.CabinetId = cab.Id;
+            @return.CabinetId = cab.Id.ToString();
             @return.Info.ClaimId = claim.Id;
             @return.ChangedAt = claim.DtUpdate;
             @return.CreatedAt = claim.Dt;
@@ -467,7 +455,7 @@ namespace automation.mbtdistr.ru.Services
             .Include(r => r.Compensation)
             .Include(r => r.Cabinet)
             .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.ReturnInfoId == r.Id, ct);
+            .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id.ToString() && _r.Info.ReturnInfoId == r.Id, ct);
           if (existingReturn != null)
           {
             var oldChangedAt = existingReturn.ChangedAt;
@@ -487,7 +475,7 @@ namespace automation.mbtdistr.ru.Services
             Models.Return @return = new Models.Return();
             @return.CreatedAt = r.CreationDate;
             @return.ChangedAt = r.UpdateDate;
-            @return.CabinetId = cab.Id;
+            @return.CabinetId = cab.Id.ToString();
 
 
 

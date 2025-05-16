@@ -1,158 +1,49 @@
 ﻿using Newtonsoft.Json;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json.Converters;
+
+using System.Runtime.Serialization;
+
+using JsonConverter = Newtonsoft.Json.JsonConverter;
 
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
   /// <summary>
-  /// Тип валюты, используемый в системе.
+  /// Коды валют.
   /// </summary>
+  [JsonConverter(typeof(StringEnumConverter))]
   public enum YMCurrencyType
   {
     /// <summary>
     /// Российский рубль.
     /// </summary>
-    [JsonPropertyName("RUR")]
-    [JsonProperty("RUR")]
+    [EnumMember(Value = "RUR")]
     RUR,
-
-    /// <summary>
-    /// Доллар США.
-    /// </summary>
-    [JsonPropertyName("USD")]
-    [JsonProperty("USD")]
-    USD,
-
-    /// <summary>
-    /// Евро.
-    /// </summary>
-    [JsonPropertyName("EUR")]
-    [JsonProperty("EUR")]
-    EUR,
 
     /// <summary>
     /// Украинская гривна.
     /// </summary>
-    [JsonPropertyName("UAH")]
-    [JsonProperty("UAH")]
+    [EnumMember(Value = "UAH")]
     UAH,
 
     /// <summary>
-    /// Австралийский доллар.
+    /// Белорусский рубль.
     /// </summary>
-    [JsonPropertyName("AUD")]
-    [JsonProperty("AUD")]
-    AUD,
-
-    /// <summary>
-    /// Британский фунт стерлингов.
-    /// </summary>
-    [JsonPropertyName("GBP")]
-    [JsonProperty("GBP")]
-    GBP,
-
-    /// <summary>
-    /// Белорусский рубль (старый).
-    /// </summary>
-    [JsonPropertyName("BYR")]
-    [JsonProperty("BYR")]
+    [EnumMember(Value = "BYR")]
     BYR,
-
-    /// <summary>
-    /// Белорусский рубль (новый).
-    /// </summary>
-    [JsonPropertyName("BYN")]
-    [JsonProperty("BYN")]
-    BYN,
-
-    /// <summary>
-    /// Датская крона.
-    /// </summary>
-    [JsonPropertyName("DKK")]
-    [JsonProperty("DKK")]
-    DKK,
-
-    /// <summary>
-    /// Исландская крона.
-    /// </summary>
-    [JsonPropertyName("ISK")]
-    [JsonProperty("ISK")]
-    ISK,
 
     /// <summary>
     /// Казахстанский тенге.
     /// </summary>
-    [JsonPropertyName("KZT")]
-    [JsonProperty("KZT")]
+    [EnumMember(Value = "KZT")]
     KZT,
 
     /// <summary>
-    /// Канадский доллар.
+    /// Узбекский сум.
     /// </summary>
-    [JsonPropertyName("CAD")]
-    [JsonProperty("CAD")]
-    CAD,
+    [EnumMember(Value = "UZS")]
+    UZS
 
-    /// <summary>
-    /// Китайский юань.
-    /// </summary>
-    [JsonPropertyName("CNY")]
-    [JsonProperty("CNY")]
-    CNY,
-
-    /// <summary>
-    /// Норвежская крона.
-    /// </summary>
-    [JsonPropertyName("NOK")]
-    [JsonProperty("NOK")]
-    NOK,
-
-    /// <summary>
-    /// Специальные права заимствования (SDR).
-    /// </summary>
-    [JsonPropertyName("XDR")]
-    [JsonProperty("XDR")]
-    XDR,
-
-    /// <summary>
-    /// Сингапурский доллар.
-    /// </summary>
-    [JsonPropertyName("SGD")]
-    [JsonProperty("SGD")]
-    SGD,
-
-    /// <summary>
-    /// Турецкая лира.
-    /// </summary>
-    [JsonPropertyName("TRY")]
-    [JsonProperty("TRY")]
-    TRY,
-
-    /// <summary>
-    /// Шведская крона.
-    /// </summary>
-    [JsonPropertyName("SEK")]
-    [JsonProperty("SEK")]
-    SEK,
-
-    /// <summary>
-    /// Швейцарский франк.
-    /// </summary>
-    [JsonPropertyName("CHF")]
-    [JsonProperty("CHF")]
-    CHF,
-
-    /// <summary>
-    /// Японская иена.
-    /// </summary>
-    [JsonPropertyName("JPY")]
-    [JsonProperty("JPY")]
-    JPY,
-
-    /// <summary>
-    /// Азербайджанский манат.
-    /// </summary>
-    [JsonPropertyName("AZN")]
-    [JsonProperty("AZN")]
-    AZN
+    // при необходимости добавить другие валюты
   }
+  
 }

@@ -37,8 +37,6 @@
     <Folder Include="Services\OpenAI\Models\" />
     <Folder Include="Services\Megamarket\" />
     <Folder Include="wwwroot\data\" />
-    <Folder Include="wwwroot\logs\tg\" />
-    <Folder Include="wwwroot\logs\ozon\" />
   </ItemGroup>
   <ItemGroup>
     <Content Update="Views\Home\BotMenuCabinetsList.cshtml">

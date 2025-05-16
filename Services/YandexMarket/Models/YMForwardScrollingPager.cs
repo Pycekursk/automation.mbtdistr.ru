@@ -2,7 +2,7 @@
 
 using System.ComponentModel.DataAnnotations;
 
-namespace automation.mbtdistr.ru.Services.YandexMarket
+namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
   /// <summary>
   /// Пейджинг с прокруткой вперед.

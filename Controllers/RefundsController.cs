@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using System.ComponentModel.DataAnnotations;
-using automation.mbtdistr.ru.Services.YandexMarket;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
 using Google.Apis.Sheets.v4.Data;
 using Newtonsoft.Json;
@@ -25,6 +24,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using Telegram.Bot.Types;
 using System;
+using automation.mbtdistr.ru.Services.YandexMarket;
 
 namespace automation.mbtdistr.ru.Controllers
 {
@@ -225,23 +225,43 @@ namespace automation.mbtdistr.ru.Controllers
             {
               foreach (var ret in returnResponse.Result.Items)
               {
-                if (ret.Id == 22508324)
-                {
-                  if (ret.Items?.Count > 0)
-                  {
-                    foreach (var item in ret.Items)
-                    {
-                      var decision = item.Decisions.FirstOrDefault();
+                var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+                if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
+                  continue;
 
-                      if (decision != null && decision.Images?.Count > 0)
-                        foreach (var img in decision.Images)
-                        {
-                          var image = await _ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, decision.ReturnItemId, img);
-                        }
-                      //_ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, item.);
+                ret.Order = (await _ym.GetOrdersAsync(c, campaign, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+                if (ret.Items?.Count > 0)
+                {
+                  foreach (var item in ret.Items)
+                  {
+                    var decision = item?.Decisions?.FirstOrDefault();
+                    if (decision != null && decision.Images?.Count > 0)
+                    {
+                      List<string> imagesUrl = new List<string>();
+                      foreach (var img in decision.Images)
+                      {
+                        //записываем изображения из base64 на диск
+                        var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
+                        var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
+                        var fileDir = Path.GetDirectoryName(filePath);
+                        if (!Directory.Exists(fileDir))
+                          Directory.CreateDirectory(fileDir);
+
+                        if (System.IO.File.Exists(filePath))
+                          continue;
+
+                        var image = await _ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+                        var imageBytes = Convert.FromBase64String(image.Result.ImageData);
+                        await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
+                        var fileUrl = $"{Request.Scheme}://{Request.Host}/images/returns/{fileName}";
+                        imagesUrl.Add(fileUrl);
+                      }
+                      decision.Images = imagesUrl;
                     }
                   }
                 }
+
+                var @return = Return.Parse<YMReturn>(ret);
               }
             }
           }

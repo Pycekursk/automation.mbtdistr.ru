@@ -5,7 +5,7 @@ using System.Runtime.Serialization;
 
 using JsonConverter = Newtonsoft.Json.JsonConverter;
 
-namespace automation.mbtdistr.ru.Services.YandexMarket
+namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
   /// <summary>
   /// Тип ответа API. Возможные значения: OK — ошибок нет, ERROR — при обработке запроса произошла ошибка.

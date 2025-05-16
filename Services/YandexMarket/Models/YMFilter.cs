@@ -60,7 +60,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     /// </summary>  
     [JsonPropertyName("statuses")]
     [JsonProperty("statuses")]
-    public List<YMRefundStatusType>? Statuses { get; set; }
+    public List<YMRefundStatus>? Statuses { get; set; }
 
     /// <summary>  
     /// Идентификаторы заказов — для фильтрации результатов.  
