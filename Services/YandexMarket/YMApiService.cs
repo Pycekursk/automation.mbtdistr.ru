@@ -27,12 +27,12 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   public class YMApiService
   {
     private readonly YMApiHttpClient _yMApiHttpClient;
-  
-  
+
+
 
     public YMApiService(YMApiHttpClient yMApiHttpClient)
     {
-     
+
       _yMApiHttpClient = yMApiHttpClient;
     }
 
@@ -648,7 +648,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
           .Include(r => r.ParentLink)
           .FirstAsync(r => r.Id == existing.Id);
     }
-
 
     /// <summary>
     /// Получение информации о заполненности карточек магазина.

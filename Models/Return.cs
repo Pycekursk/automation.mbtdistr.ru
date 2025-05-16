@@ -73,6 +73,9 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Компенсация")]
     public Compensation? Compensation { get; set; }
 
+    [Display(Name = "Склад")]
+    public Warehouse? Warehouse { get; set; } // склад/ПВЗ, куда возвращается товар
+
     [DataGrid(false)]
     [Display(Name = "Информация о возврате")]
     public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате

@@ -95,7 +95,6 @@ namespace automation.mbtdistr.ru.Services
         IConfiguration config,
         IOptions<AppSettings> options)
     {
-
       _db = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
       _botClient = botClient;
       _scopeFactory = scopeFactory;
@@ -112,6 +111,11 @@ namespace automation.mbtdistr.ru.Services
 
       MarketSyncService.ReturnStatusChanged += OnReturnStatusChanged;
       MarketSyncService.SupplyStatusChanged += OnSupplyStatusChanged;
+
+      if (Program.Environment.IsDevelopment())
+      {
+        SyncAllAsync(CancellationToken.None);
+      }
     }
 
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
@@ -239,8 +243,8 @@ namespace automation.mbtdistr.ru.Services
 
           else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
           {
-            List<YMReturn> _ymReturns = new List<YMReturn>();
             var _campaigns = await _yMApiService.GetCampaignsAsync(cab);
+            List<Return> returns = new List<Return>();
             foreach (var camp in _campaigns.Campaigns)
             {
               var supplies = await _yMApiService.GetSupplyRequests(cab, camp);
@@ -257,7 +261,7 @@ namespace automation.mbtdistr.ru.Services
               var returnResponse = await _yMApiService.GetReturnsListAsync(cab, camp);
               if (returnResponse?.Result?.Items?.Count > 0)
               {
-                List<Return> returns = new List<Return>();
+
                 foreach (var ret in returnResponse.Result.Items)
                 {
                   var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
@@ -267,7 +271,7 @@ namespace automation.mbtdistr.ru.Services
                   ret.Order = (await _yMApiService.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
                   if (ret.Items?.Count > 0)
                   {
-                    var warehouse = await _yMApiService.GetWarehouseByIdAsync(cab, ret.LogisticPickupPoint.Id);
+
 
                     foreach (var item in ret.Items)
                     {
@@ -298,16 +302,24 @@ namespace automation.mbtdistr.ru.Services
 
                   }
                   var @return = Return.Parse<YMReturn>(ret);
+
+                  if (ret.LogisticPickupPoint != null)
+                  {
+                    var warehouse = await _yMApiService.GetWarehouseByIdAsync(cab, ret.LogisticPickupPoint.Id);
+
+                  }
+
                   @return.CabinetId = cab.Id;
                   returns.Add(@return);
                 }
               }
-            }
-            if (_ymReturns.Count > 0)
-            {
-              //await ProcessYMReturnsAsync(_ymReturns, cab, _db, ct);
 
-              await Extensions.SendDebugObject<List<YMReturn>>(_ymReturns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
+            }
+            if (returns.Count > 0)
+            {
+              await ProcessYMReturnsAsync(returns, cab, _db, ct);
+
+              await Extensions.SendDebugObject<List<Return>>(returns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
             }
           }
 
@@ -478,7 +490,7 @@ namespace automation.mbtdistr.ru.Services
     }
 
     public async Task<List<Models.Return>> ProcessYMReturnsAsync(
-        List<Services.YandexMarket.Models.YMReturn> returns,
+        List<Return> returns,
         Cabinet cab,
         ApplicationDbContext db,
         CancellationToken ct
@@ -488,58 +500,13 @@ namespace automation.mbtdistr.ru.Services
 
       try
       {
-
-        foreach (var r in returns)
-        {
-
-          var existingReturn = await db.Returns
-            .Include(r => r.Info)
-            .Include(r => r.Compensation)
-            .Include(r => r.Cabinet)
-            .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefaultAsync(_r => _r.CabinetId == cab.Id && _r.Info.ReturnInfoId == r.Id, ct);
-          if (existingReturn != null)
-          {
-            var oldChangedAt = existingReturn.ChangedAt;
-            var newChangedAt = r.UpdateDate;
-
-            if (newChangedAt != oldChangedAt)
-            {
-              existingReturn.ChangedAt = newChangedAt;
-              db.Returns.Update(existingReturn);
-              returnsList.Add(existingReturn);
-              var message = FormatReturnHtmlMessage(existingReturn, cab, false);
-              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message, r));
-            }
-          }
-          else
-          {
-            Models.Return @return = new Models.Return();
-            @return.CreatedAt = r.CreationDate;
-            @return.ChangedAt = r.UpdateDate;
-            @return.CabinetId = cab.Id;
-
-
-
-            @return.Info.ProductsSku = r.Items.Select(i => i.MarketSku).ToList();
-            @return.Info.ReturnInfoId = r.Id;
-            @return.Info.OrderId = r.OrderId;
-
-            //@return.Info.ReturnStatus = r.ShipmentStatus;
-
-            db.Returns.Add(@return);
-            returnsList.Add(@return);
-
-            var message = FormatReturnHtmlMessage(@return, cab, true);
-
-
-
-            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message, r));
-          }
-
-        }
-
-        await db.SaveChangesAsync();
+        var existing = await _db.Returns
+             .Include(r => r.Warehouse)
+             .Include(r => r.Cabinet)
+             .ThenInclude(c => c.AssignedWorkers)
+             .Include(r => r.Products)
+             .ThenInclude(p => p.Images)
+             .ToListAsync();
 
       }
       catch (Exception ex)
