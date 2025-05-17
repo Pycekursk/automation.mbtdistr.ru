@@ -18,11 +18,11 @@ public class ReturnMainInfo
   [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
   public int Id { get; set; }  // Внутренний PK для этой таблицы
 
-  [ForeignKey(nameof(Return))]
-  public int ReturnId { get; set; }  // Внешний ключ к таблице Return
+  //[ForeignKey(nameof(Return))]
+  //public int ReturnId { get; set; }  // Внешний ключ к таблице Return
 
-  [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
-  public Return Return { get; set; }
+  //[System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+  //public Return Return { get; set; }
 
   /// <summary>
   /// Статус возврата в объединённой системе.

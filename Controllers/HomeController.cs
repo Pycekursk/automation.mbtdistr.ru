@@ -281,7 +281,7 @@ namespace automation.mbtdistr.ru.Controllers
       foreach (var cabinet in cabinets)
       {
         var cabinetReturns = await _db.Returns
-          .Include(r => r.Info)
+         
           .Include(r => r.Cabinet)
           .Where(r => r.CabinetId == cabinet.Id)
           .ToListAsync();
@@ -298,7 +298,7 @@ namespace automation.mbtdistr.ru.Controllers
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/returnslist")]
     public IActionResult ReturnsList([FromRoute] int id, [FromRoute] int? cabinetId)
     {
-      var returns = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
+      var returns = _db.Returns.Include(r => r.Cabinet).Where(r => r.CabinetId == cabinetId).ToList();
 
       if (returns?.Count > 0)
       {
@@ -426,7 +426,7 @@ namespace automation.mbtdistr.ru.Controllers
     [HttpGet("botmenu/{workerId?}/returninfo/{returnId?}")]
     public IActionResult ReturnInfo([FromRoute] int workerId, [FromRoute] long returnId)
     {
-      var _return = _db.Returns.Include(r => r.Info).Include(r => r.Cabinet).FirstOrDefault(r => r.Id == returnId);
+      var _return = _db.Returns.Include(r => r.Cabinet).FirstOrDefault(r => r.Id == returnId);
       if (_return == null)
       {
         return Redirect("https://t.me/MbtdistrBot");
@@ -434,7 +434,7 @@ namespace automation.mbtdistr.ru.Controllers
       MainMenuViewModel mainMenu = new MainMenuViewModel
       {
         WorkerId = workerId,
-        GreetingMessage = $"Возврат {_return.Info.ReturnInfoId}\n{_return.CreatedAt}"
+        GreetingMessage = $"Возврат {_return.ReturnId}\n{_return.CreatedAt}"
       };
 
       mainMenu.HtmlContent = MarketSyncService.FormatReturnHtmlContent(_return, _return.Cabinet, null);

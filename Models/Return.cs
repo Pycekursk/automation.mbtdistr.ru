@@ -28,7 +28,6 @@ namespace automation.mbtdistr.ru.Models
     /// ID возврата в системе Claim.Id/ReturnInfo.Id/ReturnId
     /// </summary>
     [JsonProperty("returnId")]
-
     [Display(Name = "ID возврата")]
     public string? ReturnId { get; set; } // идентификатор возврата в системе Ozon/Wildberries/ЯндексМаркет
 
@@ -76,9 +75,9 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Склад")]
     public Warehouse? Warehouse { get; set; } // склад/ПВЗ, куда возвращается товар
 
-    [DataGrid(false)]
-    [Display(Name = "Информация о возврате")]
-    public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате
+    //[DataGrid(false), NotMapped]
+    //[Display(Name = "Информация о возврате")]
+    //public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате
 
     /// <summary>
     /// Причина возврата в системе Ozon/Wildberries/ЯндексМаркет
@@ -112,8 +111,8 @@ namespace automation.mbtdistr.ru.Models
           var claim = (Claim)apiReturnObject;
           ParseClaim(ref @return, claim);
           break;
-        case nameof(ReturnInfo):
-          var returnInfo = (ReturnInfo)apiReturnObject;
+        case nameof(automation.mbtdistr.ru.Services.Ozon.Models.ReturnInfo):
+          var returnInfo = (automation.mbtdistr.ru.Services.Ozon.Models.ReturnInfo)apiReturnObject;
           ParseReturnInfo(ref @return, returnInfo);
           break;
         case nameof(YMReturn):
@@ -129,13 +128,59 @@ namespace automation.mbtdistr.ru.Models
 
     private static void ParseClaim(ref Return @return, Claim claim)
     {
+      @return.ReturnId = claim.Id;
+      @return.OrderId = claim.Srid;
       @return.ChangedAt = claim.DtUpdate;
       @return.OrderedAt = claim.OrderDt;
       @return.CreatedAt = claim.Dt;
+      @return.ClientComment = claim.UserComment;
+      @return.ReturnReason = claim.UserComment;
+      @return.Products ??= new List<ReturnProduct>();
+
+      if (!string.IsNullOrEmpty(claim.ImtName))
+      {
+        var product = new ReturnProduct()
+        {
+          Name = claim.ImtName,
+          Sku = claim.NmId.ToString(),
+          Count = 1
+        };
+
+        if (claim?.Photos?.Count > 0)
+          foreach (var photo in claim.Photos)
+          {
+            ReturnImage returnImage = new ReturnImage()
+            {
+              Url = photo
+            };
+            product.Images ??= new List<ReturnImage>();
+            product.Images.Add(returnImage);
+          }
+        if (claim?.VideoPaths?.Count > 0)
+          foreach (var video in claim.VideoPaths)
+          {
+            ReturnImage returnImage = new ReturnImage()
+            {
+              Url = video
+            };
+            product.Images ??= new List<ReturnImage>();
+            product.Images.Add(returnImage);
+          }
+
+        @return.Products.Add(product);
+      }
     }
 
-    private static void ParseReturnInfo(ref Return @return, ReturnInfo returnInfo)
+    private static void ParseReturnInfo(ref Return @return, automation.mbtdistr.ru.Services.Ozon.Models.ReturnInfo returnInfo)
     {
+      @return.ChangedAt = returnInfo.Visual?.ChangeMoment;
+      @return.ReturnId = returnInfo.Id.ToString();
+      @return.OrderId = returnInfo.OrderId.ToString();
+      @return.OrderNumber = returnInfo.OrderNumber?.ToString();
+      @return.ReturnReason = returnInfo.ReturnReasonName;
+
+
+      @return.Scheme = returnInfo.Schema == "FBS" ? SellScheme.FBS : SellScheme.FBO;
 
     }
 
@@ -149,11 +194,11 @@ namespace automation.mbtdistr.ru.Models
       @return.OrderNumber = ymReturn?.OrderId.ToString();
       @return.ReturnType = ymReturn?.ReturnType;
       @return.Scheme = ymReturn?.ShipmentRecipientType == YMShipmentRecipientType.Shop ? SellScheme.FBS : SellScheme.FBO;
+      @return.Products ??= new List<ReturnProduct>();
 
       if (ymReturn?.Items?.Count > 0)
         foreach (var item in ymReturn.Items)
         {
-
           ReturnProduct returnProduct = new ReturnProduct()
           {
             Count = item.Count,
@@ -161,13 +206,30 @@ namespace automation.mbtdistr.ru.Models
 
           };
 
+          @return.Products.Add(returnProduct);
+
           if (item?.Decisions?.Count > 0)
           {
-            @return.ClientComment += $"{item?.Decisions?.Select(d => d.Comment)?.FirstOrDefault()}\n";
-            @return.ReturnReason += $"{item?.Decisions?.Select(d => $"{d.ReasonType.GetDisplayName()} {d.SubreasonType?.GetDisplayName()}")?.FirstOrDefault()}\n";
+            @return.ClientComment += $"{string.Join("\n", item.Decisions.Select(d => d.Comment))}\n";
+            @return.ReturnReason += $"{string.Join(", ", item.Decisions.Select(d => $"{d.ReasonType.GetDisplayName()}, {d.SubreasonType?.GetDisplayName()}"))}\n";
             returnProduct.Images = item?.Decisions?.SelectMany(d => d.Images)?.Select(i => new ReturnImage() { Url = i })?.ToList();
           }
         }
+      if (ymReturn?.LogisticPickupPoint != null)
+      {
+        @return.Warehouse = new Warehouse()
+        {
+          ExternalId = ymReturn.LogisticPickupPoint.Id.ToString(),
+          Name = ymReturn.LogisticPickupPoint.Name,
+          Address = new Address()
+          {
+            Country = ymReturn.LogisticPickupPoint.Address?.Country,
+            City = ymReturn.LogisticPickupPoint.Address?.City,
+            Street = ymReturn.LogisticPickupPoint.Address?.Street,
+            House = ymReturn.LogisticPickupPoint.Address?.House,
+          }
+        };
+      }
     }
   }
 
@@ -278,24 +340,24 @@ namespace automation.mbtdistr.ru.Models
     public Warehouse Warehouse { get; set; }
   }
 
-  public class ReturnInfo
-  {
-    public ReturnInfo(int returnId)
-    {
-      ReturnId = returnId;
-    }
+  //public class ReturnInfo
+  //{
+  //  public ReturnInfo(int returnId)
+  //  {
+  //    ReturnId = returnId;
+  //  }
 
-    [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
+  //  [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+  //  public int Id { get; set; }
 
-    public string ExternalId { get; set; } = string.Empty;
+  //  public string ExternalId { get; set; } = string.Empty;
 
-    [ForeignKey("Return")]
-    public int ReturnId { get; set; }
+  //  [ForeignKey("Return")]
+  //  public int ReturnId { get; set; }
 
-    [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
-    public Return Return { get; set; }
-  }
+  //  [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
+  //  public Return Return { get; set; }
+  //}
   [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
   public enum ReturnStatus
   {

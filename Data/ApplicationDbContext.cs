@@ -36,7 +36,7 @@ namespace automation.mbtdistr.ru.Data
 
     public DbSet<Compensation> Compensations { get; set; }
 
-    public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }
+    //public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }
 
     public DbSet<YMSupplyRequest> YMSupplyRequests { get; set; }
 

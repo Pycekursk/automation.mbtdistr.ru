@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
 
+using System.ComponentModel.DataAnnotations;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
@@ -120,12 +121,14 @@ namespace automation.mbtdistr.ru.Services.Wildberries.Models
     /// 1 — портал покупателей.
     /// </summary>
     [EnumMember(Value = "1")]
+    [Display(Name = "Портал покупателей")]
     Portal = 1,
 
     /// <summary>
     /// 3 — чат.
     /// </summary>
     [EnumMember(Value = "3")]
+    [Display(Name = "Чат")]
     Chat = 3
   }
 
@@ -138,18 +141,21 @@ namespace automation.mbtdistr.ru.Services.Wildberries.Models
     /// 0 — на рассмотрении.
     /// </summary>
     [EnumMember(Value = "0")]
+    [Display(Name = "На рассмотрении")]
     UnderReview = 0,
 
     /// <summary>
     /// 1 — отказ.
     /// </summary>
     [EnumMember(Value = "1")]
+    [Display(Name = "Отказ")]
     Rejected = 1,
 
     /// <summary>
     /// 2 — одобрено.
     /// </summary>
     [EnumMember(Value = "2")]
+    [Display(Name = "Одобрено")]
     Approved = 2
   }
 
@@ -162,36 +168,42 @@ namespace automation.mbtdistr.ru.Services.Wildberries.Models
     /// 0 — заявка на рассмотрении.
     /// </summary>
     [EnumMember(Value = "0")]
+    [Display(Name = "На рассмотрении")]
     SubmissionUnderReview = 0,
 
     /// <summary>
     /// 1 — товар остаётся у покупателя (заявка отклонена).
     /// </summary>
     [EnumMember(Value = "1")]
+    [Display(Name = "Товар остаётся у покупателя (заявка отклонена)")]
     CustomerKeepsOnRejection = 1,
 
     /// <summary>
     /// 2 — покупатель сдаёт товар на WB, товар отправляется в утилизацию.
     /// </summary>
     [EnumMember(Value = "2")]
+    [Display(Name = "Покупатель сдаёт товар на WB, товар отправляется в утилизацию")]
     SendToWBForDisposal = 2,
 
     /// <summary>
     /// 5 — товар остаётся у покупателя (заявка одобрена).
     /// </summary>
     [EnumMember(Value = "5")]
+    [Display(Name = "Товар остаётся у покупателя (заявка одобрена)")]
     CustomerKeepsOnApproval = 5,
 
     /// <summary>
     /// 8 — товар будет возвращён в реализацию после проверки WB.
     /// </summary>
     [EnumMember(Value = "8")]
+    [Display(Name = "Товар будет возвращён в реализацию после проверки WB")]
     ReturnToSaleAfterWBInspection = 8,
 
     /// <summary>
     /// 10 — товар возвращается продавцу.
     /// </summary>
     [EnumMember(Value = "10")]
+    [Display(Name = "Товар возвращается продавцу")]
     ReturnToSeller = 10
   }
 
@@ -202,66 +214,75 @@ namespace automation.mbtdistr.ru.Services.Wildberries.Models
   /// </summary>
   public enum ClaimAction
   {
-    [EnumMember(Value = "approve1")]
     /// <summary>
     /// одобрить с проверкой брака.
     /// Деньги вернутся после возврата товара.
     /// Товар проверят на складе и, если подтвердится брак, отправят обратно продавцу.
     /// </summary>
+    [EnumMember(Value = "approve1")]
+    [Display(Name = "Одобрить с проверкой брака")]
     ApproveWithDefectCheck,
 
-    [EnumMember(Value = "approve2")]
     /// <summary>
     /// одобрить и забрать товар.
     /// Деньги вернутся после возврата товара.
     /// Товар будет отправлен продавцу.
     /// </summary>
+    [EnumMember(Value = "approve2")]
+    [Display(Name = "Одобрить и забрать товар")]
     ApproveAndPickup,
 
-    [EnumMember(Value = "autorefund1")]
     /// <summary>
     /// одобрить без возврата товара.
     /// Товар остаётся у покупателя, деньги вернутся сразу.
     /// </summary>
+    [EnumMember(Value = "autorefund1")]
+    [Display(Name = "Одобрить без возврата товара")]
     AutoRefundWithoutReturn,
 
-    [EnumMember(Value = "reject1")]
     /// <summary>
     /// отклонить (шаблон «Брак не обнаружен»).
     /// </summary>
+    [EnumMember(Value = "reject1")]
+    [Display(Name = "Отклонить (шаблон «Брак не обнаружен»)")]
     RejectNoDefectFound,
 
-    [EnumMember(Value = "reject2")]
     /// <summary>
     /// отклонить (шаблон «Добавить фото/видео»).
     /// </summary>
+    [EnumMember(Value = "reject2")]
+    [Display(Name = "Отклонить (шаблон «Добавить фото/видео»)")]
     RejectAddPhotoVideo,
 
-    [EnumMember(Value = "reject3")]
     /// <summary>
     /// отклонить (шаблон «Направить в сервисный центр»).
     /// </summary>
+    [EnumMember(Value = "reject3")]
+    [Display(Name = "Отклонить (шаблон «Направить в сервисный центр»)")]
     RejectSendToServiceCenter,
 
-    [EnumMember(Value = "rejectcustom")]
     /// <summary>
     /// отклонить с собственным комментарием.
     /// Комментарий передаётся в параметре comment.
     /// </summary>
+    [EnumMember(Value = "rejectcustom")]
+    [Display(Name = "Отклонить с собственным комментарием")]
     RejectCustomComment,
 
-    [EnumMember(Value = "approvecc1")]
     /// <summary>
     /// одобрить заявку с возвратом товара в магазин продавца.
     /// Применимо только при схеме «Самовывоз».
     /// </summary>
+    [EnumMember(Value = "approvecc1")]
+    [Display(Name = "Одобрить заявку с возвратом товара в магазин продавца")]
     ApproveReturnToSeller,
 
-    [EnumMember(Value = "confirmreturngoodcc1")]
     /// <summary>
     /// подтвердить приёмку товара от покупателя.
     /// Применимо только при схеме «Самовывоз».
     /// </summary>
+    [EnumMember(Value = "confirmreturngoodcc1")]
+    [Display(Name = "Подтвердить приёмку товара от покупателя")]
     ConfirmReceiptBySeller
   }
 }

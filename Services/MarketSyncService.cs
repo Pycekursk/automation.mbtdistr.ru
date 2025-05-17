@@ -168,7 +168,8 @@ namespace automation.mbtdistr.ru.Services
       {
         try
         {
-          await SyncAllAsync(stoppingToken);
+          if (!Program.Environment.IsDevelopment())
+            await SyncAllAsync(stoppingToken);
         }
         catch (Exception ex)
         {
@@ -225,7 +226,7 @@ namespace automation.mbtdistr.ru.Services
               }
               lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
             } while (true);
-            allReturns.AddRange(await ProcessOzonReturnsAsync(returns, cab, _db, ct));
+            //allReturns.AddRange(await ProcessOzonReturnsAsync(returns, cab, _db, ct));
           }
 
           else if (cab.Marketplace.Equals("WILDBERRIES", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("WB", StringComparison.OrdinalIgnoreCase))
@@ -247,17 +248,6 @@ namespace automation.mbtdistr.ru.Services
             List<Return> returns = new List<Return>();
             foreach (var camp in _campaigns.Campaigns)
             {
-              var supplies = await _yMApiService.GetSupplyRequests(cab, camp);
-              if (supplies?.Result?.Items?.Count > 0)
-              {
-                foreach (var supple in supplies.Result.Items)
-                {
-                  var suppleItems = await _yMApiService.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
-                  supple.Items = suppleItems?.Result?.Items;
-                  await _yMApiService.AddOrUpdateSupplyRequestAsync(supple, _db);
-                }
-              }
-
               var returnResponse = await _yMApiService.GetReturnsListAsync(cab, camp);
               if (returnResponse?.Result?.Items?.Count > 0)
               {
@@ -271,8 +261,6 @@ namespace automation.mbtdistr.ru.Services
                   ret.Order = (await _yMApiService.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
                   if (ret.Items?.Count > 0)
                   {
-
-
                     foreach (var item in ret.Items)
                     {
                       var decision = item?.Decisions?.FirstOrDefault();
@@ -299,14 +287,13 @@ namespace automation.mbtdistr.ru.Services
                         decision.Images = imagesUrl;
                       }
                     }
-
                   }
+                  
+                  
                   var @return = Return.Parse<YMReturn>(ret);
-
                   if (ret.LogisticPickupPoint != null)
                   {
                     var warehouse = await _yMApiService.GetWarehouseByIdAsync(cab, ret.LogisticPickupPoint.Id);
-
                   }
 
                   @return.CabinetId = cab.Id;
@@ -314,12 +301,23 @@ namespace automation.mbtdistr.ru.Services
                 }
               }
 
-            }
-            if (returns.Count > 0)
-            {
-              await ProcessYMReturnsAsync(returns, cab, _db, ct);
+              if (returns.Count > 0)
+              {
+                returns = await AddOrUpdateReturnsAsync(returns, _db);
 
-              await Extensions.SendDebugObject<List<Return>>(returns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
+                await Extensions.SendDebugObject<List<Return>>(returns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
+              }
+
+              var supplies = await _yMApiService.GetSupplyRequests(cab, camp);
+              if (supplies?.Result?.Items?.Count > 0)
+              {
+                foreach (var supple in supplies.Result.Items)
+                {
+                  var suppleItems = await _yMApiService.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
+                  supple.Items = suppleItems?.Result?.Items;
+                  await _yMApiService.AddOrUpdateSupplyRequestAsync(supple, _db);
+                }
+              }
             }
           }
 
@@ -333,95 +331,94 @@ namespace automation.mbtdistr.ru.Services
     }
 
     private async Task<List<Models.Return>> ProcessOzonReturnsAsync(
-        List<Services.Ozon.Models.ReturnInfo> returns,
+        List<Models.Return> returns,
         Cabinet cab,
         ApplicationDbContext db,
         CancellationToken ct)
     {
-      try
-      {
-        List<Models.Return> returnList = new List<Models.Return>();
-        // TODO: конкретно мапить response.Items → модели Return и upsert в db.Returns
-        string message = string.Empty;
-        //var admin = await db.Workers.FirstOrDefaultAsync(w => w.TelegramId == 1406950293.ToString(), ct);
-        foreach (var x in returns)
-        {
-          // Проверяем, существует ли возврат с таким ID в базе данных
-          var existingReturn = await db.Returns
-            .Include(r => r.Info)
-            .Include(r => r.Compensation)
-            .Include(r => r.Cabinet)
-            .ThenInclude(c => c.AssignedWorkers)
-            .FirstOrDefaultAsync(r => r.Info.ReturnInfoId == x.Id && r.CabinetId == cab.Id, ct);
-          if (existingReturn != null)
-          {
-            if (existingReturn.Info.Id == 0)
-              existingReturn.Info = new ReturnMainInfo { ClaimId = existingReturn.Id.ToString() };
+      //try
+      //{
+      //  List<Models.Return> returnList = new List<Models.Return>();
+      //  // TODO: конкретно мапить response.Items → модели Return и upsert в db.Returns
+      //  string message = string.Empty;
+      //  //var admin = await db.Workers.FirstOrDefaultAsync(w => w.TelegramId == 1406950293.ToString(), ct);
+      //  foreach (var x in returns)
+      //  {
+      //    // Проверяем, существует ли возврат с таким ID в базе данных
+      //    var existingReturn = await db.Returns
+      //      .Include(r => r.Compensation)
+      //      .Include(r => r.Cabinet)
+      //      .ThenInclude(c => c.AssignedWorkers)
+      //      .FirstOrDefaultAsync(r => r.ReturnId == x.Id && r.CabinetId == cab.Id, ct);
+      //    if (existingReturn != null)
+      //    {
+      //      if (existingReturn.Info.Id == 0)
+      //        existingReturn.Info = new ReturnMainInfo { ClaimId = existingReturn.Id.ToString() };
 
-            var newStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-            var newStatusStr = newStatus.GetDisplayName();
-            var currentStatus = existingReturn.Info.ReturnStatus;
-            var currentStatusStr = currentStatus.GetDisplayName();
-            var newChangedAt = x.Visual?.ChangeMoment;
-            var oldChangedAt = existingReturn.ChangedAt;
+      //      var newStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
+      //      var newStatusStr = newStatus.GetDisplayName();
+      //      var currentStatus = existingReturn.Info.ReturnStatus;
+      //      var currentStatusStr = currentStatus.GetDisplayName();
+      //      var newChangedAt = x.Visual?.ChangeMoment;
+      //      var oldChangedAt = existingReturn.ChangedAt;
 
-            existingReturn.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-            existingReturn.Info.ReturnInfoId = x.Id;
-            existingReturn.Info.ReturnReasonName = x.ReturnReasonName;
-            existingReturn.ChangedAt = x.Visual?.ChangeMoment;
-            existingReturn.Info.OrderId = x.OrderId;
-            db.Returns.Update(existingReturn);
-            returnList.Add(existingReturn);
+      //      existingReturn.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out status) ? (ReturnStatus)status : ReturnStatus.Unknown;
+      //      existingReturn.Info.ReturnInfoId = x.Id;
+      //      existingReturn.Info.ReturnReasonName = x.ReturnReasonName;
+      //      existingReturn.ChangedAt = x.Visual?.ChangeMoment;
+      //      existingReturn.Info.OrderId = x.OrderId;
+      //      db.Returns.Update(existingReturn);
+      //      returnList.Add(existingReturn);
 
-            await db.SaveChangesAsync();
+      //      await db.SaveChangesAsync();
 
-            if (currentStatus != newStatus || oldChangedAt != newChangedAt)
-            {
-              message = FormatReturnHtmlMessage(existingReturn, cab, false, currentStatus);
-              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message, x));
-            }
-          }
-          else
-          {
-            try
-            {
-              Models.Return @return = new Models.Return();
-              @return.CabinetId = cab.Id;
-              @return.ChangedAt = x.Visual?.ChangeMoment;
-              @return.Info.ReturnInfoId = x.Id;
-              //if (x.Logistic.ReturnDate.HasValue)
-              //  @return.OrderedAt = x.Logistic.ReturnDate.Value;
-              // Updated line to handle potential null reference
-              @return.CreatedAt = x.Logistic?.ReturnDate.GetValueOrDefault() ?? DateTime.MinValue;
+      //      if (currentStatus != newStatus || oldChangedAt != newChangedAt)
+      //      {
+      //        message = FormatReturnHtmlMessage(existingReturn, cab, false, currentStatus);
+      //        ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message, x));
+      //      }
+      //    }
+      //    else
+      //    {
+      //      try
+      //      {
+      //        Models.Return @return = new Models.Return();
+      //        @return.CabinetId = cab.Id;
+      //        @return.ChangedAt = x.Visual?.ChangeMoment;
 
+      //        //if (x.Logistic.ReturnDate.HasValue)
+      //        //  @return.OrderedAt = x.Logistic.ReturnDate.Value;
+      //        // Updated line to handle potential null reference
+      //        @return.CreatedAt = x.Logistic?.ReturnDate.GetValueOrDefault() ?? DateTime.MinValue;
 
 
 
-              @return.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-              @return.Info.ReturnReasonName = x.ReturnReasonName;
-              @return.Info.OrderId = x.OrderId;
-              db.Returns.Add(@return);
-              returnList.Add(@return);
 
-              await db.SaveChangesAsync();
 
-              message = FormatReturnHtmlMessage(@return, cab, true);
-              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message, x));
-            }
-            catch (Exception ex)
-            {
-              await Extensions.SendDebugMessage($"Ошибка при обработке возврата Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-            }
-          }
-        }
-        return returnList;
-      }
-      catch (Exception ex)
-      {
-        //ошибка при сохранении изменений в БД
-        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-        throw;
-      }
+      //        db.Returns.Add(@return);
+      //        returnList.Add(@return);
+
+      //        await db.SaveChangesAsync();
+
+      //        message = FormatReturnHtmlMessage(@return, cab, true);
+      //        ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message, x));
+      //      }
+      //      catch (Exception ex)
+      //      {
+      //        await Extensions.SendDebugMessage($"Ошибка при обработке возврата Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
+      //      }
+      //    }
+      //  }
+      //  return returnList;
+      //}
+      //catch (Exception ex)
+      //{
+      //  //ошибка при сохранении изменений в БД
+      //  await Extensions.SendDebugMessage($"Ошибка при обработке возвратов Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
+      //  throw;
+      //}
+
+      return returns;
     }
 
 
@@ -437,18 +434,18 @@ namespace automation.mbtdistr.ru.Services
         foreach (var claim in claims)
         {
           var existingReturn = db.Returns
-       .Include(r => r.Info)
+       //.Include(r => r.Info)
        .Include(r => r.Compensation)
        .Include(r => r.Cabinet)
            .ThenInclude(c => c.AssignedWorkers)
-       .FirstOrDefault(r => r.Info.ClaimId == claim.Id && r.CabinetId == cab.Id);
+       .FirstOrDefault(r => r.ReturnId == claim.Id && r.CabinetId == cab.Id);
 
           if (existingReturn != null)
           {
             var oldChangedAt = existingReturn.ChangedAt;
             var newChangedAt = claim.DtUpdate;
             // Обновляем существующий возврат
-            existingReturn.Info.ClaimId = claim.Id;
+            existingReturn.ReturnId = claim.Id;
             existingReturn.ChangedAt = claim.DtUpdate;
             existingReturn.OrderedAt = claim.OrderDt;
             existingReturn.CreatedAt = claim.Dt;
@@ -466,7 +463,7 @@ namespace automation.mbtdistr.ru.Services
           {
             Models.Return @return = new Models.Return();
             @return.CabinetId = cab.Id;
-            @return.Info.ClaimId = claim.Id;
+            @return.ReturnId = claim.Id;
             @return.ChangedAt = claim.DtUpdate;
             @return.CreatedAt = claim.Dt;
             @return.OrderedAt = claim.OrderDt;
@@ -489,32 +486,33 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-    public async Task<List<Models.Return>> ProcessYMReturnsAsync(
-        List<Return> returns,
-        Cabinet cab,
-        ApplicationDbContext db,
-        CancellationToken ct
-      )
-    {
-      var returnsList = new List<Models.Return>();
 
+    /// <summary>
+    /// Добавление или обновление возвратов в базе данных.
+    /// </summary>
+    /// <param name="returns"> Список возвратов для обработки.</param>
+    /// <param name="db"> Контекст базы данных.</param>
+    /// <returns> Список обработанных возвратов.</returns>
+    public async Task<List<Models.Return>> AddOrUpdateReturnsAsync(List<Return> returns, ApplicationDbContext db)
+    {
       try
       {
-        var existing = await _db.Returns
+        var existing = _db.Returns
              .Include(r => r.Warehouse)
              .Include(r => r.Cabinet)
              .ThenInclude(c => c.AssignedWorkers)
              .Include(r => r.Products)
              .ThenInclude(p => p.Images)
-             .ToListAsync();
+             .ToList()
+             .Where(r => !string.IsNullOrEmpty(r.ReturnId) && returns.Any(_r => $"{r.ReturnId}_{r.OrderId}" == $"{_r.ReturnId}_{_r.OrderId}"))
+             .ToList();
 
       }
       catch (Exception ex)
       {
         await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
       }
-
-      return returnsList;
+      return returns;
     }
 
     public async Task ProcessYMSupplyRequestsAsync(
@@ -594,25 +592,54 @@ namespace automation.mbtdistr.ru.Services
     public static string FormatReturnHtmlMessage(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
     {
       var sb = new StringBuilder();
-
+      // Реализация аналогичная с FormatReturnHtmlContent за исключением того, что здесь вместо <br> используется StringBuilder.AppendLine(" ")
       if (isNew.HasValue && isNew.Value)
       {
-        sb.AppendLine($"<b>НОВЫЙ ВОЗВРАТ</b>");
-        sb.AppendLine($"{cab.Name} ({cab.Marketplace.ToUpper()})");
+        sb.AppendLine($"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine(" ");
       }
       else if (isNew.HasValue && !isNew.Value)
       {
-        sb.AppendLine($"<b>Обновление возврата</b>");
-        sb.AppendLine($"{cab.Name} ({cab.Marketplace.ToUpper()})");
+        sb.AppendLine($"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine(" ");
+      }
+      sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
+      sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
+      sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
+      sb.AppendLine($"<b>Номер заказа:</b> {x.OrderNumber}");
+      sb.AppendLine($"<b>Дата заказа:</b> {x.OrderedAt}");
+      if (!string.IsNullOrEmpty(x.ReturnReason))
+        sb.AppendLine($"<b>Причина возврата:</b> {x.ReturnReason}");
+      sb.AppendLine(" ");
+      sb.AppendLine(" ");
+      if (x?.Products?.Count > 0)
+      {
+        sb.AppendLine("<b>Товары:</b>");
+        int i = 1;
+        foreach (var item in x.Products)
+        {
+          sb.AppendLine(" ");
+          sb.AppendLine($"<b>№ {i++}:</b>");
+          sb.AppendLine($"<b>Наименование:</b> {item.Name}");
+          sb.AppendLine($"<b>SKU:</b> {item.Sku}");
+          sb.AppendLine($"<b>Артикул:</b> {item.OfferId}");
+          sb.AppendLine($"<b>Количество:</b> {item.Count}");
+        }
+        sb.AppendLine(" ");
+        sb.AppendLine(" ");
       }
 
-      sb.AppendLine($"<b>ID возврата:</b> {x.Info.ReturnInfoId}");
-      sb.AppendLine($"<b>ID заказа:</b> {x.Info.OrderId}");
-      sb.AppendLine("");
-      sb.AppendLine($"<b>Причина возврата:</b> {x.Info.ReturnReasonName}");
-      sb.AppendLine("");
       sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
+      sb.AppendLine(" ");
       sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
+      sb.AppendLine(" ");
+      sb.AppendLine($"<b>Локация:</b> {x.Warehouse?.Name}");
+      sb.AppendLine(" ");
+      if (x.Warehouse?.Address != null)
+      {
+        sb.AppendLine($"<b>Адрес:</b>{x.Warehouse.Address.Country}, {x.Warehouse.Address.City}, {x.Warehouse.Address.Street}, {x.Warehouse.Address.House}, {x.Warehouse.Address.Office}");
+        sb.AppendLine(" ");
+      }
       return sb.ToString();
     }
 
@@ -630,16 +657,45 @@ namespace automation.mbtdistr.ru.Services
         sb.AppendLine($"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
         sb.AppendLine("<br>");
       }
+      sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
+      sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
+      sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
+      sb.AppendLine($"<b>Номер заказа:</b> {x.OrderNumber}");
+      sb.AppendLine($"<b>Дата заказа:</b> {x.OrderedAt}");
 
-      sb.AppendLine($"<b>ID возврата:</b> {x.Info.ReturnInfoId}");
-      sb.AppendLine($"<b>ID заказа:</b> {x.Info.OrderId}");
+      if (!string.IsNullOrEmpty(x.ReturnReason))
+        sb.AppendLine($"<b>Причина возврата:</b> {x.ReturnReason}");
+
       sb.AppendLine("<br>");
       sb.AppendLine("<br>");
-      sb.AppendLine($"<b>Причина возврата:</b> {x.Info.ReturnReasonName}");
-      sb.AppendLine("<br>");
+
+      if (x?.Products?.Count > 0)
+      {
+        sb.AppendLine($"<b>Товары:</b>");
+        int i = 1;
+        foreach (var item in x.Products)
+        {
+          sb.AppendLine("<br>");
+          sb.AppendLine($"<b>№ {i++}:</b>");
+          sb.AppendLine($"<b>Наименование:</b> {item.Name}");
+          sb.AppendLine($"<b>SKU:</b> {item.Sku}");
+          sb.AppendLine($"<b>Артикул:</b> {item.OfferId}");
+          sb.AppendLine($"<b>Количество:</b> {item.Count}");
+        }
+        sb.AppendLine("<br>");
+        sb.AppendLine("<br>");
+      }
       sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
       sb.AppendLine("<br>");
       sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
+      sb.AppendLine("<br>");
+      sb.AppendLine($"<b>Локация:</b> {x.Warehouse?.Name}");
+      sb.AppendLine("<br>");
+      if (x.Warehouse?.Address != null)
+      {
+        sb.AppendLine($"<b>Адрес:</b>{x.Warehouse.Address.Country}, {x.Warehouse.Address.City}, {x.Warehouse.Address.Street}, {x.Warehouse.Address.House}, {x.Warehouse.Address.Office}");
+        sb.AppendLine("<br>");
+      }
       return sb.ToString();
     }
 
