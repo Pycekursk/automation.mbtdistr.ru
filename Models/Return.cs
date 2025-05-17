@@ -72,6 +72,10 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Компенсация")]
     public Compensation? Compensation { get; set; }
 
+    [ForeignKey(nameof(Warehouse)), DataGrid(false)]
+    [Display(Name = "ID склада")]
+    public int? WarehouseId { get; set; } // идентификатор склада/ПВЗ, куда возвращается товар
+
     [Display(Name = "Склад")]
     public Warehouse? Warehouse { get; set; } // склад/ПВЗ, куда возвращается товар
 
@@ -340,24 +344,6 @@ namespace automation.mbtdistr.ru.Models
     public Warehouse Warehouse { get; set; }
   }
 
-  //public class ReturnInfo
-  //{
-  //  public ReturnInfo(int returnId)
-  //  {
-  //    ReturnId = returnId;
-  //  }
-
-  //  [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-  //  public int Id { get; set; }
-
-  //  public string ExternalId { get; set; } = string.Empty;
-
-  //  [ForeignKey("Return")]
-  //  public int ReturnId { get; set; }
-
-  //  [System.Text.Json.Serialization.JsonIgnore, Newtonsoft.Json.JsonIgnore]
-  //  public Return Return { get; set; }
-  //}
   [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
   public enum ReturnStatus
   {

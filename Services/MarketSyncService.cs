@@ -39,7 +39,6 @@ namespace automation.mbtdistr.ru.Services
   public class MarketSyncService : BackgroundService
   {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<MarketSyncService> _logger;
     private readonly TimeSpan _interval;
     private readonly ITelegramBotClient _botClient;
     private const int _telegramMaxMessageLength = 4096;
@@ -90,16 +89,20 @@ namespace automation.mbtdistr.ru.Services
     public MarketSyncService(
 
         IServiceScopeFactory scopeFactory,
-        ILogger<MarketSyncService> logger,
         ITelegramBotClient botClient,
         IConfiguration config,
         IOptions<AppSettings> options)
     {
-      _db = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
-      _botClient = botClient;
+      //_db = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
       _scopeFactory = scopeFactory;
+      using var scope = _scopeFactory.CreateScope();
+      _db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+
+      _botClient = botClient;
+      //_scopeFactory = scopeFactory;
       _yMApiService = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<YMApiService>();
-      _logger = logger;
       var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
 
@@ -211,7 +214,7 @@ namespace automation.mbtdistr.ru.Services
               var response = await ozSvc.GetReturnsListAsync(cab, filter, lastId: lastId);
               if (response == null)
               {
-                _logger.LogWarning("Не удалось получить данные возвратов для кабинета {CabinetId}", cab.Id);
+
                 break;
               }
               if (response.Returns != null && response.Returns.Count > 0)
@@ -288,8 +291,8 @@ namespace automation.mbtdistr.ru.Services
                       }
                     }
                   }
-                  
-                  
+
+
                   var @return = Return.Parse<YMReturn>(ret);
                   if (ret.LogisticPickupPoint != null)
                   {
@@ -495,9 +498,7 @@ namespace automation.mbtdistr.ru.Services
     /// <returns> Список обработанных возвратов.</returns>
     public async Task<List<Models.Return>> AddOrUpdateReturnsAsync(List<Return> returns, ApplicationDbContext db)
     {
-      try
-      {
-        var existing = _db.Returns
+      var existing = _db.Returns
              .Include(r => r.Warehouse)
              .Include(r => r.Cabinet)
              .ThenInclude(c => c.AssignedWorkers)
@@ -507,10 +508,49 @@ namespace automation.mbtdistr.ru.Services
              .Where(r => !string.IsNullOrEmpty(r.ReturnId) && returns.Any(_r => $"{r.ReturnId}_{r.OrderId}" == $"{_r.ReturnId}_{_r.OrderId}"))
              .ToList();
 
-      }
-      catch (Exception ex)
+      foreach (var ret in returns)
       {
-        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
+        try
+        {
+          if (ret.Warehouse != null)
+          {
+            var warehouse = await db.Warehouses.FirstOrDefaultAsync(w => w.Name == ret.Warehouse.Name);
+            if (warehouse != null)
+            {
+              // Если локация уже существует, обновляем ее
+              ret.WarehouseId = warehouse.Id;
+            }
+            else
+            {
+              // Если локация не существует, добавляем ее
+              db.Warehouses.Add(ret.Warehouse);
+              await db.SaveChangesAsync();
+              ret.WarehouseId = ret.Warehouse.Id;
+            }
+          }
+          var existingReturn = existing.FirstOrDefault(r => r.ReturnId == ret.ReturnId && r.OrderId == ret.OrderId);
+          if (existingReturn != null)
+          {
+            // Обновляем существующий возврат
+            existingReturn.ChangedAt = ret.ChangedAt;
+            existingReturn.CreatedAt = ret.CreatedAt;
+            existingReturn.OrderedAt = ret.OrderedAt;
+            existingReturn.WarehouseId = ret.WarehouseId;
+            db.Returns.Update(existingReturn);
+          }
+          else
+          {
+            // Добавляем новый возврат
+            db.Returns.Add(ret);
+
+          }
+          await db.SaveChangesAsync();
+
+        }
+        catch (Exception ex)
+        {
+          await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
+        }
       }
       return returns;
     }

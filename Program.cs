@@ -7,7 +7,7 @@ using automation.mbtdistr.ru.Services.LLM;
 using automation.mbtdistr.ru.Services.Ozon;
 using automation.mbtdistr.ru.Services.Wildberries;
 using automation.mbtdistr.ru.Services.YandexMarket;
-
+using Microsoft.EntityFrameworkCore.InMemory;
 using Google.Apis.Sheets.v4;
 
 using Microsoft.AspNetCore.Identity;
@@ -60,6 +60,8 @@ namespace automation.mbtdistr.ru
           new MySqlServerVersion(new Version(8, 0, 21)));
       });
 
+      builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseInMemoryDatabase("TestDb"));
 
       builder.Services.AddControllersWithViews();
 

@@ -268,7 +268,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ReturnMainInfo");
+                    b.ToTable("ReturnMainInfo", (string)null);
                 });
 
             modelBuilder.Entity("WorkerCabinets", b =>
@@ -326,7 +326,7 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("WarehouseId")
                         .IsUnique();
 
-                    b.ToTable("Address");
+                    b.ToTable("Address", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Cabinet", b =>
@@ -347,7 +347,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Cabinets");
+                    b.ToTable("Cabinets", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.CabinetSettings", b =>
@@ -366,7 +366,7 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("CabinetId")
                         .IsUnique();
 
-                    b.ToTable("CabinetSettings");
+                    b.ToTable("CabinetSettings", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Compensation", b =>
@@ -395,7 +395,7 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("ReturnId")
                         .IsUnique();
 
-                    b.ToTable("Compensations");
+                    b.ToTable("Compensations", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.ConnectionParameter", b =>
@@ -419,7 +419,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("CabinetSettingsId");
 
-                    b.ToTable("ConnectionParameters");
+                    b.ToTable("ConnectionParameters", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.NotificationOptions", b =>
@@ -445,7 +445,7 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("WorkerId")
                         .IsUnique();
 
-                    b.ToTable("NotificationOptions");
+                    b.ToTable("NotificationOptions", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Return", b =>
@@ -502,7 +502,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("WarehouseId");
 
-                    b.ToTable("Returns");
+                    b.ToTable("Returns", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnImage", b =>
@@ -524,7 +524,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("ReturnProductId");
 
-                    b.ToTable("ReturnImages");
+                    b.ToTable("ReturnImages", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnProduct", b =>
@@ -554,7 +554,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("ReturnId");
 
-                    b.ToTable("ReturnProducts");
+                    b.ToTable("ReturnProducts", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Warehouse", b =>
@@ -576,7 +576,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Warehouses");
+                    b.ToTable("Warehouses", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Worker", b =>
@@ -612,7 +612,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Workers");
+                    b.ToTable("Workers", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMCurrencyValue", b =>
@@ -638,7 +638,7 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("YMSupplyRequestItemId")
                         .IsUnique();
 
-                    b.ToTable("YMCurrencyValues");
+                    b.ToTable("YMCurrencyValues", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrder", b =>
@@ -848,7 +848,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("TransitLocationServiceId");
 
-                    b.ToTable("YMSupplyRequests");
+                    b.ToTable("YMSupplyRequests", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestCounters", b =>
@@ -879,7 +879,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("YMSupplyRequestCounters");
+                    b.ToTable("YMSupplyRequestCounters", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestId", b =>
@@ -898,7 +898,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("YMSupplyRequestId");
+                    b.ToTable("YMSupplyRequestId", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItem", b =>
@@ -926,7 +926,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("SupplyRequestId");
 
-                    b.ToTable("YMSupplyRequestItems");
+                    b.ToTable("YMSupplyRequestItems", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItemCounters", b =>
@@ -952,7 +952,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("YMSupplyRequestItemCounters");
+                    b.ToTable("YMSupplyRequestItemCounters", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocation", b =>
@@ -980,7 +980,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("AddressId");
 
-                    b.ToTable("YMSupplyRequestLocation");
+                    b.ToTable("YMSupplyRequestLocation", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocationAddress", b =>
@@ -996,7 +996,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("YMLocationAddresses");
+                    b.ToTable("YMLocationAddresses", (string)null);
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestReference", b =>
@@ -1024,7 +1024,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("RequestId");
 
-                    b.ToTable("YMSupplyRequestReferences");
+                    b.ToTable("YMSupplyRequestReferences", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -1217,7 +1217,7 @@ namespace automation.mbtdistr.ru.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDeliveryAddress", "Address", b1 =>
+                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDelivery.Address#automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDeliveryAddress", "Address", b1 =>
                         {
                             b1.Property<long>("YMOrderDeliveryOrderId")
                                 .HasColumnType("bigint");
@@ -1254,13 +1254,13 @@ namespace automation.mbtdistr.ru.Migrations
 
                             b1.HasKey("YMOrderDeliveryOrderId");
 
-                            b1.ToTable("YMOrderDeliveries");
+                            b1.ToTable("YMOrderDeliveries", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("YMOrderDeliveryOrderId");
                         });
 
-                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDeliveryDates", "Dates", b1 =>
+                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDelivery.Dates#automation.mbtdistr.ru.Services.YandexMarket.Models.YMOrderDeliveryDates", "Dates", b1 =>
                         {
                             b1.Property<long>("YMOrderDeliveryOrderId")
                                 .HasColumnType("bigint");
@@ -1287,7 +1287,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                             b1.HasKey("YMOrderDeliveryOrderId");
 
-                            b1.ToTable("YMOrderDeliveries");
+                            b1.ToTable("YMOrderDeliveries", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("YMOrderDeliveryOrderId");
@@ -1386,7 +1386,7 @@ namespace automation.mbtdistr.ru.Migrations
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocationAddress", b =>
                 {
-                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.YMGps", "Gps", b1 =>
+                    b.OwnsOne("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestLocationAddress.Gps#automation.mbtdistr.ru.Services.YandexMarket.YMGps", "Gps", b1 =>
                         {
                             b1.Property<long>("YMSupplyRequestLocationAddressId")
                                 .HasColumnType("bigint");
@@ -1399,7 +1399,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                             b1.HasKey("YMSupplyRequestLocationAddressId");
 
-                            b1.ToTable("YMLocationAddresses");
+                            b1.ToTable("YMLocationAddresses", (string)null);
 
                             b1.WithOwner()
                                 .HasForeignKey("YMSupplyRequestLocationAddressId");
