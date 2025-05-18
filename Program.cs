@@ -21,13 +21,13 @@ using Swashbuckle.AspNetCore.SwaggerUI;
 using System;
 using System.Reflection;
 using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Unicode;
 
 using Telegram.Bot;
 
 using static automation.mbtdistr.ru.Extensions;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace automation.mbtdistr.ru
 {
@@ -63,7 +63,17 @@ namespace automation.mbtdistr.ru
       builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseInMemoryDatabase("TestDb"));
 
-      builder.Services.AddControllersWithViews();
+      builder.Services.AddControllersWithViews().AddNewtonsoftJson(options =>
+      {
+        options.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
+        options.SerializerSettings.Formatting = Formatting.Indented;
+        options.SerializerSettings.Converters.Add(new StringEnumConverter());
+
+
+      });
+
+
+
 
       builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 

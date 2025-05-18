@@ -110,8 +110,8 @@ namespace automation.mbtdistr.ru.Services
 
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
     {
-      if (e.ApiDTO != null)
-        await Extensions.SendDebugObject(e.ApiDTO, $"Обьект возврата: {e.Return.Id}");
+      //if (e.ApiDTO != null)
+      //  await Extensions.SendDebugObject(e.ApiDTO, $"Обьект возврата: {e.Return.Id}");
       using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
       var workers = context.Cabinets
         .Include(c => c.AssignedWorkers)
@@ -337,8 +337,8 @@ namespace automation.mbtdistr.ru.Services
                   }
                   if (@return.Scheme == SellScheme.FBO)
                   {
-                    @return.OrderUrl = $"https://partner.market.yandex.ru/business/{camp.Business.Id}/returns?campaignId={camp.Id}&returnId={ret.Id}&partnerId=179624982&orderId={ret.OrderId}";
-                    @return.Url = $"https://partner.market.yandex.ru/order/{ret.OrderId}?partnerId=179624982";
+                    //@return.OrderUrl = $"https://partner.market.yandex.ru/business/{camp.Business.Id}/returns?campaignId={camp.Id}&returnId={ret.Id}&partnerId=179624982&orderId={ret.OrderId}";
+                    //@return.Url = $"https://partner.market.yandex.ru/order/{ret.OrderId}?partnerId=179624982";
                   }
                   @return.Products?.ForEach(p => p.Url = $"https://partner.market.yandex.ru/supplier/{camp.Id}/assortment/offer-card?tld=ru&offerId={p.OfferId}");
                   returns.Add(@return);
@@ -574,6 +574,9 @@ namespace automation.mbtdistr.ru.Services
           var existingReturn = existing.FirstOrDefault(r => r.ReturnId == ret.ReturnId && r.OrderId == ret.OrderId);
           if (existingReturn != null)
           {
+            var oldChangedAt = existingReturn.ChangedAt;
+            var newChangedAt = ret.ChangedAt;
+
             // Обновляем существующий возврат
             existingReturn.ChangedAt = ret.ChangedAt;
             existingReturn.CreatedAt = ret.CreatedAt;
@@ -603,16 +606,25 @@ namespace automation.mbtdistr.ru.Services
                 }
               }
             }
-
-
             db.Returns.Update(existingReturn);
+            await db.SaveChangesAsync();
+
+            if (oldChangedAt != newChangedAt)
+            {
+              // Отправляем сообщение об обновлении возврата
+              var message = FormatReturnHtmlMessage(existingReturn, db.Cabinets.FirstOrDefault(c => c.Id == existingReturn.CabinetId), false);
+              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(existingReturn.CabinetId, existingReturn, message));
+            }
           }
           else
           {
             // Добавляем новый возврат
             db.Returns.Add(ret);
+            await db.SaveChangesAsync();
+
+            var message = FormatReturnHtmlMessage(ret, db.Cabinets.FirstOrDefault(c => c.Id == ret.CabinetId), true);
+            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(ret.CabinetId, ret, message));
           }
-          await db.SaveChangesAsync();
 
         }
         catch (Exception ex)
@@ -712,12 +724,16 @@ namespace automation.mbtdistr.ru.Services
         sb.AppendLine(" ");
       }
       sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
+      sb.AppendLine($"<b>Тип возврата:</b> {x?.Scheme?.GetDisplayName()}");
+
       sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
       sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
       sb.AppendLine($"<b>Номер заказа:</b> {x.OrderNumber}");
       sb.AppendLine($"<b>Дата заказа:</b> {x.OrderedAt}");
       if (!string.IsNullOrEmpty(x.ReturnReason))
         sb.AppendLine($"<b>Причина возврата:</b> {x.ReturnReason}");
+      if (!string.IsNullOrEmpty(x.ClientComment))
+        sb.AppendLine($"<b>Комментарий:</b> {x.ClientComment}");
       sb.AppendLine(" ");
       sb.AppendLine(" ");
       if (x?.Products?.Count > 0)
@@ -726,27 +742,35 @@ namespace automation.mbtdistr.ru.Services
         int i = 1;
         foreach (var item in x.Products)
         {
-          sb.AppendLine(" ");
           sb.AppendLine($"<b>№ {i++}:</b>");
-          sb.AppendLine($"<b>Наименование:</b> {item.Name}");
+          if (!string.IsNullOrEmpty(item.Url))
+            sb.AppendLine($"<b>Наименование: </b><a href=\"{item.Url}\">{item.Name}</a>");
+          sb.AppendLine($"");
           sb.AppendLine($"<b>SKU:</b> {item.Sku}");
           sb.AppendLine($"<b>Артикул:</b> {item.OfferId}");
           sb.AppendLine($"<b>Количество:</b> {item.Count}");
+          if (item.Images != null && item.Images.Count > 0)
+          {
+            sb.AppendLine($"<b>Изображения:</b>");
+            foreach (var img in item.Images)
+            {
+              sb.AppendLine($"<a href=\"{img.Url}\">{img.Url}</a>");
+            }
+          }
         }
         sb.AppendLine(" ");
         sb.AppendLine(" ");
       }
 
       sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
-      sb.AppendLine(" ");
       sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
-      sb.AppendLine(" ");
-      sb.AppendLine($"<b>Локация:</b> {x.Warehouse?.Name}");
       sb.AppendLine(" ");
       if (x.Warehouse?.Address != null)
       {
-        sb.AppendLine($"<b>Адрес:</b>{x.Warehouse.Address.Country}, {x.Warehouse.Address.City}, {x.Warehouse.Address.Street}, {x.Warehouse.Address.House}, {x.Warehouse.Address.Office}");
-        sb.AppendLine(" ");
+        x.Warehouse.Address.FullAddress ??= $"{x.Warehouse.Address.Country}, {x.Warehouse.Address.City}, {x.Warehouse.Address.Street}, {x.Warehouse.Address.House}, {x.Warehouse.Address.Office}";
+
+        sb.AppendLine($"<b>Склад:</b> {x.Warehouse.Name}");
+        sb.AppendLine($"<b>Адрес:</b> {x.Warehouse.Address.FullAddress}");
       }
       return sb.ToString();
     }

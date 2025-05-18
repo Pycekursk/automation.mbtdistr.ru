@@ -73,6 +73,19 @@ namespace automation.mbtdistr.ru.Data
           .Where(t => t.IsEnum && t.Name.StartsWith("YM", StringComparison.Ordinal))
           .ToList();
 
+      ymEnumTypes.Add(typeof(SellScheme));
+      ymEnumTypes.Add(typeof(ReturnType));
+
+      //добавляем в список все енумы класса Return
+
+      //  var enums = typeof(automation.mbtdistr.ru.Models.Return).GetNestedTypes().Where(t => t.IsEnum).ToList();
+
+
+      //ymEnumTypes.AddRange(typeof(Return).Assembly
+      //    .GetTypes()
+      //    .Where(t => t.IsEnum)
+      //    .ToList());
+
       foreach (var enumType in ymEnumTypes)
       {
         // Создаём ValueConverter для данного enum-типа

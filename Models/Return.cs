@@ -20,7 +20,7 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "ID Кабинета"), ForeignKey(nameof(Cabinet)), DataGrid(false)]
     public int CabinetId { get; set; } // кабинет/бренд/ООО
 
-    [Display(Name = "Кабинет")]
+    [Display(Name = "Кабинет"), JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public Cabinet Cabinet { get; set; }
 
     /// <summary>
@@ -33,8 +33,8 @@ namespace automation.mbtdistr.ru.Models
     /// <summary>
     /// Ссылка на возврат в системе Ozon/Wildberries/ЯндексМаркет
     /// </summary>
-    [JsonProperty("returnNumber")]
-    [Display(Name = "Номер возврата")]
+    [JsonProperty("url")]
+    [Display(Name = "Ссылка на возврат")]
     public string? Url { get; set; } // ссылка на возврат в системе Ozon/Wildberries/ЯндексМаркет
 
 
@@ -275,6 +275,12 @@ namespace automation.mbtdistr.ru.Models
             Sku = item.MarketSku.ToString(),
             Count = item.Count,
             OfferId = item.ShopSku,
+            Name = ymReturn?.Order?.Items?.FirstOrDefault(i => i.OfferId == item.ShopSku)?.OfferName,
+            Price = new Price()
+            {
+              Amount = (decimal?)ymReturn?.Order?.Items?.FirstOrDefault(i => i.OfferId == item.ShopSku)?.Price,
+              Currency = ymReturn?.Order?.Currency.ToString(),
+            },
             //получаем все картинки из всех решений
           };
           if (item?.Decisions?.Count > 0)
@@ -306,7 +312,7 @@ namespace automation.mbtdistr.ru.Models
           @return.Warehouse.Address.Longitude = ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
         }
       }
-    
+
     }
   }
 }
