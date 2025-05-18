@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250518073448_removeAddress3")]
+    partial class removeAddress3
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -350,31 +353,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsUnique();
 
                     b.ToTable("NotificationOptions");
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal?>("Amount")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("Currency")
-                        .HasColumnType("longtext");
-
-                    b.Property<int>("ReturnProductId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReturnProductId")
-                        .IsUnique();
-
-                    b.ToTable("Price");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Return", b =>
@@ -1078,17 +1056,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Worker");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Models.ReturnProduct", "ReturnProduct")
-                        .WithOne("Price")
-                        .HasForeignKey("automation.mbtdistr.ru.Models.Price", "ReturnProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ReturnProduct");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Return", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Models.Cabinet", "Cabinet")
@@ -1436,9 +1403,6 @@ namespace automation.mbtdistr.ru.Migrations
             modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnProduct", b =>
                 {
                     b.Navigation("Images");
-
-                    b.Navigation("Price")
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Warehouse", b =>

@@ -34,8 +34,6 @@ namespace automation.mbtdistr.ru.Data
 
     public DbSet<Warehouse> Warehouses { get; set; }
 
-    public DbSet<automation.mbtdistr.ru.Models.Address> Addresses { get; set; }
-
     public DbSet<Compensation> Compensations { get; set; }
 
     //public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }
@@ -170,10 +168,6 @@ namespace automation.mbtdistr.ru.Data
           .WithMany(a => a.LocationAddresses)
           .HasForeignKey(l => l.AddressId)
           .OnDelete(DeleteBehavior.Restrict);
-
-      modelBuilder.Entity<ReturnMainInfo>()
-        .Property(r => r.ReturnStatus)
-        .HasConversion<string>();
 
       // 1:1 Cabinet ↔ CabinetSettings
       modelBuilder.Entity<Cabinet>()

@@ -15,7 +15,6 @@ namespace automation.mbtdistr.ru.Models
     /// Невыкуп.
     /// </summary>
     [EnumMember(Value = "UNREDEEMED")]
-
     [JsonProperty("UNREDEEMED")]
     [Display(Name = "Невыкуп")]
     Unredeemed,
@@ -33,9 +32,8 @@ namespace automation.mbtdistr.ru.Models
     /// Неизвестный тип.
     /// </summary>
     [EnumMember(Value = "UNKNOWN")]
-
     [JsonProperty("UNKNOWN")]
     [Display(Name = "Неизвестный тип")]
-    Unknown = 0
+    Unknown
   }
 }

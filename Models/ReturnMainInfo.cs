@@ -15,7 +15,6 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public class ReturnMainInfo
 {
-  [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
   public int Id { get; set; }  // Внутренний PK для этой таблицы
 
   //[ForeignKey(nameof(Return))]
@@ -138,11 +137,6 @@ public class ReturnItem
   public int Count { get; set; } // Количество товара
 
   public string Status { get; set; } // Статус товара (например, PICKED) (только Яндекс)
-
-  // Навигация на родительский возврат
-  [ForeignKey(nameof(ReturnMainInfo))]
-  public long ReturnMainInfoId { get; set; }
-  public ReturnMainInfo ReturnMainInfo { get; set; }
 
   // Список треков для этого товара
   public List<ReturnTrack> Tracks { get; set; } = new List<ReturnTrack>();

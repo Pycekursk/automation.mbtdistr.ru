@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250518060907_removeAddress2")]
+    partial class removeAddress2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -218,6 +221,59 @@ namespace automation.mbtdistr.ru.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("ReturnMainInfo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimId")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasColumnType("longtext");
+
+                    b.Property<long?>("NmId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OrderNumber")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("PostingNumber")
+                        .HasColumnType("longtext");
+
+                    b.Property<decimal?>("Price")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<string>("ProductsSku")
+                        .HasColumnType("longtext");
+
+                    b.Property<long?>("ReturnInfoId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReturnReasonName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("ReturnStatus")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Schema")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Type")
+                        .HasColumnType("longtext");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ReturnMainInfo");
+                });
+
             modelBuilder.Entity("WorkerCabinets", b =>
                 {
                     b.Property<int>("WorkerId")
@@ -350,31 +406,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsUnique();
 
                     b.ToTable("NotificationOptions");
-                });
-
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal?>("Amount")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("Currency")
-                        .HasColumnType("longtext");
-
-                    b.Property<int>("ReturnProductId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReturnProductId")
-                        .IsUnique();
-
-                    b.ToTable("Price");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Return", b =>
@@ -1078,17 +1109,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Worker");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Models.ReturnProduct", "ReturnProduct")
-                        .WithOne("Price")
-                        .HasForeignKey("automation.mbtdistr.ru.Models.Price", "ReturnProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ReturnProduct");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Return", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Models.Cabinet", "Cabinet")
@@ -1139,9 +1159,6 @@ namespace automation.mbtdistr.ru.Migrations
                                 .HasColumnType("longtext");
 
                             b1.Property<string>("Country")
-                                .HasColumnType("longtext");
-
-                            b1.Property<string>("FullAddress")
                                 .HasColumnType("longtext");
 
                             b1.Property<string>("House")
@@ -1436,9 +1453,6 @@ namespace automation.mbtdistr.ru.Migrations
             modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnProduct", b =>
                 {
                     b.Navigation("Images");
-
-                    b.Navigation("Price")
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Warehouse", b =>

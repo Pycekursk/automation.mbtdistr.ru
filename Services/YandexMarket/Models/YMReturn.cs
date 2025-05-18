@@ -6,6 +6,8 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
+using JsonIgnoreAttribute = Newtonsoft.Json.JsonIgnoreAttribute;
+
 namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 {
   /// <summary>
@@ -47,6 +49,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonPropertyName("logisticPickupPoint")]
     [JsonProperty("logisticPickupPoint")]
     public YMLogisticPickupPoint? LogisticPickupPoint { get; set; }
+
+    [JsonIgnore]
+    public YMFulfillmentWarehouse? FulfillmentWarehouse { get; set; }
+
 
     /// <summary>
     /// Тип получателя отправления.

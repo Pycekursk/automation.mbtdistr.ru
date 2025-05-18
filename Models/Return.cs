@@ -211,10 +211,48 @@ namespace automation.mbtdistr.ru.Models
       @return.OrderId = returnInfo.OrderId.ToString();
       @return.OrderNumber = returnInfo.OrderNumber?.ToString();
       @return.ReturnReason = returnInfo.ReturnReasonName;
-      @return.ReturnType = returnInfo.Type == "Cancellation" ? automation.mbtdistr.ru.Models.ReturnType.Unredeemed : automation.mbtdistr.ru.Models.ReturnType.Return;
+      @return.CreatedAt = returnInfo.Logistic?.ReturnDate;
+      if (returnInfo?.Type?.ToLower() == "cancellation")
+        @return.ReturnType = Models.ReturnType.Unredeemed;
+      else if (returnInfo?.Type?.ToLower() == "clientreturn")
+        @return.ReturnType = Models.ReturnType.Return;
+      else
+        @return.ReturnType = Models.ReturnType.Unknown;
 
-      @return.Scheme = returnInfo.Schema == "FBS" ? SellScheme.FBS : SellScheme.FBO;
+      @return.Scheme = returnInfo.Schema?.ToUpper() == "FBS" ? SellScheme.FBS : returnInfo.Schema?.ToUpper() == "FBO" ? SellScheme.FBO : SellScheme.Unknown;
 
+      if (returnInfo.Product != null)
+      {
+        ReturnProduct returnProduct = new ReturnProduct()
+        {
+          Sku = returnInfo.Product.Sku.ToString(),
+          Count = returnInfo.Product.Quantity,
+          OfferId = returnInfo.Product.OfferId,
+          Name = returnInfo.Product.Name,
+          Price = new Price()
+          {
+            Amount = (decimal?)returnInfo.Product.Price.Price,
+            Currency = returnInfo.Product.Price.CurrencyCode,
+          },
+
+          //получаем все картинки из всех решений
+        };
+        @return.Products = new List<ReturnProduct> { returnProduct };
+      }
+
+      if (returnInfo.Place != null)
+      {
+        //id, name, address
+        @return.Warehouse = new Warehouse()
+        {
+          ExternalId = returnInfo.Place.Id.ToString(),
+          Name = returnInfo.Place.Name,
+          Address = new Address()
+          {
+            FullAddress = returnInfo.Place.Address,
+          }
+        };
+      }
     }
 
     private static void ParseYMReturn(ref Return @return, YMReturn ymReturn)
@@ -234,35 +272,41 @@ namespace automation.mbtdistr.ru.Models
         {
           ReturnProduct returnProduct = new ReturnProduct()
           {
-            Count = item.Count,
             Sku = item.MarketSku.ToString(),
-
+            Count = item.Count,
+            OfferId = item.ShopSku,
+            //получаем все картинки из всех решений
           };
-
-          @return.Products.Add(returnProduct);
-
           if (item?.Decisions?.Count > 0)
           {
             @return.ClientComment += $"{string.Join("\n", item.Decisions.Select(d => d.Comment))}\n";
             @return.ReturnReason += $"{string.Join(", ", item.Decisions.Select(d => $"{d.ReasonType.GetDisplayName()}, {d.SubreasonType?.GetDisplayName()}"))}\n";
             returnProduct.Images = item?.Decisions?.SelectMany(d => d.Images)?.Select(i => new ReturnImage() { Url = i })?.ToList();
           }
+          @return.Products.Add(returnProduct);
         }
-      if (ymReturn?.LogisticPickupPoint != null)
+      if (ymReturn?.FulfillmentWarehouse != null)
       {
         @return.Warehouse = new Warehouse()
         {
-          ExternalId = ymReturn.LogisticPickupPoint.Id.ToString(),
-          Name = ymReturn.LogisticPickupPoint.Name,
+          ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
+          Name = ymReturn.FulfillmentWarehouse.Name,
           Address = new Address()
           {
-            Country = ymReturn.LogisticPickupPoint.Address?.Country,
-            City = ymReturn.LogisticPickupPoint.Address?.City,
-            Street = ymReturn.LogisticPickupPoint.Address?.Street,
-            House = ymReturn.LogisticPickupPoint.Address?.House
+            City = ymReturn.FulfillmentWarehouse.Address?.City,
+            Street = ymReturn.FulfillmentWarehouse.Address?.Street,
+            House = ymReturn.FulfillmentWarehouse.Address?.Building,
+            Office = ymReturn.FulfillmentWarehouse.Address?.Number,
           }
         };
+        @return.Warehouse.Address.FullAddress = $"{@return.Warehouse.Address.City}, {@return.Warehouse.Address.Street} {@return.Warehouse.Address.House} {@return.Warehouse.Address.Office}";
+        if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
+        {
+          @return.Warehouse.Address.Latitude = ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
+          @return.Warehouse.Address.Longitude = ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
+        }
       }
+    
     }
   }
 }
