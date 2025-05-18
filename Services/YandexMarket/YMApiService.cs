@@ -28,8 +28,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
   {
     private readonly YMApiHttpClient _yMApiHttpClient;
 
-
-
     public YMApiService(YMApiHttpClient yMApiHttpClient)
     {
 

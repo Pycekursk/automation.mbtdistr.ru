@@ -34,6 +34,8 @@ namespace automation.mbtdistr.ru.Data
 
     public DbSet<Warehouse> Warehouses { get; set; }
 
+    public DbSet<automation.mbtdistr.ru.Models.Address> Addresses { get; set; }
+
     public DbSet<Compensation> Compensations { get; set; }
 
     //public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }

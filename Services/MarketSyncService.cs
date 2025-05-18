@@ -86,23 +86,11 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-    public MarketSyncService(
-
-        IServiceScopeFactory scopeFactory,
-        ITelegramBotClient botClient,
-        IConfiguration config,
-        IOptions<AppSettings> options)
+    public MarketSyncService(IServiceScopeFactory scopeFactory, ITelegramBotClient botClient, IConfiguration config, IOptions<AppSettings> options)
     {
-      //_db = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
       _scopeFactory = scopeFactory;
-      using var scope = _scopeFactory.CreateScope();
-      _db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-
+      _db = _scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
       _botClient = botClient;
-      //_scopeFactory = scopeFactory;
-      _yMApiService = scopeFactory.CreateScope().ServiceProvider.GetRequiredService<YMApiService>();
       var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
 
@@ -188,11 +176,21 @@ namespace automation.mbtdistr.ru.Services
       var ozSvc = scope.ServiceProvider.GetRequiredService<OzonApiService>();
       var ymSvc = scope.ServiceProvider.GetRequiredService<YMApiService>();
 
+      List<Cabinet> cabinets = new List<Cabinet>();
+      try
+      {
+        // получаем все кабинеты из базы данных
+        cabinets = await _db.Cabinets
+          .Include(c => c.Settings)
+          .ThenInclude(s => s.ConnectionParameters)
+          .ToListAsync(ct);
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка при получении кабинетов из БД\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
+        return;
+      }
       // подтягиваем все кабинеты вместе с настройками
-      var cabinets = await _db.Cabinets
-                             .Include(c => c.Settings)
-                             .ThenInclude(s => s.ConnectionParameters)
-                             .ToListAsync(ct);
 
       List<Models.Return> allReturns = new List<Models.Return>();
       foreach (var cab in cabinets)
@@ -229,6 +227,23 @@ namespace automation.mbtdistr.ru.Services
               }
               lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
             } while (true);
+
+
+            List<Return> _returns = new List<Return>();
+            foreach (var ret in returns)
+            {
+              var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+              if (dbChangeDate != null && dbChangeDate == ret.Visual?.ChangeMoment)
+                continue;
+              var @return = Return.Parse<Ozon.Models.ReturnInfo>(ret);
+              @return.CabinetId = cab.Id;
+              _returns.Add(@return);
+            }
+            if (_returns.Count > 0)
+            {
+              _returns = await AddOrUpdateReturnsAsync(_returns, _db);
+              await Extensions.SendDebugObject<List<Return>>(_returns, $"Возвраты Ozon для кабинета {cab.Name} ({cab.Marketplace})");
+            }
             //allReturns.AddRange(await ProcessOzonReturnsAsync(returns, cab, _db, ct));
           }
 
@@ -237,21 +252,31 @@ namespace automation.mbtdistr.ru.Services
             var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
             if (response?.Claims.Count > 0)
             {
-              await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response, $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
-
-              //   await Extensions.SendDebugObject<Wildberries.Models.ReturnsListResponse>(response);
-              //var ret = await ProcessWbReturnsAsync(response.Claims, cab, _db, ct);
-              // allReturns.AddRange(ret);
+              List<Return> _returns = new List<Return>();
+              foreach (var claim in response.Claims)
+              {
+                var dbChangeDate = _db.Returns.Where(r => r.ReturnId == claim.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+                if (dbChangeDate != null && dbChangeDate == claim.DtUpdate)
+                  continue;
+                var @return = Return.Parse<Wildberries.Models.Claim>(claim);
+                @return.CabinetId = cab.Id;
+                _returns.Add(@return);
+              }
+              if (_returns.Count > 0)
+              {
+                _returns = await AddOrUpdateReturnsAsync(_returns, _db);
+                await Extensions.SendDebugObject<List<Return>>(_returns, $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
+              }
             }
           }
 
           else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
           {
-            var _campaigns = await _yMApiService.GetCampaignsAsync(cab);
+            var _campaigns = await ymSvc.GetCampaignsAsync(cab);
             List<Return> returns = new List<Return>();
             foreach (var camp in _campaigns.Campaigns)
             {
-              var returnResponse = await _yMApiService.GetReturnsListAsync(cab, camp);
+              var returnResponse = await ymSvc.GetReturnsListAsync(cab, camp);
               if (returnResponse?.Result?.Items?.Count > 0)
               {
 
@@ -261,7 +286,7 @@ namespace automation.mbtdistr.ru.Services
                   if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
                     continue;
 
-                  ret.Order = (await _yMApiService.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+                  ret.Order = (await ymSvc.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
                   if (ret.Items?.Count > 0)
                   {
                     foreach (var item in ret.Items)
@@ -281,7 +306,7 @@ namespace automation.mbtdistr.ru.Services
                           if (System.IO.File.Exists(filePath))
                             continue;
 
-                          var image = await _yMApiService.GetReturnImageAsync(cab, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+                          var image = await ymSvc.GetReturnImageAsync(cab, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
                           var imageBytes = Convert.FromBase64String(image.Result.ImageData);
                           await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
                           var fileUrl = $"{baseUrl}/images/returns/{fileName}";
@@ -311,12 +336,12 @@ namespace automation.mbtdistr.ru.Services
                 await Extensions.SendDebugObject<List<Return>>(returns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
               }
 
-              var supplies = await _yMApiService.GetSupplyRequests(cab, camp);
+              var supplies = await ymSvc.GetSupplyRequests(cab, camp);
               if (supplies?.Result?.Items?.Count > 0)
               {
                 foreach (var supple in supplies.Result.Items)
                 {
-                  var suppleItems = await _yMApiService.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
+                  var suppleItems = await ymSvc.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
                   supple.Items = suppleItems?.Result?.Items;
                   await _yMApiService.AddOrUpdateSupplyRequestAsync(supple, _db);
                 }
@@ -500,8 +525,10 @@ namespace automation.mbtdistr.ru.Services
     {
       var existing = _db.Returns
              .Include(r => r.Warehouse)
+             .ThenInclude(w => w.Address)
              .Include(r => r.Cabinet)
              .ThenInclude(c => c.AssignedWorkers)
+             .ThenInclude(w => w.NotificationOptions)
              .Include(r => r.Products)
              .ThenInclude(p => p.Images)
              .ToList()
@@ -514,20 +541,61 @@ namespace automation.mbtdistr.ru.Services
         {
           if (ret.Warehouse != null)
           {
-            var warehouse = await db.Warehouses.FirstOrDefaultAsync(w => w.Name == ret.Warehouse.Name);
+            var key = $"{ret.Warehouse.Name}_{ret.Warehouse.ExternalId}";
+            var warehouse = await db.Warehouses
+              .Include(w => w.Address)
+              .FirstOrDefaultAsync(w => w.Name + "_" + w.ExternalId == key);
+
+            var address = await db.Addresses.FirstOrDefaultAsync(a => a.WarehouseId == ret.WarehouseId);
+            if (address == null && ret.Warehouse.Address != null)
+            {
+              db.Addresses.Add(ret.Warehouse.Address);
+              await db.SaveChangesAsync();
+            }
+            else if (address != null && ret.Warehouse.Address != null)
+            {
+              address.Country = ret.Warehouse.Address.Country;
+              address.City = ret.Warehouse.Address.City;
+              address.Street = ret.Warehouse.Address.Street;
+              address.House = ret.Warehouse.Address.House;
+              address.ZipCode = ret.Warehouse.Address.ZipCode;
+              db.Addresses.Update(address);
+              await db.SaveChangesAsync();
+            }
             if (warehouse != null)
             {
-              // Если локация уже существует, обновляем ее
               ret.WarehouseId = warehouse.Id;
             }
             else
             {
-              // Если локация не существует, добавляем ее
               db.Warehouses.Add(ret.Warehouse);
               await db.SaveChangesAsync();
               ret.WarehouseId = ret.Warehouse.Id;
             }
           }
+
+          //проверяем наличие продуктов в обьекте и если они есть свреям с базой
+          if (ret.Products != null && ret.Products.Count > 0)
+          {
+            foreach (var product in ret.Products)
+            {
+              var existingProduct = db.ReturnProducts
+                .Include(p => p.Images)
+                .FirstOrDefault(p => p.Sku == product.Sku && p.ReturnId.ToString() == ret.ReturnId);
+              if (existingProduct != null)
+              {
+                existingProduct.Count = product.Count;
+                existingProduct.Images = product.Images;
+                db.ReturnProducts.Update(existingProduct);
+              }
+              else
+              {
+                db.ReturnProducts.Add(product);
+              }
+            }
+          }
+
+
           var existingReturn = existing.FirstOrDefault(r => r.ReturnId == ret.ReturnId && r.OrderId == ret.OrderId);
           if (existingReturn != null)
           {
@@ -542,7 +610,6 @@ namespace automation.mbtdistr.ru.Services
           {
             // Добавляем новый возврат
             db.Returns.Add(ret);
-
           }
           await db.SaveChangesAsync();
 
