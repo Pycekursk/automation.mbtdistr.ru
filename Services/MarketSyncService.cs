@@ -66,7 +66,6 @@ namespace automation.mbtdistr.ru.Services
         CabinetId = cabinetId;
         Return = @return;
         Message = message;
-        ApiDTO = apiDTO;
       }
     }
 
@@ -75,13 +74,11 @@ namespace automation.mbtdistr.ru.Services
       public YMSupplyRequest Supply { get; set; }
       public string Message { get; set; }
       public int CabinetId { get; set; }
-      object? ApiDTO { get; set; }
       public SupplyStatusChangedEventArgs(int cabinetId, YMSupplyRequest supply, string message, object? apiDTO = null)
       {
         CabinetId = cabinetId;
         Supply = supply;
         Message = message;
-        ApiDTO = apiDTO;
       }
     }
 

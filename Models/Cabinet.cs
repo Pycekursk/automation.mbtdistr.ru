@@ -23,6 +23,8 @@ namespace automation.mbtdistr.ru.Models
 
     public ICollection<Return>? Returns { get; set; }
 
+    public ICollection<Warehouse>? Warehouses { get; set; }
+
     public override string ToString()
     {
       StringBuilder sb = new StringBuilder();

@@ -19,5 +19,11 @@ namespace automation.mbtdistr.ru.Models
 
     [Newtonsoft.Json.JsonIgnore]
     public ICollection<Return>? Returns { get; set; } = new List<Return>();
+
+    [ForeignKey(nameof(Cabinet))]
+    public int? CabinetId { get; set; }
+
+    [Newtonsoft.Json.JsonIgnore]
+    public Cabinet? Cabinet { get; set; }
   }
 }

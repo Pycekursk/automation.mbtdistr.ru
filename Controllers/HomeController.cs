@@ -448,6 +448,30 @@ namespace automation.mbtdistr.ru.Controllers
       return View(mainMenu);
     }
 
+    [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/warehouseslist")]
+    public IActionResult WarehousesList([FromRoute] long id, [FromRoute] int? cabinetId)
+    {
+      var worker = _db.Workers.Include(w => w.AssignedCabinets).FirstOrDefault(w => w.Id == id);
+      if (worker == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
+      var warehouses = _db.Warehouses.Include(w => w.Returns).ToList();
+      if (warehouses?.Count > 0)
+      {
+        ViewData["GreetingMessage"] = $"Склады ({warehouses.Count} шт.)";
+        foreach (var warehouse in warehouses)
+        {
+          ViewData["GreetingMessage"] += $"\n{warehouse.Name} ({warehouse?.Returns?.Count})";
+        }
+      }
+      else
+      {
+        ViewData["GreetingMessage"] = "У кабинета нет активных возвратов.";
+      }
+      return View("/Views/Home/Warehouses.cshtml", warehouses);
+    }
+
     [HttpPost("botmenu/{id?}/cabinet/{cabinetId?}/workersettings")]
     public IActionResult WorkerSettings([FromRoute] long id, [FromBody] NotificationOptions notificationOptions)
     {

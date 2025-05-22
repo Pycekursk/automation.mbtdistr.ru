@@ -1,0 +1,128 @@
+﻿@using automation.mbtdistr.ru.ViewModels
+@{
+  ViewData["Title"] = "Склады";
+  Layout = "/Views/Shared/_BotMenuLayout.cshtml";
+}
+@model List<Warehouse>?
+@{
+  var modelName = typeof(Warehouse).Name;
+  var defaultExportFileName = $"{modelName}s_{DateTime.Now:yyyy-MM-dd}";
+}
+  @using System.ComponentModel.DataAnnotations
+@{
+  var columns = typeof(Warehouse).GetProperties()
+  .Where(p =>
+  {
+    if (!p.CanRead) return false;
+    var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
+  .Cast<DataGridAttribute>()
+  .FirstOrDefault();
+    return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
+  })
+  .Select(p => new
+  {
+    Field = p.Name,
+    Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
+  .Cast<DisplayAttribute>()
+  .FirstOrDefault()?.Name ?? p.Name,
+    IsEnum = p.PropertyType.IsEnum,
+    EnumType = p.PropertyType
+  })
+  .ToList();
+}
+@{
+  var enumFields = typeof(Warehouse).GetProperties()
+  .Where(p => p.PropertyType.IsEnum)
+  .ToList();
+}
+@(
+Html.DevExtreme().DataGrid<Warehouse>()
+     .ID("gridContainer")
+     .KeyExpr("Id")
+     .ColumnAutoWidth(true)
+     .ShowRowLines(true)
+     .ShowBorders(true)
+     .DataSource(Model)
+      .Columns(columnsBuilder =>
+      {
+        foreach (var col in columns)
+        {
+          DevExtreme.AspNet.Mvc.Builders.DataGridColumnBuilder<Warehouse>? column = null;
+          column = columnsBuilder.Add()
+              .DataField(col.Field)
+              .Caption(col.Caption);
+          if (col.IsEnum)
+          {
+            var enumValues = Enum.GetValues(col.EnumType)
+            .Cast<Enum>()
+            .Select(e => new
+            {
+              Id = Convert.ToInt32(e),
+              Name = e.GetDisplayName()
+            })
+            .ToList();
+
+            column.Lookup(lookup => lookup
+            .DataSource(enumValues)
+            .ValueExpr("Id")
+            .DisplayExpr("Name"));
+          }
+        }
+      })
+       .ColumnChooser(cc =>
+      {
+        cc.Enabled(true)
+        .Height("400px")
+        .Mode(GridColumnChooserMode.Select)
+        .Position(pc => pc
+        .My(HorizontalAlignment.Right, VerticalAlignment.Top)
+        .At(HorizontalAlignment.Right, VerticalAlignment.Bottom)
+        .Of(".dx-datagrid-column-chooser-button")
+        );
+
+        cc.Search(ccs => ccs
+        .Enabled(true)
+        .EditorOptions(new { Placeholder = "Поиск" })
+        );
+
+        cc.Selection(ccs => ccs
+        .AllowSelectAll(true)
+        .SelectByClick(true)
+        .Recursive(true)
+        );
+      })
+        .Toolbar(toolbar =>
+      {
+        toolbar.Items(items =>
+        {
+          items.Add()
+        .Location(ToolbarItemLocation.Before)
+        .Widget(w =>
+        {
+          var b = w.Button();
+          b.Text("Назад");
+          b.OnClick("goBack");
+          return b;
+        });
+          items.Add()
+        .Name("exportButton")
+        .Location(ToolbarItemLocation.After);
+
+          items.Add()
+        .Name("columnChooserButton")
+        .Location(ToolbarItemLocation.After);
+        });
+      })
+     .LoadPanel(loadPanel => loadPanel.Enabled(true))
+     .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
+     .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
+     .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
+     .AllowColumnResizing(true)
+     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{modelName}_grid"))
+     .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
+     .HeaderFilter(h => h.Visible(true))
+     .Selection(s => s.Mode(SelectionMode.Single))
+     .FilterRow(f => f.Visible(true))
+     .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true))))
+
+
