@@ -121,7 +121,7 @@ namespace automation.mbtdistr.ru.Services
         return;
       if (Program.Environment.IsDevelopment())
       {
-        await _botClient.SendMessage("1406950293", e.Message, ParseMode.Html);
+        // await _botClient.SendMessage("1406950293", e.Message, ParseMode.Html);
         return;
       }
       foreach (var worker in workers)
@@ -558,15 +558,46 @@ namespace automation.mbtdistr.ru.Services
             var key = $"{ret.Warehouse.ExternalId}_{ret.Warehouse.Service}";
             var warehouse = await db.Warehouses
               .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
-
             if (warehouse == null)
             {
+              // если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
+              if (ret.Warehouse.Address != null && string.IsNullOrEmpty(ret.Warehouse.Address.FullAddress))
+              {
+                ret.Warehouse.Address.FullAddress = $"{ret.Warehouse.Address.Country}, {ret.Warehouse.Address}, {ret.Warehouse.Address.City}, {ret.Warehouse.Address.Street}, {ret.Warehouse.Address.House}, {ret.Warehouse.Address.Office}";
+              }
+              //проверяем если координаты пустые, то заполняем их
+              if (ret?.Warehouse?.Address?.Latitude == 0 && ret.Warehouse.Address.Longitude == 0)
+              {
+                //получаем значение апи ключа YandexGeo из appsettings
+                var apiKey = Program.Configuration.GetSection("YandexGeo:Key").Value;
+                var geoService = new YandexGeocoderService(apiKey);
+                var coordinates = await geoService.GetCoordinatesAsync(ret.Warehouse.Address.FullAddress);
+                if (coordinates != null)
+                {
+                  ret.Warehouse.Address.Latitude = (decimal)coordinates.Value.lat;
+                  ret.Warehouse.Address.Longitude = (decimal)coordinates.Value.lon;
+                }
+              }
+
               db.Warehouses.Add(ret.Warehouse);
               ret.Warehouse = warehouse;
               await db.SaveChangesAsync();
             }
             else
             {
+              //проверяем если координаты пустые, то заполняем их
+              if (ret?.Warehouse?.Address?.Latitude == 0 && ret.Warehouse.Address.Longitude == 0)
+              {
+                //получаем значение апи ключа YandexGeo из appsettings
+                var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
+                var geoService = new YandexGeocoderService(apiKey);
+                var coordinates = await geoService.GetCoordinatesAsync(ret.Warehouse.Address.FullAddress);
+                if (coordinates != null)
+                {
+                  ret.Warehouse.Address.Latitude = (decimal)coordinates.Value.lat;
+                  ret.Warehouse.Address.Longitude = (decimal)coordinates.Value.lon;
+                }
+              }
               ret.Warehouse = warehouse;
             }
           }
@@ -601,8 +632,8 @@ namespace automation.mbtdistr.ru.Services
                 else
                 {
                   // сбрасываем PK, чтобы EF сгенерировал новый
-                  product.Id = 0;
-                  db.ReturnProducts.Add(product);
+                  //product.Id = 0;
+                  //db.ReturnProducts.Add(product);
                 }
               }
             }
@@ -724,7 +755,7 @@ namespace automation.mbtdistr.ru.Services
         sb.AppendLine(" ");
       }
       sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
-      sb.AppendLine($"<b>Тип возврата:</b> {x?.Scheme?.GetDisplayName()}");
+      sb.AppendLine($"<b>Тип возврата:</b> {x?.ReturnType?.GetDisplayName()}");
 
       sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
       sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
@@ -742,10 +773,10 @@ namespace automation.mbtdistr.ru.Services
         int i = 1;
         foreach (var item in x.Products)
         {
-          sb.AppendLine($"<b>№ {i++}:</b>");
           if (!string.IsNullOrEmpty(item.Url))
-            sb.AppendLine($"<b>Наименование: </b><a href=\"{item.Url}\">{item.Name}</a>");
-          sb.AppendLine($"");
+            sb.AppendLine($"<b>№ {i++}:</b><a href=\"{item.Url}\">{item.Name}</a>");
+          else
+            sb.AppendLine($"<b>№ {i++}:</b> {item.Name}");
           sb.AppendLine($"<b>SKU:</b> {item.Sku}");
           sb.AppendLine($"<b>Артикул:</b> {item.OfferId}");
           sb.AppendLine($"<b>Количество:</b> {item.Count}");
