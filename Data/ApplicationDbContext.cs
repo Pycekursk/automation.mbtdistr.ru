@@ -5,6 +5,7 @@ using automation.mbtdistr.ru.Services.YandexMarket.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -110,6 +111,8 @@ namespace automation.mbtdistr.ru.Data
         }
       }
 
+
+      modelBuilder.ApplyConfiguration(new ReturnConfiguration());
       modelBuilder.ApplyConfiguration(new YMOrderConfiguration());
       modelBuilder.ApplyConfiguration(new YMOrderBuyerConfiguration());
       modelBuilder.ApplyConfiguration(new YMOrderDeliveryConfiguration());
@@ -239,4 +242,25 @@ namespace automation.mbtdistr.ru.Data
 
     }
   }
+
+  public class ReturnConfiguration : IEntityTypeConfiguration<Return>
+  {
+    public void Configure(EntityTypeBuilder<Return> builder)
+    {
+      builder
+      .HasOne(r => r.CurrentWarehouse)
+      .WithMany(w => w.CurrentReturns)
+      .HasForeignKey(r => r.CurrentWarehouseId)
+      .HasConstraintName("FK_Returns_CurrentWarehouse")
+      .OnDelete(DeleteBehavior.Restrict);
+
+      builder
+          .HasOne(r => r.TargetWarehouse)
+          .WithMany(w => w.DestinationReturns)
+          .HasForeignKey(r => r.TargetWarehouseId)
+          .HasConstraintName("FK_Returns_DestinationWarehouse")
+          .OnDelete(DeleteBehavior.Restrict);
+    }
+  }
+
 }

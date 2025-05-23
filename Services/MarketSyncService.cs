@@ -233,8 +233,8 @@ namespace automation.mbtdistr.ru.Services
                 continue;
               var @return = Return.Parse<Ozon.Models.ReturnInfo>(ret);
               @return.CabinetId = cab.Id;
-              if (@return.Warehouse != null)
-                @return.Warehouse.Service = cab.Marketplace;
+              if (@return.TargetWarehouse != null)
+                @return.TargetWarehouse.Service = cab.Marketplace;
 
 
 
@@ -328,9 +328,9 @@ namespace automation.mbtdistr.ru.Services
                   }
                   var @return = Return.Parse<YMReturn>(ret);
                   @return.CabinetId = cab.Id;
-                  if (@return.Warehouse != null)
+                  if (@return.TargetWarehouse != null)
                   {
-                    @return.Warehouse.Service = cab.Marketplace;
+                    @return.TargetWarehouse.Service = cab.Marketplace;
                   }
                   if (@return.Scheme == SellScheme.FBO)
                   {
@@ -370,162 +370,7 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-    private async Task<List<Models.Return>> ProcessOzonReturnsAsync(
-        List<Models.Return> returns,
-        Cabinet cab,
-        ApplicationDbContext db,
-        CancellationToken ct)
-    {
-      //try
-      //{
-      //  List<Models.Return> returnList = new List<Models.Return>();
-      //  // TODO: конкретно мапить response.Items → модели Return и upsert в db.Returns
-      //  string message = string.Empty;
-      //  //var admin = await db.Workers.FirstOrDefaultAsync(w => w.TelegramId == 1406950293.ToString(), ct);
-      //  foreach (var x in returns)
-      //  {
-      //    // Проверяем, существует ли возврат с таким ID в базе данных
-      //    var existingReturn = await db.Returns
-      //      .Include(r => r.Compensation)
-      //      .Include(r => r.Cabinet)
-      //      .ThenInclude(c => c.AssignedWorkers)
-      //      .FirstOrDefaultAsync(r => r.ReturnId == x.Id && r.CabinetId == cab.Id, ct);
-      //    if (existingReturn != null)
-      //    {
-      //      if (existingReturn.Info.Id == 0)
-      //        existingReturn.Info = new ReturnMainInfo { ClaimId = existingReturn.Id.ToString() };
-
-      //      var newStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out var status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-      //      var newStatusStr = newStatus.GetDisplayName();
-      //      var currentStatus = existingReturn.Info.ReturnStatus;
-      //      var currentStatusStr = currentStatus.GetDisplayName();
-      //      var newChangedAt = x.Visual?.ChangeMoment;
-      //      var oldChangedAt = existingReturn.ChangedAt;
-
-      //      existingReturn.Info.ReturnStatus = Enum.TryParse(typeof(ReturnStatus), x.Visual?.Status?.SysName, out status) ? (ReturnStatus)status : ReturnStatus.Unknown;
-      //      existingReturn.Info.ReturnInfoId = x.Id;
-      //      existingReturn.Info.ReturnReasonName = x.ReturnReasonName;
-      //      existingReturn.ChangedAt = x.Visual?.ChangeMoment;
-      //      existingReturn.Info.OrderId = x.OrderId;
-      //      db.Returns.Update(existingReturn);
-      //      returnList.Add(existingReturn);
-
-      //      await db.SaveChangesAsync();
-
-      //      if (currentStatus != newStatus || oldChangedAt != newChangedAt)
-      //      {
-      //        message = FormatReturnHtmlMessage(existingReturn, cab, false, currentStatus);
-      //        ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message, x));
-      //      }
-      //    }
-      //    else
-      //    {
-      //      try
-      //      {
-      //        Models.Return @return = new Models.Return();
-      //        @return.CabinetId = cab.Id;
-      //        @return.ChangedAt = x.Visual?.ChangeMoment;
-
-      //        //if (x.Logistic.ReturnDate.HasValue)
-      //        //  @return.OrderedAt = x.Logistic.ReturnDate.Value;
-      //        // Updated line to handle potential null reference
-      //        @return.CreatedAt = x.Logistic?.ReturnDate.GetValueOrDefault() ?? DateTime.MinValue;
-
-
-
-
-
-      //        db.Returns.Add(@return);
-      //        returnList.Add(@return);
-
-      //        await db.SaveChangesAsync();
-
-      //        message = FormatReturnHtmlMessage(@return, cab, true);
-      //        ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message, x));
-      //      }
-      //      catch (Exception ex)
-      //      {
-      //        await Extensions.SendDebugMessage($"Ошибка при обработке возврата Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-      //      }
-      //    }
-      //  }
-      //  return returnList;
-      //}
-      //catch (Exception ex)
-      //{
-      //  //ошибка при сохранении изменений в БД
-      //  await Extensions.SendDebugMessage($"Ошибка при обработке возвратов Ozon\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-      //  throw;
-      //}
-
-      return returns;
-    }
-
-
-    private async Task<List<Models.Return>> ProcessWbReturnsAsync(
-        List<Claim> claims,
-        Cabinet cab,
-        ApplicationDbContext db,
-        CancellationToken ct)
-    {
-      List<Models.Return> returnsList = new List<Models.Return>();
-      try
-      {
-        foreach (var claim in claims)
-        {
-          var existingReturn = db.Returns
-       //.Include(r => r.Info)
-       .Include(r => r.Compensation)
-       .Include(r => r.Cabinet)
-           .ThenInclude(c => c.AssignedWorkers)
-       .FirstOrDefault(r => r.ReturnId == claim.Id && r.CabinetId == cab.Id);
-
-          if (existingReturn != null)
-          {
-            var oldChangedAt = existingReturn.ChangedAt;
-            var newChangedAt = claim.DtUpdate;
-            // Обновляем существующий возврат
-            existingReturn.ReturnId = claim.Id;
-            existingReturn.ChangedAt = claim.DtUpdate;
-            existingReturn.OrderedAt = claim.OrderDt;
-            existingReturn.CreatedAt = claim.Dt;
-            db.Returns.Update(existingReturn);
-            returnsList.Add(existingReturn);
-
-            await db.SaveChangesAsync();
-            if (oldChangedAt != newChangedAt)
-            {
-              var message = $"<b>Изменения в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>\n\nОбновление возврата {claim.NmId}\n\n{newChangedAt:dd.MM.yyyy HH:mm:ss}";
-              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, existingReturn, message));
-            }
-          }
-          else
-          {
-            Models.Return @return = new Models.Return();
-            @return.CabinetId = cab.Id;
-            @return.ReturnId = claim.Id;
-            @return.ChangedAt = claim.DtUpdate;
-            @return.CreatedAt = claim.Dt;
-            @return.OrderedAt = claim.OrderDt;
-            db.Returns.Add(@return);
-            returnsList.Add(@return);
-
-            await db.SaveChangesAsync();
-
-            var message = $"<b>Новый возврат в личном кабинете {cab.Marketplace.ToUpper()} / {cab.Name}</b>\n\nВозврат {claim.NmId}\n\n{claim.DtUpdate:dd.MM.yyyy HH:mm:ss}";
-            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cab.Id, @return, message));
-          }
-        }
-        return returnsList;
-      }
-
-      catch (Exception ex)
-      {
-        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов Wildberries\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-        throw;
-      }
-    }
-
+ 
 
     /// <summary>
     /// Добавление или обновление возвратов в базе данных.
@@ -536,7 +381,8 @@ namespace automation.mbtdistr.ru.Services
     public async Task<List<Models.Return>> AddOrUpdateReturnsAsync(List<Return> returns, ApplicationDbContext db)
     {
       var existing = _db.Returns
-             .Include(r => r.Warehouse)
+             .Include(r => r.TargetWarehouse).ThenInclude(w => w.Address)
+             .Include(r => r.CurrentWarehouse).ThenInclude(w => w.Address)
              .Include(r => r.Cabinet)
              .ThenInclude(c => c.AssignedWorkers)
              .ThenInclude(w => w.NotificationOptions)
@@ -550,52 +396,50 @@ namespace automation.mbtdistr.ru.Services
       {
         try
         {
-          if (ret.Warehouse != null)
+          if (ret.TargetWarehouse != null)
           {
-            var key = $"{ret.Warehouse.ExternalId}_{ret.Warehouse.Service}";
+            var key = $"{ret.TargetWarehouse.ExternalId}_{ret.TargetWarehouse.Service}";
             var warehouse = await db.Warehouses
               .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
             if (warehouse == null)
             {
               // если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
-              if (ret.Warehouse.Address != null && string.IsNullOrEmpty(ret.Warehouse.Address.FullAddress))
+              if (ret.TargetWarehouse.Address != null && string.IsNullOrEmpty(ret.TargetWarehouse.Address.FullAddress))
               {
-                ret.Warehouse.Address.FullAddress = $"{ret.Warehouse.Address.Country}, {ret.Warehouse.Address}, {ret.Warehouse.Address.City}, {ret.Warehouse.Address.Street}, {ret.Warehouse.Address.House}, {ret.Warehouse.Address.Office}";
+                ret.TargetWarehouse.Address.FullAddress = $"{ret.TargetWarehouse.Address.Country}, {ret.TargetWarehouse.Address}, {ret.TargetWarehouse.Address.City}, {ret.TargetWarehouse.Address.Street}, {ret.TargetWarehouse.Address.House}, {ret.TargetWarehouse.Address.Office}";
               }
               //проверяем если координаты пустые, то заполняем их
-              if (ret?.Warehouse?.Address?.Latitude == 0 && ret.Warehouse.Address.Longitude == 0)
+              if (ret?.TargetWarehouse?.Address?.Latitude == 0 && ret.TargetWarehouse.Address.Longitude == 0)
               {
                 //получаем значение апи ключа YandexGeo из appsettings
                 var apiKey = Program.Configuration.GetSection("YandexGeo:Key").Value;
                 var geoService = new YandexGeocoderService(apiKey);
-                var coordinates = await geoService.GetCoordinatesAsync(ret.Warehouse.Address.FullAddress);
-                if (coordinates != null)
+                var addressObj = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
+                if (addressObj != null)
                 {
-                  ret.Warehouse.Address.Latitude = (decimal)coordinates.Value.lat;
-                  ret.Warehouse.Address.Longitude = (decimal)coordinates.Value.lon;
+                  ret.TargetWarehouse.Address = addressObj;
                 }
               }
 
-              db.Warehouses.Add(ret.Warehouse);
-              ret.Warehouse = warehouse;
+              db.Warehouses.Add(ret.TargetWarehouse);
+              ret.TargetWarehouse = warehouse;
               await db.SaveChangesAsync();
             }
             else
             {
               //проверяем если координаты пустые, то заполняем их
-              if (ret?.Warehouse?.Address?.Latitude == 0 && ret.Warehouse.Address.Longitude == 0)
+              if (ret?.TargetWarehouse?.Address?.Latitude == 0 && ret.TargetWarehouse.Address.Longitude == 0)
               {
                 //получаем значение апи ключа YandexGeo из appsettings
                 var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
                 var geoService = new YandexGeocoderService(apiKey);
-                var coordinates = await geoService.GetCoordinatesAsync(ret.Warehouse.Address.FullAddress);
-                if (coordinates != null)
+                var addressObj = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
+                if (addressObj != null)
                 {
-                  ret.Warehouse.Address.Latitude = (decimal)coordinates.Value.lat;
-                  ret.Warehouse.Address.Longitude = (decimal)coordinates.Value.lon;
+                  ret.TargetWarehouse.Address = addressObj;
                 }
               }
-              ret.Warehouse = warehouse;
+              ret.TargetWarehouse = warehouse;
             }
           }
 
@@ -609,7 +453,7 @@ namespace automation.mbtdistr.ru.Services
             existingReturn.ChangedAt = ret.ChangedAt;
             existingReturn.CreatedAt = ret.CreatedAt;
             existingReturn.OrderedAt = ret.OrderedAt;
-            existingReturn.WarehouseId = ret.WarehouseId;
+            existingReturn.TargetWarehouseId = ret.TargetWarehouseId;
 
             //проверяем наличие продуктов в обьекте и если они есть свреям с базой
             if (ret.Products != null && ret.Products.Count > 0)
@@ -752,17 +596,16 @@ namespace automation.mbtdistr.ru.Services
         sb.AppendLine(" ");
       }
       sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
-      sb.AppendLine($"<b>Тип возврата:</b> {x?.ReturnType.GetDisplayName()}");
+      sb.AppendLine($"<b>Тип:</b> {x?.ReturnType.GetDisplayName()}");
 
-      sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
-      sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
+      sb.AppendLine($"<b>Идентификатор возврата:</b> {x.ReturnId}");
+      sb.AppendLine($"<b>Идентификатор заказа:</b> {x.OrderId}");
       sb.AppendLine($"<b>Номер заказа:</b> {x.OrderNumber}");
       sb.AppendLine($"<b>Дата заказа:</b> {x.OrderedAt}");
       if (!string.IsNullOrEmpty(x.ReturnReason))
-        sb.AppendLine($"<b>Причина возврата:</b> {x.ReturnReason}");
+        sb.AppendLine($"<b>Причина:</b> {x.ReturnReason}");
       if (!string.IsNullOrEmpty(x.ClientComment))
         sb.AppendLine($"<b>Комментарий:</b> {x.ClientComment}");
-      sb.AppendLine(" ");
       sb.AppendLine(" ");
       if (x?.Products?.Count > 0)
       {
@@ -771,9 +614,9 @@ namespace automation.mbtdistr.ru.Services
         foreach (var item in x.Products)
         {
           if (!string.IsNullOrEmpty(item.Url))
-            sb.AppendLine($"<b>№ {i++}:</b><a href=\"{item.Url}\">{item.Name}</a>");
+            sb.AppendLine($"<b>{i++} </b><a href=\"{item.Url}\">{item.Name}</a>");
           else
-            sb.AppendLine($"<b>№ {i++}:</b> {item.Name}");
+            sb.AppendLine($"<b>{i++} </b>{item.Name}");
           sb.AppendLine($"<b>SKU:</b> {item.Sku}");
           sb.AppendLine($"<b>Артикул:</b> {item.OfferId}");
           sb.AppendLine($"<b>Количество:</b> {item.Count}");
@@ -787,18 +630,17 @@ namespace automation.mbtdistr.ru.Services
           }
         }
         sb.AppendLine(" ");
-        sb.AppendLine(" ");
       }
 
       sb.AppendLine($"<b>Создан:</b> {x.CreatedAt:dd.MM.yyyy HH:mm:ss}");
       sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
       sb.AppendLine(" ");
-      if (x.Warehouse?.Address != null)
+      if (x.TargetWarehouse?.Address != null)
       {
-        x.Warehouse.Address.FullAddress ??= $"{x.Warehouse.Address.Country}, {x.Warehouse.Address.City}, {x.Warehouse.Address.Street}, {x.Warehouse.Address.House}, {x.Warehouse.Address.Office}";
+        x.TargetWarehouse.Address.FullAddress ??= $"{x.TargetWarehouse.Address.Country}, {x.TargetWarehouse.Address.City}, {x.TargetWarehouse.Address.Street}, {x.TargetWarehouse.Address.House}, {x.TargetWarehouse.Address.Office}";
 
-        sb.AppendLine($"<b>Склад:</b> {x.Warehouse.Name}");
-        sb.AppendLine($"<b>Адрес:</b> {x.Warehouse.Address.FullAddress}");
+        sb.AppendLine($"<b>Склад:</b> {x.TargetWarehouse.Name}");
+        sb.AppendLine($"<b>Адрес:</b> {x.TargetWarehouse.Address.FullAddress}");
       }
       return sb.ToString();
     }
@@ -849,11 +691,11 @@ namespace automation.mbtdistr.ru.Services
       sb.AppendLine("<br>");
       sb.AppendLine($"<b>Обновлен:</b> {x.ChangedAt:dd.MM.yyyy HH:mm:ss}");
       sb.AppendLine("<br>");
-      sb.AppendLine($"<b>Локация:</b> {x.Warehouse?.Name}");
+      sb.AppendLine($"<b>Локация:</b> {x.TargetWarehouse?.Name}");
       sb.AppendLine("<br>");
-      if (x.Warehouse?.Address != null)
+      if (x.TargetWarehouse?.Address != null)
       {
-        sb.AppendLine($"<b>Адрес:</b>{x.Warehouse.Address.Country}, {x.Warehouse.Address.City}, {x.Warehouse.Address.Street}, {x.Warehouse.Address.House}, {x.Warehouse.Address.Office}");
+        sb.AppendLine($"<b>Адрес:</b>{x.TargetWarehouse.Address.Country}, {x.TargetWarehouse.Address.City}, {x.TargetWarehouse.Address.Street}, {x.TargetWarehouse.Address.House}, {x.TargetWarehouse.Address.Office}");
         sb.AppendLine("<br>");
       }
       return sb.ToString();

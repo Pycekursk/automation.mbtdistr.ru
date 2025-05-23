@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250523021616_appendSecondWarehouseToReturnObject")]
+    partial class appendSecondWarehouseToReturnObject
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -430,11 +433,11 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("TargetWarehouseId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Url")
                         .HasColumnType("longtext");
+
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -442,7 +445,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasIndex("CurrentWarehouseId");
 
-                    b.HasIndex("TargetWarehouseId");
+                    b.HasIndex("WarehouseId");
 
                     b.ToTable("Returns");
                 });
@@ -1115,9 +1118,9 @@ namespace automation.mbtdistr.ru.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_Returns_CurrentWarehouse");
 
-                    b.HasOne("automation.mbtdistr.ru.Models.Warehouse", "TargetWarehouse")
+                    b.HasOne("automation.mbtdistr.ru.Models.Warehouse", "Warehouse")
                         .WithMany("DestinationReturns")
-                        .HasForeignKey("TargetWarehouseId")
+                        .HasForeignKey("WarehouseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_Returns_DestinationWarehouse");
 
@@ -1125,7 +1128,7 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.Navigation("CurrentWarehouse");
 
-                    b.Navigation("TargetWarehouse");
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.ReturnImage", b =>

@@ -85,17 +85,34 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Компенсация")]
     public Compensation? Compensation { get; set; }
 
-    [ForeignKey(nameof(Warehouse)), DataGrid(false)]
-    [Display(Name = "ID склада")]
-    public int? WarehouseId { get; set; } // идентификатор склада/ПВЗ, куда возвращается товар
 
+    /// <summary>
+    /// Идентификатор склада/ПВЗ, где находится возврат
+    /// </summary>
+    [ForeignKey(nameof(CurrentWarehouse)), DataGrid(false)]
+    [Display(Name = "Идентификатор текущего склада")]
+    public int? CurrentWarehouseId { get; set; }
+
+    /// <summary>
+    /// Склад/ПВЗ, где находится возврат
+    /// </summary>
+    [JsonProperty("currentWarehouse")]
+    [Display(Name = "Текущий склад")]
+    public Warehouse? CurrentWarehouse { get; set; }
+
+    /// <summary>
+    /// Склад/ПВЗ, куда направлен возврат
+    /// </summary>
+    [ForeignKey(nameof(TargetWarehouse)), DataGrid(false)]
+    [Display(Name = "Идентификатор целевого склада")]
+    public int? TargetWarehouseId { get; set; }
+
+    /// <summary>
+    /// Склад/ПВЗ, куда направлен возврат
+    /// </summary>
     [JsonProperty("warehouse")]
-    [Display(Name = "Склад")]
-    public Warehouse? Warehouse { get; set; } // склад/ПВЗ, куда возвращается товар
-
-    //[DataGrid(false), NotMapped]
-    //[Display(Name = "Информация о возврате")]
-    //public ReturnMainInfo Info { get; set; } = new ReturnMainInfo(); // информация о возврате
+    [Display(Name = "Целевой склад")]
+    public Warehouse? TargetWarehouse { get; set; } // склад/ПВЗ, куда направлен возврат
 
     /// <summary>
     /// Причина возврата в системе Ozon/Wildberries/ЯндексМаркет
@@ -243,7 +260,7 @@ namespace automation.mbtdistr.ru.Models
       if (returnInfo.Place != null)
       {
         //id, name, address
-        @return.Warehouse = new Warehouse()
+        @return.TargetWarehouse = new Warehouse()
         {
           ExternalId = returnInfo.Place.Id.ToString(),
           Name = returnInfo.Place.Name,
@@ -293,7 +310,7 @@ namespace automation.mbtdistr.ru.Models
         }
       if (ymReturn?.FulfillmentWarehouse != null)
       {
-        @return.Warehouse = new Warehouse()
+        @return.TargetWarehouse = new Warehouse()
         {
           ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
           Name = ymReturn.FulfillmentWarehouse.Name,
@@ -305,11 +322,11 @@ namespace automation.mbtdistr.ru.Models
             Office = ymReturn.FulfillmentWarehouse.Address?.Number,
           }
         };
-        @return.Warehouse.Address.FullAddress = $"{@return.Warehouse.Address.City}, {@return.Warehouse.Address.Street} {@return.Warehouse.Address.House} {@return.Warehouse.Address.Office}";
+        @return.TargetWarehouse.Address.FullAddress = $"{@return.TargetWarehouse.Address.City}, {@return.TargetWarehouse.Address.Street} {@return.TargetWarehouse.Address.House} {@return.TargetWarehouse.Address.Office}";
         if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
         {
-          @return.Warehouse.Address.Latitude = ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
-          @return.Warehouse.Address.Longitude = ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
+          @return.TargetWarehouse.Address.Latitude = ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
+          @return.TargetWarehouse.Address.Longitude = ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
         }
       }
 

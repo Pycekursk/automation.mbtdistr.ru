@@ -13,34 +13,96 @@ namespace automation.mbtdistr.ru.Services
       _httpClient = new HttpClient();
     }
 
-    public async Task<(double lat, double lon)?> GetCoordinatesAsync(string address)
+    /// <summary>
+    /// Возвращает заполненный объект Address (включая координаты и разобранные компоненты).
+    /// </summary>
+    public async Task<automation.mbtdistr.ru.Models.Address?> GetAddressAsync(string addressQuery, CancellationToken cancellation = default)
     {
-      var url = $"https://geocode-maps.yandex.ru/1.x/?apikey={_apiKey}&geocode={Uri.EscapeDataString(address)}&format=json";
-      var response = await _httpClient.GetAsync(url);
+      var url = $"https://geocode-maps.yandex.ru/1.x/?apikey={_apiKey}&geocode={Uri.EscapeDataString(addressQuery)}&format=json&kind=house";
+      var response = await _httpClient.GetAsync(url, cancellation);
       response.EnsureSuccessStatusCode();
 
-      var json = await response.Content.ReadAsStringAsync();
+      using var stream = await response.Content.ReadAsStreamAsync(cancellation);
+      using var doc = await JsonDocument.ParseAsync(stream, default, cancellation);
 
-      using var doc = JsonDocument.Parse(json);
-      var pos = doc
-          .RootElement
+      // Навигация к первому GeoObject
+      if (!doc.RootElement
+             .GetProperty("response")
+             .GetProperty("GeoObjectCollection")
+             .GetProperty("featureMember")
+             .EnumerateArray()
+             .Any())
+        return null;
+
+      var geoObject = doc.RootElement
           .GetProperty("response")
           .GetProperty("GeoObjectCollection")
           .GetProperty("featureMember")[0]
-          .GetProperty("GeoObject")
+          .GetProperty("GeoObject");
+
+      // 1) Координаты
+      var pos = geoObject
           .GetProperty("Point")
           .GetProperty("pos")
-          .GetString();
-
-      // Пример ответа: "37.617635 55.755814"
+          .GetString()!; // формат "lon lat"
       var parts = pos.Split(' ');
-      if (parts.Length != 2)
-        return null;
+      var lon = decimal.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+      var lat = decimal.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
 
-      double lon = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
-      double lat = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+      // 2) Полный адрес (текстовый)
+      var meta = geoObject
+          .GetProperty("metaDataProperty")
+          .GetProperty("GeocoderMetaData");
+      var fullAddress = meta.GetProperty("text").GetString();
 
-      return (lat, lon);
+      // 3) Компоненты разбора адреса
+      //    находятся в meta -> Address -> Components
+      var compRoot = meta
+          .GetProperty("Address")
+          .GetProperty("Components")
+          .EnumerateArray();
+
+      var result = new automation.mbtdistr.ru.Models.Address
+      {
+        FullAddress = fullAddress,
+        Latitude = lat,
+        Longitude = lon
+      };
+
+      foreach (var comp in compRoot)
+      {
+        var kind = comp.GetProperty("kind").GetString();
+        var name = comp.GetProperty("name").GetString();
+
+        switch (kind)
+        {
+          case "country":
+            result.Country = name;
+            break;
+          case "province":   // область
+                             // при желании можно сохранить или проигнорировать
+            break;
+          case "locality":   // город/нас. пункт
+            result.City = name;
+            break;
+          case "street":
+            result.Street = name;
+            break;
+          case "house":
+            result.House = name;
+            break;
+          case "postal_code":
+            result.ZipCode = name;
+            break;
+          // Yandex не отдаёт отдельного office — можно попытаться
+          // вытянуть из полного адреса regex-ом, но обычно не требуется.
+          default:
+            break;
+        }
+      }
+
+      return result;
     }
   }
+
 }

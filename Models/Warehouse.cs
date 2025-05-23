@@ -17,8 +17,13 @@ namespace automation.mbtdistr.ru.Models
 
     public string? Service { get; set; }
 
+    // Возвраты, которые сейчас на этом складе
     [Newtonsoft.Json.JsonIgnore]
-    public ICollection<Return>? Returns { get; set; } = new List<Return>();
+    public ICollection<Return> CurrentReturns { get; set; } = new List<Return>();
+
+    // Возвраты, направленные на этот склад
+    [Newtonsoft.Json.JsonIgnore]
+    public ICollection<Return> DestinationReturns { get; set; } = new List<Return>();
 
     [ForeignKey(nameof(Cabinet))]
     public int? CabinetId { get; set; }

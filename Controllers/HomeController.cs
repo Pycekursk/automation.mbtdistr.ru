@@ -58,6 +58,11 @@ namespace automation.mbtdistr.ru.Controllers
       return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 
+    /// <summary>
+    /// Отображает главное меню веб приложения телеграм бота.
+    /// </summary>
+    /// <param name="id">Телеграм id пользователя</param>
+    /// <returns></returns>
     [HttpGet("botmenu/{id?}")]
     public IActionResult BotMenu([FromQuery] long? id)
     {
@@ -147,7 +152,7 @@ namespace automation.mbtdistr.ru.Controllers
             }
           };
         }
-        else if(user.Role == RoleType.Courier)
+        else if (user.Role == RoleType.Courier)
         {
 
         }
@@ -291,8 +296,6 @@ namespace automation.mbtdistr.ru.Controllers
           returns.AddRange(cabinetReturns);
         }
       }
-
-
       return View(returns);
     }
 
@@ -302,7 +305,7 @@ namespace automation.mbtdistr.ru.Controllers
       var returns = _db.Returns
         .Include(r => r.Cabinet)
         .Where(r => r.CabinetId == cabinetId)
-        .Include(r => r.Warehouse)
+        .Include(r => r.TargetWarehouse)
         .Include(r => r.Products)
         .ThenInclude(p => p.Images)
         .ToList();
@@ -457,13 +460,13 @@ namespace automation.mbtdistr.ru.Controllers
       {
         return Redirect("https://t.me/MbtdistrBot");
       }
-      var warehouses = _db.Warehouses.Include(w => w.Returns).ToList();
+      var warehouses = _db.Warehouses.Include(w => w.CurrentReturns).Include(w => w.DestinationReturns).ToList();
       if (warehouses?.Count > 0)
       {
         ViewData["GreetingMessage"] = $"Склады ({warehouses.Count} шт.)";
         foreach (var warehouse in warehouses)
         {
-          ViewData["GreetingMessage"] += $"\n{warehouse.Name} ({warehouse?.Returns?.Count})";
+          ViewData["GreetingMessage"] += $"\n{warehouse.Name} ({warehouse.CurrentReturns.Count} возвратов)";
         }
       }
       else

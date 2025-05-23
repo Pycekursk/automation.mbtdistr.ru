@@ -28,6 +28,8 @@ using Telegram.Bot;
 using static automation.mbtdistr.ru.Extensions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Microsoft.Extensions.Hosting;
+using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace automation.mbtdistr.ru
 {
@@ -43,6 +45,7 @@ namespace automation.mbtdistr.ru
       var builder = WebApplication.CreateBuilder(args);
       Configuration = builder.Configuration;
       Services = builder.Services;
+      Environment = builder.Environment;
 
       // Add services to the container
 
@@ -51,13 +54,12 @@ namespace automation.mbtdistr.ru
         options.EnableDetailedErrors();
         options.EnableSensitiveDataLogging();
 
-        //есои приложение в режиме разработки то получаем строку подключения DebugConnectionString
-        if (builder.Environment.IsDevelopment())
-          options.UseMySql(builder.Configuration.GetConnectionString("DebugConnection"),
-            new MySqlServerVersion(new Version(8, 0, 21)));
-        else
-          options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
-          new MySqlServerVersion(new Version(8, 0, 21)));
+        var connectionString = Environment.IsProduction()
+          ? Configuration.GetConnectionString("DefaultConnection")
+          : Configuration.GetConnectionString("DebugConnection");
+
+        var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        optionsBuilder.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
       });
 
       builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -170,7 +172,6 @@ namespace automation.mbtdistr.ru
       builder.Services.AddSingleton<SheetsApiService>();
 
       var app = builder.Build();
-      Environment = app.Environment;
       app.UseStaticFiles();
 
       // После сборки app
