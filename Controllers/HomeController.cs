@@ -82,7 +82,7 @@ namespace automation.mbtdistr.ru.Controllers
               Icon = "bi bi-gear-fill",
               Action = "orderslist",
               Title = "Заказы",
-              CSS = "btn btn-outline-success"
+              CSS = "btn btn-outline-success disabled"
             },
             new MenuItem
             {
@@ -111,7 +111,7 @@ namespace automation.mbtdistr.ru.Controllers
               Icon = "bi bi-gear-fill",
               Action = "workersettings",
               Title = "Настройки",
-              CSS = "btn btn-outline-light"
+              CSS = "btn btn-outline-light disabled"
             }
           };
         }
@@ -124,7 +124,6 @@ namespace automation.mbtdistr.ru.Controllers
           {
             new MenuItem
             {
-
               Action = "cabinetslist",
               Title = "Кабинеты",
               CSS = "btn btn-outline-primary",
@@ -147,6 +146,10 @@ namespace automation.mbtdistr.ru.Controllers
               Icon = "bi bi-box-seam"
             }
           };
+        }
+        else if(user.Role == RoleType.Courier)
+        {
+
         }
       }
       else
@@ -234,7 +237,6 @@ namespace automation.mbtdistr.ru.Controllers
 
       return View(mainMenu);
     }
-
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/orderslist")]
     public IActionResult OrdersList([FromRoute] long id, [FromRoute] int? cabinetId)

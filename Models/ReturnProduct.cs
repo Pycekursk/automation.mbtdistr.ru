@@ -27,7 +27,7 @@ namespace automation.mbtdistr.ru.Models
     [ForeignKey("Return")]
     public int ReturnId { get; set; }
 
-    [Newtonsoft.Json.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public Return Return { get; set; }
 
     public string? Url { get; set; }

@@ -8,6 +8,11 @@
   var modelName = typeof(Return).Name;
   var defaultExportFileName = $"{modelName}s_{DateTime.Now:yyyy-MM-dd}";
 }
+
+<script>
+  var defaultExportFileName = '@defaultExportFileName';
+</script>
+
   @using System.ComponentModel.DataAnnotations
 @{
   var columns = typeof(Return).GetProperties()
@@ -39,10 +44,13 @@
 Html.DevExtreme().DataGrid<Return>()
      .ID("gridContainer")
      .KeyExpr("Id")
+     .Height("95vh")
      .ColumnAutoWidth(true)
      .ShowRowLines(true)
      .ShowBorders(true)
      .DataSource(Model)
+      .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx" }); })
+          .OnExporting("onExportingHandler")
       .Columns(columnsBuilder =>
       {
         foreach (var col in columns)
@@ -86,7 +94,7 @@ Html.DevExtreme().DataGrid<Return>()
        .ColumnChooser(cc =>
       {
         cc.Enabled(true)
-        .Height("400px")
+         .Height("400px")
         .Mode(GridColumnChooserMode.Select)
         .Position(pc => pc
         .My(HorizontalAlignment.Right, VerticalAlignment.Top)
@@ -118,6 +126,11 @@ Html.DevExtreme().DataGrid<Return>()
           b.OnClick("goBack");
           return b;
         });
+
+          items.Add()
+.Name("searchPanel") // <<< это добавляет поле поиска
+.Location(ToolbarItemLocation.Center); // или Before/After
+
           items.Add()
         .Name("exportButton")
         .Location(ToolbarItemLocation.After);
@@ -130,14 +143,21 @@ Html.DevExtreme().DataGrid<Return>()
      .LoadPanel(loadPanel => loadPanel.Enabled(true))
      .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
      .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
+       .Pager(p =>
+                                          {
+                                            p.Visible(true);
+                                            p.ShowPageSizeSelector(true);
+                                            p.AllowedPageSizes(new int[] { 20, 50, 100 });
+                                          })
      .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
      .AllowColumnResizing(true)
-     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{Model.GetType().Name}_grid"))
+     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{modelName}_grid"))
      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
-     @* .FilterPanel(f => f.Visible(true)) *@
-     .HeaderFilter(h => h.Visible(true))
+       .HeaderFilter(hf => hf.Visible(true))
+                                          .FilterRow(f => f.Visible(true))
+
+                                              .SearchPanel(s => s.Visible(true))
      .Selection(s => s.Mode(SelectionMode.Single))
-     .FilterRow(f => f.Visible(true))
-     .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true))))
+     .KeyExpr("Id"))
 
 

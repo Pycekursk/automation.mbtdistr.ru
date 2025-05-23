@@ -10,52 +10,57 @@
 @model List<YMSupplyRequest>
 
 @{
-  var modelName = typeof(YMSupplyRequest).Name;
+  // var modelName = Model.GetType().Name;
+  //получаем название типа вложенного в лист который является моделью
+  var modelName = Model.FirstOrDefault()?.GetType().Name ?? "YMSupplyRequest";
   var defaultExportFileName = $"{modelName}_{DateTime.Now:yyyy-MM-dd}";
 }
 
+<script>
+  var defaultExportFileName = '@defaultExportFileName';
+</script>
 
 
 
   @using System.ComponentModel.DataAnnotations
-  @{
-    var columns = typeof(YMSupplyRequest).GetProperties()
-      .Where(p =>
-      {
-        if (!p.CanRead) return false;
+@{
+  var columns = typeof(YMSupplyRequest).GetProperties()
+    .Where(p =>
+    {
+      if (!p.CanRead) return false;
 
-        var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
-      .Cast<DataGridAttribute>()
-      .FirstOrDefault();
+      var attr = p.GetCustomAttributes(typeof(DataGridAttribute), false)
+    .Cast<DataGridAttribute>()
+    .FirstOrDefault();
 
-        return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
-      })
-      .Select(p => new
-      {
-        Field = p.Name,
-        Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
-      .Cast<DisplayAttribute>()
-      .FirstOrDefault()?.Name ?? p.Name,
-        IsEnum = p.PropertyType.IsEnum,
-        EnumType = p.PropertyType
-      })
-      .ToList();
-  }
-  @{
-    var enumFields = typeof(YMSupplyRequest).GetProperties()
-      .Where(p => p.PropertyType.IsEnum)
-      .ToList();
-  }
-  @(
+      return attr == null || attr.IsVisible; // пропускаем только если явно Visible == false
+    })
+    .Select(p => new
+    {
+      Field = p.Name,
+      Caption = p.GetCustomAttributes(typeof(DisplayAttribute), false)
+    .Cast<DisplayAttribute>()
+    .FirstOrDefault()?.Name ?? p.Name,
+      IsEnum = p.PropertyType.IsEnum,
+      EnumType = p.PropertyType
+    })
+    .ToList();
+}
+@{
+  var enumFields = typeof(YMSupplyRequest).GetProperties()
+    .Where(p => p.PropertyType.IsEnum)
+    .ToList();
+}
+@(
                 Html.DevExtreme().DataGrid<YMSupplyRequest>()
                                             .ID("gridContainer")
                                             .KeyExpr("Id")
                                             .ColumnAutoWidth(true)
-                                            .Height("700px")
+                                                 .Height("95vh")
                                             .ShowRowLines(true)
                                             .ShowBorders(true)
                                             .DataSource(Model)
-                                            .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx", "pdf" }); })
+                                            .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx" }); })
                                             .OnExporting("onExportingHandler")
 
                                             .Columns(columnsBuilder =>
@@ -105,7 +110,7 @@
                             }
                         ")
               .AllowFiltering(true)
-              .AllowSorting(false); // можно отключить сортировку, если не нужна
+              .AllowSorting(true); // можно отключить сортировку, если не нужна
                                                 }
                                                 else
                                                 {
@@ -212,6 +217,7 @@
 
                                           .Selection(s => s.Mode(SelectionMode.Single))
                                           .HeaderFilter(hf => hf.Visible(true))
+                                          .FilterRow(f => f.Visible(true))
 
                                               .SearchPanel(s => s.Visible(true))
                               )

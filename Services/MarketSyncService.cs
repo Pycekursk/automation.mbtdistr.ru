@@ -101,7 +101,7 @@ namespace automation.mbtdistr.ru.Services
 
       if (Program.Environment.IsDevelopment())
       {
-        SyncAllAsync(CancellationToken.None);
+       // SyncAllAsync(CancellationToken.None);
       }
     }
 

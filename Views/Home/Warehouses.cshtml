@@ -3,11 +3,17 @@
   ViewData["Title"] = "Склады";
   Layout = "/Views/Shared/_BotMenuLayout.cshtml";
 }
+
 @model List<Warehouse>?
 @{
-  var modelName = typeof(Warehouse).Name;
+  var modelName = Model?.FirstOrDefault()?.GetType().Name ?? "Warehouse";
   var defaultExportFileName = $"{modelName}s_{DateTime.Now:yyyy-MM-dd}";
 }
+
+<script>
+  var defaultExportFileName = '@defaultExportFileName';
+</script>
+
   @using System.ComponentModel.DataAnnotations
 @{
   var columns = typeof(Warehouse).GetProperties()
@@ -43,6 +49,13 @@ Html.DevExtreme().DataGrid<Warehouse>()
      .ShowRowLines(true)
      .ShowBorders(true)
      .DataSource(Model)
+     .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx" }); })
+       .Pager(p =>
+                                          {
+                                            p.Visible(true);
+                                            p.ShowPageSizeSelector(true);
+                                            p.AllowedPageSizes(new int[] { 20, 50, 100 });
+                                          })
       .Columns(columnsBuilder =>
       {
         foreach (var col in columns)
@@ -72,7 +85,7 @@ Html.DevExtreme().DataGrid<Warehouse>()
        .ColumnChooser(cc =>
       {
         cc.Enabled(true)
-        .Height("400px")
+         .Height("95vh")
         .Mode(GridColumnChooserMode.Select)
         .Position(pc => pc
         .My(HorizontalAlignment.Right, VerticalAlignment.Top)

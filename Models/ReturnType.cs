@@ -2,13 +2,14 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
 
 namespace automation.mbtdistr.ru.Models
 {
   /// <summary>
   /// Тип возврата.
   /// </summary>
-  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter)), System.Text.Json.Serialization.JsonConverter(typeof(JsonStringEnumConverter))]
   public enum ReturnType
   {
     /// <summary>
@@ -16,6 +17,7 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [EnumMember(Value = "UNREDEEMED")]
     [JsonProperty("UNREDEEMED")]
+    [System.Text.Json.Serialization.JsonPropertyName("UNREDEEMED")]
     [Display(Name = "Невыкуп")]
     Unredeemed,
 
@@ -23,7 +25,7 @@ namespace automation.mbtdistr.ru.Models
     /// Возврат.
     /// </summary>
     [EnumMember(Value = "RETURN")]
-
+    [System.Text.Json.Serialization.JsonPropertyName("RETURN")]
     [JsonProperty("RETURN")]
     [Display(Name = "Возврат")]
     Return,
@@ -33,7 +35,8 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [EnumMember(Value = "UNKNOWN")]
     [JsonProperty("UNKNOWN")]
-    [Display(Name = "Неизвестный тип")]
+    [System.Text.Json.Serialization.JsonPropertyName("UNKNOW")]
+    [Display(Name = "Неизвестный")]
     Unknown
   }
 }
