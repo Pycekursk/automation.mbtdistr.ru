@@ -8,6 +8,7 @@
   using System.Net.Http.Headers;
   using automation.mbtdistr.ru.Services.YandexMarket;
   using automation.mbtdistr.ru.Services;
+  using Newtonsoft.Json;
 
   public class OzonSellerApiHttpClient
   {
@@ -18,7 +19,11 @@
       new()
       {
                 { MarketApiRequestType.ReturnsList,
-                  new EndpointDefinition("/v1/returns/list", HttpMethod.Post) }
+                  new EndpointDefinition("/v1/returns/list", HttpMethod.Post) },
+                { MarketApiRequestType.ProductList,
+                  new EndpointDefinition("/v3/product/list", HttpMethod.Post) },
+                { MarketApiRequestType.ProductInfo,
+                  new EndpointDefinition("/v3/product/info/list", HttpMethod.Post) },
       };
 
     public OzonSellerApiHttpClient()
@@ -75,5 +80,8 @@
         throw;
       }
     }
+
+
+  
   }
 }

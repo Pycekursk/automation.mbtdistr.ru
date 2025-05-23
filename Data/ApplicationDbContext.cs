@@ -25,6 +25,11 @@ namespace automation.mbtdistr.ru.Data
     public DbSet<Worker> Workers { get; set; }
     public DbSet<NotificationOptions> NotificationOptions { get; set; }
     public DbSet<Return> Returns { get; set; }
+
+    public DbSet<Product> Products { get; set; }
+
+    public DbSet<ProductBarcode> ProductBarcodes { get; set; }
+
     public DbSet<Cabinet> Cabinets { get; set; }
     public DbSet<CabinetSettings> CabinetSettings { get; set; }
     public DbSet<ConnectionParameter> ConnectionParameters { get; set; }
@@ -219,6 +224,21 @@ namespace automation.mbtdistr.ru.Data
             wc.ToTable("WorkerCabinets");
           }
         );
+
+      modelBuilder.Entity<Product>()
+      .ToTable("Products");
+
+      modelBuilder.Entity<ProductBarcode>()
+          .ToTable("ProductBarcodes")
+          .HasIndex(x => new { x.ProductId, x.Barcode })
+          .IsUnique();
+
+      // Опционально: настроить каскадное удаление
+      modelBuilder.Entity<Product>()
+          .HasMany(p => p.Barcodes)
+          .WithOne(b => b.Product)
+          .HasForeignKey(b => b.ProductId)
+          .OnDelete(DeleteBehavior.Cascade);
     }
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

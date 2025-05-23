@@ -41,6 +41,7 @@ namespace automation.mbtdistr.ru.Services
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeSpan _interval;
     private readonly ITelegramBotClient _botClient;
+    private readonly OzonApiService _ozSvc;
     private const int _telegramMaxMessageLength = 4096;
     private readonly ApplicationDbContext _db;
     private readonly IOptions<AppSettings> _options;
@@ -85,7 +86,9 @@ namespace automation.mbtdistr.ru.Services
     public MarketSyncService(IServiceScopeFactory scopeFactory, ITelegramBotClient botClient, IConfiguration config, IOptions<AppSettings> options)
     {
       _scopeFactory = scopeFactory;
-      _db = _scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ApplicationDbContext>();
+      var scope = _scopeFactory.CreateScope();
+      _db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+      _ozSvc = scope.ServiceProvider.GetRequiredService<OzonApiService>();
       _botClient = botClient;
       var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
@@ -169,7 +172,7 @@ namespace automation.mbtdistr.ru.Services
     {
       using var scope = _scopeFactory.CreateScope();
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
-      var ozSvc = scope.ServiceProvider.GetRequiredService<OzonApiService>();
+
       var ymSvc = scope.ServiceProvider.GetRequiredService<YMApiService>();
 
       List<Cabinet> cabinets = new List<Cabinet>();
@@ -186,7 +189,8 @@ namespace automation.mbtdistr.ru.Services
         await Extensions.SendDebugMessage($"Ошибка при получении кабинетов из БД\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
         return;
       }
-      // подтягиваем все кабинеты вместе с настройками
+
+      await Task.WhenAll(cabinets.Where(c => c.Marketplace.ToUpper() == "OZON").Select(c => SyncOzonProducts(c)));
 
       List<Models.Return> allReturns = new List<Models.Return>();
       foreach (var cab in cabinets)
@@ -195,6 +199,10 @@ namespace automation.mbtdistr.ru.Services
         {
           if (cab.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("OZ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗОН", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗ", StringComparison.OrdinalIgnoreCase))
           {
+
+
+
+
             var filter = new Services.Ozon.Models.Filter();
             filter.LogisticReturnDate = new Services.Ozon.Models.DateRange
             {
@@ -205,7 +213,7 @@ namespace automation.mbtdistr.ru.Services
             long lastId = 0;
             do
             {
-              var response = await ozSvc.GetReturnsListAsync(cab, filter, lastId: lastId);
+              var response = await _ozSvc.GetReturnsListAsync(cab, filter, lastId: lastId);
               if (response == null)
               {
 
@@ -235,11 +243,6 @@ namespace automation.mbtdistr.ru.Services
               @return.CabinetId = cab.Id;
               if (@return.TargetWarehouse != null)
                 @return.TargetWarehouse.Service = cab.Marketplace;
-
-
-
-
-
               _returns.Add(@return);
             }
             if (_returns.Count > 0)
@@ -370,6 +373,63 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
+
+    private async Task<List<Product>> SyncOzonProducts(Cabinet cabinet)
+    {
+      var products = new List<Product>();
+      var ids = await _ozSvc.GetOfferIdsAsync(cabinet);
+      products = await _ozSvc.GetProductsInfoAsync(cabinet, ids);
+
+      using (var db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>()))
+      {
+        foreach (var product in products)
+        {
+          try
+          {
+            var dbProduct = db.Products.FirstOrDefault(p => p.OfferId == product.OfferId);
+            if (dbProduct != null)
+            {
+              product.Barcodes.ToList().ForEach(b =>
+              {
+                var dbBarcode = dbProduct.Barcodes.FirstOrDefault(bc => bc.Barcode == b.Barcode);
+                if (dbBarcode == null)
+                {
+                  dbProduct.Barcodes.Add(new ProductBarcode
+                  {
+                    Barcode = b.Barcode,
+                    ProductId = dbProduct.Id
+                  });
+                }
+              });
+              // удаляем штрихкоды, которых нет в новом списке
+              foreach (var dbBarcode in dbProduct.Barcodes.ToList())
+              {
+                if (!product.Barcodes.Any(b => b.Barcode == dbBarcode.Barcode))
+                {
+                  db.ProductBarcodes.Remove(dbBarcode);
+                }
+              }
+              // обновляем поля товара
+              dbProduct.Name = product.Name;
+              dbProduct.Barcodes = product.Barcodes;
+              db.Products.Update(dbProduct);
+            }
+            else
+            {
+              db.Products.Add(product);
+            }
+          }
+          catch (Exception exc)
+          {
+            await Extensions.SendDebugObject(product, $"Ошибка при синхронизации товара {product.OfferId} ({product.Name})\n\n{exc.Message}\n\n{exc?.InnerException?.Message}");
+          }
+        }
+        await db.SaveChangesAsync();
+      }
+      
+
+      return products;
+    }
 
 
     /// <summary>

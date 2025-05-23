@@ -7,6 +7,8 @@ using Telegram.Bot.Types;
 
 using ZXing;
 using System.Drawing.Imaging;
+using automation.mbtdistr.ru.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace automation.mbtdistr.ru.Services.BarcodeService
 {
@@ -51,9 +53,24 @@ namespace automation.mbtdistr.ru.Services.BarcodeService
 
         if (!string.IsNullOrEmpty(barcode))
         {
+          //ищем товар в базе
+          using var db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+          var product = await db.Products
+              .Include(p => p.Barcodes)
+              .FirstOrDefaultAsync(p => p.Barcodes.Any(b => b.Barcode == barcode));
+
+          if (product == null)
+          {
+            await _botClient.SendMessage(
+                chatId: update.Message.Chat.Id,
+                text: "Товар не найден в базе."
+            );
+            return;
+          }
+
           await _botClient.SendMessage(
               chatId: update.Message.Chat.Id,
-              text: $"Штрихкод: {barcode}"
+              text: $"{product.Name}"
           );
         }
         else
