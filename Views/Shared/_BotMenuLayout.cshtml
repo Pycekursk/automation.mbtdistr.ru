@@ -90,62 +90,53 @@
     });
   </script>
   <div class="dx-viewport-inner">
-    <script>
-              function onExportingHandler(e) {
-          const defaultName = defaultExportFileName;
-          DevExpress.ui.dialog.custom({
-              title: "Сохранить как",
-              messageHtml: "<div>Введите имя файла:</div><input type='text' id='filenameInput' value='" + defaultName + "' style='width:100%' />",
-              buttons: [
-                  {
-                      text: "Сохранить", onClick: () => {
-                          const filename = document.getElementById('filenameInput').value || defaultName;
-                          e.fileName = filename;
+ 
+      <script>
+          function onExportingHandler(e) {
+              const workbook  = new ExcelJS.Workbook();
+              const worksheet = workbook.addWorksheet('Возвраты');
 
-                          if (e.format === 'xlsx') {
+              DevExpress.excelExporter.exportDataGrid({
+                  component: e.component,
+                  worksheet: worksheet,
+                  topLeftCell: { row: 1, column: 1 }
+              }).then(() => {
+                  return workbook.xlsx.writeBuffer();
+              }).then(buffer => {
+                  // Собираем Blob и конвертим в base64
+                  const blob = new Blob([buffer], {
+                      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  });
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                      const base64 = reader.result.split(',')[1];
+                      const fileName = 'defaultExportFileName' + '.xlsx';
+                      // Шлём на сервер
+                      fetch('/api/TelegramBot/sendReturnsExcel', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              chatId:   window.telegramChatId,
+                              fileName: fileName,
+                              base64:   base64
+                          })
+                      }).then(resp => {
+                          if (!resp.ok) alert('Ошибка отправки отчёта');
+                      });
+                  };
+                  reader.readAsDataURL(blob);
+              });
 
-                              var workbook = new ExcelJS.Workbook();
-                              var worksheet = workbook.addWorksheet('Main sheet');
-                              DevExpress.excelExporter.exportDataGrid({
-                                  worksheet: worksheet,
-                                  component: e.component,
-                                  customizeCell: function (options) {
-                                      options.excelCell.font = { name: 'Arial', size: 12 };
-                                      options.excelCell.alignment = { horizontal: 'left' };
-                                  }
-                              }).then(function () {
-                                  workbook.xlsx.writeBuffer().then(function (buffer) {
-                                      saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `${e.fileName}.xlsx`);
-                                  });
-                              });
+              // отменяем стандартный экспорт
+              e.cancel = true;
+          }
 
+          // Функция «Назад»
+          function goBack() {
+              window.history.back();
+          }
+      </script>
 
-                          }
-                          else if (e.format === 'pdf') {
-                              const doc = new jspdf.jsPDF();
-                              DevExpress.pdfExporter.exportDataGrid({
-                                  jsPDFDocument: doc,
-                                  component: e.component,
-                              }).then(() => {
-                                  doc.save(`${e.fileName}.pdf`);
-                              });
-
-                          }
-
-
-
-
-                      }
-                  },
-                  { text: "Отмена", onClick: () => e.cancel = true }
-              ]
-          }).show();
-
-          // отменяем экспорт по умолчанию, он продолжится в диалоге
-         // e.cancel = true;
-      }
-//DevExpress.pdfMake = pdfMake;
-    </script>
 
     <div class="container-fluid py-3">
       <main role="main">

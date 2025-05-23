@@ -1024,6 +1024,39 @@ ILogger<TelegramBotController> logger)
       await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(keyboard));
     }
 
+
+    [HttpPost("sendReturnsExcel")]
+    public async Task<IActionResult> SendReturnsExcel([FromBody] SendExportRequestDto request)
+    {
+      if (request.ChatId == 0)
+      {
+        await _botClient.SendMessage(request.ChatId, "Загрузка файлов доступна только через WebApp Telegram.");
+        return BadRequest("Загрузка файлов доступна только через WebApp Telegram.");
+      }
+      // 1) Декодируем файл и сохраняем на диск
+      var bytes = Convert.FromBase64String(request.Base64);
+      var exportDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "exports");
+      if (!Directory.Exists(exportDir))
+        Directory.CreateDirectory(exportDir);
+      var filePath = Path.Combine(exportDir, request.FileName);
+      await System.IO.File.WriteAllBytesAsync(filePath, bytes);
+
+      // 2) Отправляем через Телеграм-бота
+      await using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+      var inputFile = new Telegram.Bot.Types.InputFileStream(fs, request.FileName);
+      await _botClient.SendDocument(
+          chatId: request.ChatId,
+          document: inputFile,
+          caption: "Ваш отчёт по возвратам готов.",
+          cancellationToken: CancellationToken.None
+      );
+
+      // (опционально) удалить файл:
+      // System.IO.File.Delete(filePath);
+
+      return Ok();
+    }
+
     #region Pdf translate
 
     private string OpenAiTranslate(string text, string fromLang, string toLang)
@@ -1829,7 +1862,18 @@ ILogger<TelegramBotController> logger)
     }
     #endregion
   }
+  // DTO для приёма запроса
+  public class SendExportRequestDto
+  {
+    [JsonPropertyName("chatId")]
+    public long ChatId { get; set; }
 
+    [JsonPropertyName("fileName")]
+    public string FileName { get; set; } = string.Empty;
+
+    [JsonPropertyName("base64")]
+    public string Base64 { get; set; } = string.Empty;
+  }
   public class UpdateExample : IExamplesProvider<Update>
   {
     Update IExamplesProvider<Update>.GetExamples()

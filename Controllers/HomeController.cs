@@ -154,7 +154,25 @@ namespace automation.mbtdistr.ru.Controllers
         }
         else if (user.Role == RoleType.Courier)
         {
-
+          mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
+          //меню с кнопками: Кабинеты, Возвраты, Настройки
+          mainMenu.Menu = new List<MenuItem>
+          {
+            new MenuItem
+            {
+              Action = "warehouseslist",
+              Title = "Склады",
+              CSS = "btn btn-outline-primary",
+              Icon = "bi bi-building"
+            },
+            new MenuItem
+            {
+            Action = "supplieslist",
+            Title = "Заявки",
+            CSS = "btn btn-outline-primary",
+            Icon = "bi bi-box-seam"
+            }
+          };
         }
       }
       else

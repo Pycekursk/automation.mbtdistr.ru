@@ -370,7 +370,7 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
- 
+
 
     /// <summary>
     /// Добавление или обновление возвратов в базе данных.
@@ -398,6 +398,7 @@ namespace automation.mbtdistr.ru.Services
         {
           if (ret.TargetWarehouse != null)
           {
+            ret.TargetWarehouse.CabinetId = ret.CabinetId;
             var key = $"{ret.TargetWarehouse.ExternalId}_{ret.TargetWarehouse.Service}";
             var warehouse = await db.Warehouses
               .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
@@ -420,7 +421,6 @@ namespace automation.mbtdistr.ru.Services
                   ret.TargetWarehouse.Address = addressObj;
                 }
               }
-
               db.Warehouses.Add(ret.TargetWarehouse);
               ret.TargetWarehouse = warehouse;
               await db.SaveChangesAsync();
@@ -428,18 +428,65 @@ namespace automation.mbtdistr.ru.Services
             else
             {
               //проверяем если координаты пустые, то заполняем их
-              if (ret?.TargetWarehouse?.Address?.Latitude == 0 && ret.TargetWarehouse.Address.Longitude == 0)
+              if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
               {
                 //получаем значение апи ключа YandexGeo из appsettings
                 var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
                 var geoService = new YandexGeocoderService(apiKey);
-                var addressObj = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
+                var addressObj = await geoService.GetAddressAsync(warehouse.Address.FullAddress);
                 if (addressObj != null)
                 {
-                  ret.TargetWarehouse.Address = addressObj;
+                  warehouse.Address = addressObj;
                 }
               }
               ret.TargetWarehouse = warehouse;
+            }
+          }
+          if (ret.CurrentWarehouse != null)
+          {
+            ret.CurrentWarehouse.CabinetId = ret.CabinetId;
+            var key = $"{ret.CurrentWarehouse.ExternalId}_{ret.CurrentWarehouse.Service}";
+            var warehouse = await db.Warehouses
+              .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
+            if (warehouse == null)
+            {
+              //если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
+              if (ret.CurrentWarehouse.Address != null && string.IsNullOrEmpty(ret.CurrentWarehouse.Address.FullAddress))
+              {
+                ret.CurrentWarehouse.Address.FullAddress = $"{ret.CurrentWarehouse.Address.Country}, {ret.CurrentWarehouse.Address}, {ret.CurrentWarehouse.Address.City}, {ret.CurrentWarehouse.Address.Street}, {ret.CurrentWarehouse.Address.House}, {ret.CurrentWarehouse.Address.Office}";
+              }
+              if (ret?.CurrentWarehouse?.Address?.Latitude == 0 || ret?.CurrentWarehouse?.Address?.Longitude == 0)
+              {
+                //получаем значение апи ключа YandexGeo из appsettings
+                var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
+                var geoService = new YandexGeocoderService(apiKey);
+                var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
+                if (addressObj != null)
+                {
+                  warehouse.Address = addressObj;
+                }
+              }
+
+              db.Warehouses.Add(ret.CurrentWarehouse);
+              ret.CurrentWarehouse = warehouse;
+              await db.SaveChangesAsync();
+            }
+            else
+            {
+              //проверяем если координаты пустые, то заполняем их
+              if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
+              {
+                //получаем значение апи ключа YandexGeo из appsettings
+                var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
+                var geoService = new YandexGeocoderService(apiKey);
+                var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
+                if (addressObj != null)
+                {
+                  warehouse.Address = addressObj;
+                }
+                warehouse.CabinetId = ret.CabinetId;
+              }
+              ret.CurrentWarehouse = warehouse;
             }
           }
 
@@ -462,6 +509,7 @@ namespace automation.mbtdistr.ru.Services
               {
                 var existingProduct = db.ReturnProducts
                   .Include(p => p.Images)
+                  .Include(p => p.Price)
                   .Include(p => p.Return)
                   .FirstOrDefault(p => p.Sku == product.Sku && p.ReturnId.ToString() == ret.ReturnId);
                 if (existingProduct != null)
