@@ -115,7 +115,7 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [JsonProperty("scheme")]
     [Display(Name = "Схема реализации")]
-    public SellScheme? Scheme { get; set; }
+    public SellScheme Scheme { get; set; }
 
     public List<ReturnProduct>? Products { get; set; }
 
@@ -124,7 +124,7 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [JsonProperty("returnType")]
     [Display(Name = "Тип возврата")]
-    public ReturnType? ReturnType { get; set; }
+    public ReturnType ReturnType { get; set; }
 
     /// <summary>
     /// Метод преобразования объекта возврата в общий объект возврата.
@@ -263,7 +263,7 @@ namespace automation.mbtdistr.ru.Models
       @return.ReturnId = ymReturn?.Id.ToString();
       @return.OrderId = ymReturn?.OrderId.ToString();
       @return.OrderNumber = ymReturn?.OrderId.ToString();
-      @return.ReturnType = ymReturn?.ReturnType;
+      @return.ReturnType = ymReturn.ReturnType;
       @return.Scheme = ymReturn?.ShipmentRecipientType == YMShipmentRecipientType.Shop ? SellScheme.FBS : SellScheme.FBO;
       @return.Products ??= new List<ReturnProduct>();
 

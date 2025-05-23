@@ -101,7 +101,7 @@ namespace automation.mbtdistr.ru.Services
 
       if (Program.Environment.IsDevelopment())
       {
-       // SyncAllAsync(CancellationToken.None);
+        SyncAllAsync(CancellationToken.None);
       }
     }
 
@@ -752,7 +752,7 @@ namespace automation.mbtdistr.ru.Services
         sb.AppendLine(" ");
       }
       sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
-      sb.AppendLine($"<b>Тип возврата:</b> {x?.ReturnType?.GetDisplayName()}");
+      sb.AppendLine($"<b>Тип возврата:</b> {x?.ReturnType.GetDisplayName()}");
 
       sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
       sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
