@@ -55,9 +55,7 @@ Html.DevExtreme().DataGrid<Return>()
       {
         foreach (var col in columns)
         {
-
           DevExtreme.AspNet.Mvc.Builders.DataGridColumnBuilder<Return>? column = null;
-
           if (col.Field == "TargetLocation")
           {
             column = columnsBuilder.Add()
@@ -67,27 +65,36 @@ Html.DevExtreme().DataGrid<Return>()
                 .CalculateCellValue("function(data) { return data.TargetLocation ? data.TargetLocation.Name + ' ' + data.TargetLocation.Address.FullAddress : ''; }").AllowFiltering(true)
                 .AllowSorting(false);
           }
+          else if (col.Field == "Cabinet")
+          {
+            column = columnsBuilder.Add()
+            .Caption(col.Caption)
+              .CssClass("wrap-text-cell")
+                .CalculateCellValue(@"function(data) { return data.Cabinet ? data.Cabinet.Name +'\n'+ data.Cabinet.Marketplace : ''; }").AllowFiltering(true)
+.AllowSorting(false);
+          }
           else
           {
             column = columnsBuilder.Add()
-                .DataField(col.Field)
-                .Caption(col.Caption);
-            if (col.IsEnum)
+                                                   .DataField(col.Field)
+                                                   .CssClass("wrap-text-cell")
+                                                   .Caption(col.Caption);
+          }
+          if (col.IsEnum)
+          {
+            var enumValues = Enum.GetValues(col.EnumType)
+            .Cast<Enum>()
+            .Select(e => new
             {
-              var enumValues = Enum.GetValues(col.EnumType)
-              .Cast<Enum>()
-              .Select(e => new
-              {
-                Id = Convert.ToInt32(e),
-                Name = e.GetDisplayName()
-              })
-              .ToList();
+              Id = Convert.ToInt32(e),
+              Name = e.GetDisplayName()
+            })
+            .ToList();
 
-              column.Lookup(lookup => lookup
-              .DataSource(enumValues)
-              .ValueExpr("Id")
-              .DisplayExpr("Name"));
-            }
+            column.Lookup(lookup => lookup
+            .DataSource(enumValues)
+            .ValueExpr("Id")
+            .DisplayExpr("Name"));
           }
         }
       })
@@ -158,6 +165,7 @@ Html.DevExtreme().DataGrid<Return>()
 
                                               .SearchPanel(s => s.Visible(true))
      .Selection(s => s.Mode(SelectionMode.Single))
-     .KeyExpr("Id"))
+     .KeyExpr("Id")
+)
 
 

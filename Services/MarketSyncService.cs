@@ -374,63 +374,109 @@ namespace automation.mbtdistr.ru.Services
     }
 
 
+    /// <summary>
+    /// Синхронизирует товары из кабинета Ozon с локальной БД.
+    /// </summary>
+    /// <param name="cabinet">Объект кабинета Ozon, содержащий учётные данные и токены.</param>
+    /// <returns>Список актуальных товаров после синхронизации.</returns>
+    /// <remarks>
+    /// Алгоритм:
+    /// 1. Запрашивает у Ozon список offer-идентификаторов и детальную информацию о товарах.
+    /// 2. Для каждого товара:
+    ///    • убирает возможные дубликаты штрихкодов, пришедших из API;<br/>
+    ///    • если товар уже есть в БД — добавляет новые штрихкоды, удаляет отсутствующие, обновляет имя;<br/>
+    ///    • если товара нет — вставляет запись целиком вместе с уникальными штрихкодами.<br/>
+    /// 3. Сохраняет изменения одним батчем.
+    /// </remarks>
     private async Task<List<Product>> SyncOzonProducts(Cabinet cabinet)
     {
-      var products = new List<Product>();
+      // 1. Получаем актуальные товары из Ozon
       var ids = await _ozSvc.GetOfferIdsAsync(cabinet);
-      products = await _ozSvc.GetProductsInfoAsync(cabinet, ids);
+      var products = await _ozSvc.GetProductsInfoAsync(cabinet, ids);
 
-      using (var db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>()))
+      using var db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+
+      foreach (var product in products)
       {
-        foreach (var product in products)
+        try
         {
-          try
+          /*------------------------------------------------------
+           * Шаг 1. Удаляем дубли штрихкодов внутри одного товара
+           *-----------------------------------------------------*/
+          product.Barcodes = product.Barcodes
+                               .GroupBy(b => b.Barcode)
+                               .Select(g => g.First())
+                               .ToList();
+
+          /*------------------------------------------------------
+           * Шаг 2. Проверяем, есть ли товар в базе
+           *-----------------------------------------------------*/
+          var dbProduct = db.Products
+                            .FirstOrDefault(p => p.OfferId == product.OfferId);
+
+          if (dbProduct != null)
           {
-            var dbProduct = db.Products.FirstOrDefault(p => p.OfferId == product.OfferId);
-            if (dbProduct != null)
+            #region Обновление существующего товара
+
+            // 2.1 Добавляем новые штрихкоды
+            foreach (var b in product.Barcodes)
             {
-              product.Barcodes.ToList().ForEach(b =>
+              bool exists = dbProduct.Barcodes
+                                     .Any(bc => bc.Barcode == b.Barcode);
+              if (!exists)
               {
-                var dbBarcode = dbProduct.Barcodes.FirstOrDefault(bc => bc.Barcode == b.Barcode);
-                if (dbBarcode == null)
+                dbProduct.Barcodes.Add(new ProductBarcode
                 {
-                  dbProduct.Barcodes.Add(new ProductBarcode
-                  {
-                    Barcode = b.Barcode,
-                    ProductId = dbProduct.Id
-                  });
-                }
-              });
-              // удаляем штрихкоды, которых нет в новом списке
-              foreach (var dbBarcode in dbProduct.Barcodes.ToList())
-              {
-                if (!product.Barcodes.Any(b => b.Barcode == dbBarcode.Barcode))
-                {
-                  db.ProductBarcodes.Remove(dbBarcode);
-                }
+                  Barcode = b.Barcode,
+                  ProductId = dbProduct.Id
+                });
               }
-              // обновляем поля товара
-              dbProduct.Name = product.Name;
-              dbProduct.Barcodes = product.Barcodes;
-              db.Products.Update(dbProduct);
             }
-            else
+
+            // 2.2 Удаляем штрихкоды, которых больше нет в Ozon
+            foreach (var dbBarcode in dbProduct.Barcodes.ToList())
             {
-              db.Products.Add(product);
+              bool stillExists = product.Barcodes
+                                        .Any(b => b.Barcode == dbBarcode.Barcode);
+              if (!stillExists)
+              {
+                db.ProductBarcodes.Remove(dbBarcode);
+              }
             }
+
+            // 2.3 Обновляем остальные поля товара
+            dbProduct.Name = product.Name;
+
+            db.Products.Update(dbProduct);
+
+            #endregion
           }
-          catch (Exception exc)
+          else
           {
-            await Extensions.SendDebugObject(product, $"Ошибка при синхронизации товара {product.OfferId} ({product.Name})\n\n{exc.Message}\n\n{exc?.InnerException?.Message}");
+            #region Вставка нового товара
+
+            // Для полностью нового товара штрихкоды уже уникальны
+            db.Products.Add(product);
+
+            #endregion
           }
         }
-        await db.SaveChangesAsync();
+        catch (Exception exc)
+        {
+          await Extensions.SendDebugObject(
+              product,
+              $"Ошибка при синхронизации товара {product.OfferId} ({product.Name})\n\n" +
+              $"{exc.Message}\n\n{exc?.InnerException?.Message}");
+        }
       }
-      
+
+      /*----------------------------------------------------------
+       * Шаг 3. Сохраняем изменения в БД одним вызовом
+       *---------------------------------------------------------*/
+      await db.SaveChangesAsync();
 
       return products;
     }
-
 
     /// <summary>
     /// Добавление или обновление возвратов в базе данных.

@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
+using System.Text.Json.Serialization;
 
 using Telegram.Bot.Types;
 
@@ -21,6 +22,7 @@ namespace automation.mbtdistr.ru.Models
     public ICollection<Worker> AssignedWorkers { get; set; }
             = new List<Worker>();
 
+    [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public ICollection<Return>? Returns { get; set; }
 
     public ICollection<Warehouse>? Warehouses { get; set; }

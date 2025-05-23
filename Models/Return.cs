@@ -20,7 +20,7 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "ID Кабинета"), ForeignKey(nameof(Cabinet)), DataGrid(false)]
     public int CabinetId { get; set; } // кабинет/бренд/ООО
 
-    [Display(Name = "Кабинет"), JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    [Display(Name = "Кабинет")]
     public Cabinet Cabinet { get; set; }
 
     /// <summary>

@@ -12,6 +12,15 @@ namespace automation.mbtdistr.ru.Models
   public enum SellScheme
   {
     /// <summary>
+    /// Неизвестно.
+    /// </summary>
+    [EnumMember(Value = "unknown")]
+    [Display(Name = "Неизвестно")]
+    [JsonProperty("unknown")]
+    [System.Text.Json.Serialization.JsonPropertyName("unknown")]
+    Unknown,
+
+    /// <summary>
     /// Продавец на складе Ozon.
     /// </summary>
     [EnumMember(Value = "fbo")]
@@ -27,15 +36,6 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "ФБС")]
     [JsonProperty("fbs")]
     [System.Text.Json.Serialization.JsonPropertyName("fbs")]
-    FBS, // Продавец на своём складе
-
-    /// <summary>
-    /// Неизвестно.
-    /// </summary>
-    [EnumMember(Value = "unknown")]
-    [Display(Name = "Неизвестно")]
-    [JsonProperty("unknown")]
-    [System.Text.Json.Serialization.JsonPropertyName("unknown")]
-    Unknown = 0 // Неизвестно
+    FBS // Продавец на своём складе
   }
 }
