@@ -8,10 +8,7 @@
 @if (Model?.WorkerId == null)
 {
   <script>
-    const tg = window.Telegram.WebApp;
     tg.ready();
-    // Получаем ID пользователя
-    const userId = tg.initDataUnsafe?.user?.id;
     if (userId) {
       // Переход на ASP.NET-роут с передачей ID
       let url = `botmenu?id=${userId}`;
@@ -46,7 +43,7 @@ else
   <script>
 
                          var workerId = @Model?.WorkerId
-           const tg = window.Telegram.WebApp;
+          
              tg.ready();
 
              tg.BackButton.show();

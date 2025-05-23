@@ -1024,7 +1024,6 @@ ILogger<TelegramBotController> logger)
       await _botClient.EditMessageText(cb.Message.Chat.Id, cb.Message.MessageId, sb.ToString().TrimEnd(), replyMarkup: new InlineKeyboardMarkup(keyboard));
     }
 
-
     [HttpPost("sendReturnsExcel")]
     public async Task<IActionResult> SendReturnsExcel([FromBody] SendExportRequestDto request)
     {
@@ -1047,12 +1046,12 @@ ILogger<TelegramBotController> logger)
       await _botClient.SendDocument(
           chatId: request.ChatId,
           document: inputFile,
-          caption: "Ваш отчёт по возвратам готов.",
+          caption: "Ваш отчёт готов.",
           cancellationToken: CancellationToken.None
       );
 
       // (опционально) удалить файл:
-      // System.IO.File.Delete(filePath);
+      System.IO.File.Delete(filePath);
 
       return Ok();
     }

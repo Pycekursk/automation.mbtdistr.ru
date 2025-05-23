@@ -53,9 +53,9 @@ if (!window.Telegram) {
         }
     };
 }
-window.tgApp = Telegram.WebApp;
-Telegram.WebApp.ready?.();
-window.telegramId = tgApp.initDataUnsafe?.chat?.id;
+
+
+
 Telegram.WebApp.BackButton.show();
 Telegram.WebApp.BackButton.onClick(() => {
     window.history.back();

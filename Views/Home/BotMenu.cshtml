@@ -9,9 +9,6 @@
 @if (Model?.WorkerId == null)
 {
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    const userId = tg.initDataUnsafe?.user?.id;
     if (userId) {
         window.location.href = `botmenu?id=${userId}`;
     } else {
@@ -37,7 +34,6 @@ else
 
   <script>
     var workerId = @Model?.WorkerId
-    const tg = window.Telegram.WebApp;
     tg.ready();
 
     document.addEventListener("DOMContentLoaded", function () {

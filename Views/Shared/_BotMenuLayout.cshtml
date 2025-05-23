@@ -88,10 +88,18 @@
         childList: true,
         subtree: true
     });
+     const tg = window.Telegram.WebApp;
+    tg.ready();
+   
+    const userId = tg.initDataUnsafe?.user?.id;
+ 
   </script>
   <div class="dx-viewport-inner">
- 
+
       <script>
+
+
+
           function onExportingHandler(e) {
               const workbook  = new ExcelJS.Workbook();
               const worksheet = workbook.addWorksheet('Возвраты');
@@ -110,18 +118,18 @@
                   const reader = new FileReader();
                   reader.onload = () => {
                       const base64 = reader.result.split(',')[1];
-                      const fileName = 'defaultExportFileName' + '.xlsx';
+                      const fileName = defaultExportFileName + '.xlsx';
                       // Шлём на сервер
                       fetch('/api/TelegramBot/sendReturnsExcel', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                              chatId:   window.telegramChatId,
+                      chatId:   userId,
                               fileName: fileName,
                               base64:   base64
                           })
                       }).then(resp => {
-                          if (!resp.ok) alert('Ошибка отправки отчёта');
+                          if (!resp.ok) alert('Ошибка отправки отчёта' + userId);
                       });
                   };
                   reader.readAsDataURL(blob);

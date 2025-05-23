@@ -646,8 +646,8 @@ namespace automation.mbtdistr.ru.Services
       sb.AppendLine($"<b>Схема:</b> {x.Scheme}");
       sb.AppendLine($"<b>Тип:</b> {x?.ReturnType.GetDisplayName()}");
 
-      sb.AppendLine($"<b>Идентификатор возврата:</b> {x.ReturnId}");
-      sb.AppendLine($"<b>Идентификатор заказа:</b> {x.OrderId}");
+      sb.AppendLine($"<b>ID возврата:</b> {x.ReturnId}");
+      sb.AppendLine($"<b>ID заказа:</b> {x.OrderId}");
       sb.AppendLine($"<b>Номер заказа:</b> {x.OrderNumber}");
       sb.AppendLine($"<b>Дата заказа:</b> {x.OrderedAt}");
       if (!string.IsNullOrEmpty(x.ReturnReason))
@@ -662,7 +662,7 @@ namespace automation.mbtdistr.ru.Services
         foreach (var item in x.Products)
         {
           if (!string.IsNullOrEmpty(item.Url))
-            sb.AppendLine($"<b>{i++} </b><a href=\"{item.Url}\">{item.Name}</a>");
+            sb.AppendLine($"<b>{i++}. </b><a href=\"{item.Url}\">{item.Name}</a>");
           else
             sb.AppendLine($"<b>{i++} </b>{item.Name}");
           sb.AppendLine($"<b>SKU:</b> {item.Sku}");
@@ -670,7 +670,7 @@ namespace automation.mbtdistr.ru.Services
           sb.AppendLine($"<b>Количество:</b> {item.Count}");
           if (item.Images != null && item.Images.Count > 0)
           {
-            sb.AppendLine($"<b>Изображения:</b>");
+            sb.AppendLine($"<b>Фото:</b>");
             foreach (var img in item.Images)
             {
               sb.AppendLine($"<a href=\"{img.Url}\">{img.Url}</a>");
