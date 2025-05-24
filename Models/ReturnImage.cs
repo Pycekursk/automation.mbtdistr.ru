@@ -11,7 +11,7 @@ namespace automation.mbtdistr.ru.Models
     [ForeignKey("ReturnProduct")]
     public int ReturnProductId { get; set; }
 
-    [Newtonsoft.Json.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
     public ReturnProduct ReturnProduct { get; set; }
 
     public string Url { get; set; } = string.Empty;

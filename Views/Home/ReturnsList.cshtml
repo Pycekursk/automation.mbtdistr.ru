@@ -56,14 +56,33 @@ Html.DevExtreme().DataGrid<Return>()
         foreach (var col in columns)
         {
           DevExtreme.AspNet.Mvc.Builders.DataGridColumnBuilder<Return>? column = null;
-          if (col.Field == "TargetLocation")
+          if (col.Field == "TargetWarehouse")
           {
             column = columnsBuilder.Add()
                 .Caption(col.Caption)
                 .CssClass("wrap-text-cell")
                 .DataType(GridColumnDataType.String)
-                .CalculateCellValue("function(data) { return data.TargetLocation ? data.TargetLocation.Name + ' ' + data.TargetLocation.Address.FullAddress : ''; }").AllowFiltering(true)
+                .CalculateCellValue("function(data) { return data.TargetWarehouse ? data.TargetWarehouse.Name + ' ' + data.TargetWarehouse.Address.FullAddress : ''; }").AllowFiltering(true)
                 .AllowSorting(false);
+          }
+          else if (col.Field == "CurrentWarehouse")
+          {
+            column = columnsBuilder.Add()
+              .Caption(col.Caption)
+              .CssClass("wrap-text-cell")
+              .DataType(GridColumnDataType.String)
+              .CalculateCellValue("function(data) { return data.CurrentWarehouse ? data.CurrentWarehouse.Name + ' ' + data.CurrentWarehouse.Address.FullAddress : ''; }").AllowFiltering(true)
+              .AllowSorting(false);
+          }
+          else if (col.Field == "Products")
+          {
+            column = columnsBuilder
+              .AddFor(r => r.Products)            // типизированно укажем поле
+              .Caption("Товары")
+              .CssClass("wrap-text-cell")
+              .CellTemplate(new JS("productsCellTemplate")) // имя JS-функции
+              .AllowFiltering(true)
+              .AllowSorting(true);
           }
           else if (col.Field == "Cabinet")
           {
@@ -158,9 +177,12 @@ Html.DevExtreme().DataGrid<Return>()
                                           })
      .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
      .AllowColumnResizing(true)
-     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{modelName}_grid"))
+     .StateStoring(
+         s => s.Enabled(true)
+        .Type(StateStoringType.SessionStorage)
+        .StorageKey($"{modelName}_grid"))
      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
-       .HeaderFilter(hf => hf.Visible(true))
+     .HeaderFilter(hf => hf.Visible(true))
                                           .FilterRow(f => f.Visible(true))
 
                                               .SearchPanel(s => s.Visible(true))
@@ -168,4 +190,99 @@ Html.DevExtreme().DataGrid<Return>()
      .KeyExpr("Id")
 )
 
+<!-- JS-функция рендеринга ячейки "Products" -->
+<script type="text/javascript">
+  function productsCellTemplate(container, options) {
+      // console.log("productsCellTemplate called", options);
+    var products = options.data.Products;
+    if (!products || !products.length) {
+      // можно оставить пустую строку или сообщение
+      return;
+    }
 
+    // создаём список
+    var $ul = $("<ul>").css({ paddingLeft: "1em", margin: 0 });
+    products.forEach(function(p, i) {
+      var $li = $("<li>").css("margin-bottom", "0.5em");
+      $li.text((i + 1) + ". " + p.Name + " (" + p.OfferId + ")");
+
+      console.log(p.Images, p.images);
+
+      // если есть изображения — добавляем кнопку
+      if (p.Images && p.Images.length) {
+        var button = $("<div>").dxButton({
+          text: "Показать изображения",
+          stylingMode: "text",
+          onInitialized: function(e) {
+            e.element.css({
+              color: "green",
+              cursor: "pointer"
+            });
+          },
+          onClick: function() {
+            showImages(p.Images);
+          }
+        });
+        // Добавляем кнопку после текста
+        $li.append(" ").append(button);
+      }
+
+      $ul.append($li);
+    });
+
+    // Вставляем весь список в контейнер ячейки
+    $(container).append($ul);
+  }
+
+  // Существующая функция для показа Popup с каруселью
+  function showImages(images) {
+      console.log("showImages called", images);
+    var popup = $("#imagesPopup").dxPopup({
+      title: "Изображения товара",
+      showTitle: true,
+      width: 600,
+      height: "auto",
+      dragEnabled: true,
+      resizeEnabled: true,
+      contentTemplate: function() {
+        var $carousel = $("<div>").addClass("image-carousel");
+        images.forEach(function(img) {
+          $carousel.append(
+            $("<div>").append(
+              $("<img>")
+                .attr("src", img.Url)
+                .css({
+                  "max-width": "100%",
+                  "margin-bottom": "10px",
+                  "border-radius": "4px",
+                  "box-shadow": "0 2px 6px rgba(0,0,0,0.2)"
+                })
+            )
+          );
+        });
+        return $carousel;
+      },
+      onHidden: function() {
+        popup.dispose();
+      },
+      visible: true
+    }).dxPopup("instance");
+  }
+</script>
+
+<!-- Контейнер для Popup -->
+<div id="imagesPopup"></div>
+
+<style>
+  .image-carousel {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 10px 0;
+  }
+
+    .image-carousel img {
+      flex: 0 0 auto;
+      max-height: 200px;
+    }
+</style>

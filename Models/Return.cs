@@ -134,6 +134,8 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Схема реализации")]
     public SellScheme Scheme { get; set; }
 
+    [JsonProperty("products")]
+    [Display(Name ="Товары")]
     public List<ReturnProduct>? Products { get; set; }
 
     /// <summary>

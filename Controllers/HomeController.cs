@@ -307,6 +307,10 @@ namespace automation.mbtdistr.ru.Controllers
       {
         var cabinetReturns = await _db.Returns
           .Include(r => r.Cabinet)
+          .Include(r => r.TargetWarehouse)
+          .Include(r => r.CurrentWarehouse)
+          .Include(r => r.Products)
+          .ThenInclude(p => p.Images)
           .Where(r => r.CabinetId == cabinet.Id)
           .ToListAsync();
         if (cabinetReturns != null)

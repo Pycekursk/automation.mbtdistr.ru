@@ -8,7 +8,6 @@ namespace automation.mbtdistr.ru.Models
   /// <summary>
   /// Схема продажи товара.
   /// </summary>
-  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter)), System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
   public enum SellScheme
   {
     /// <summary>

@@ -9,7 +9,6 @@ namespace automation.mbtdistr.ru.Models
   /// <summary>
   /// Тип возврата.
   /// </summary>
-  [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter)), System.Text.Json.Serialization.JsonConverter(typeof(JsonStringEnumConverter))]
   public enum ReturnType
   {
     /// <summary>

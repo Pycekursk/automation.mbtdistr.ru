@@ -41,11 +41,11 @@ namespace automation.mbtdistr.ru.Services
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeSpan _interval;
     private readonly ITelegramBotClient _botClient;
-    private readonly OzonApiService _ozSvc;
+    private static OzonApiService _ozSvc;
     private const int _telegramMaxMessageLength = 4096;
     private readonly ApplicationDbContext _db;
     private readonly IOptions<AppSettings> _options;
-    private string baseUrl;
+    private static string baseUrl;
 
 
     public delegate void ReturnStatusChangedEventHandler(ReturnStatusChangedEventArgs e);
@@ -107,7 +107,423 @@ namespace automation.mbtdistr.ru.Services
         SyncAllAsync(CancellationToken.None);
       }
     }
+    #region === публичный метод, вызываемый из HostedService ===
 
+    // Добавьте в начало класса
+    private static readonly SemaphoreSlim _ozonSyncLock = new SemaphoreSlim(1, 1);
+
+    /// <summary>
+    /// Синхронизирует ВСЕ кабинеты:
+    /// • товары OZON — параллельно, но через семафор (одновременный доступ 1)
+    /// • возвраты всех площадок — параллельно с ограничением потоков
+    /// </summary>
+    public async Task SyncAllAsync(CancellationToken ct = default)
+    {
+      // 1. Получаем все кабинеты без трекинга
+      var cabinets = await _db.Cabinets
+          .AsNoTracking()
+          .Include(c => c.Settings)
+              .ThenInclude(s => s.ConnectionParameters)
+          .ToListAsync(ct);
+
+      // 2. Синхронизация OZON-товаров через семафор
+      var ozonTasks = cabinets
+          .Where(c => c.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase))
+          .Select(c => Task.Run(async () =>
+          {
+            await _ozonSyncLock.WaitAsync(ct);
+            try
+            {
+              await SyncOzonProducts(c);
+            }
+            finally
+            {
+              _ozonSyncLock.Release();
+            }
+          }, ct));
+
+      await Task.WhenAll(ozonTasks);
+
+      // 3. Обработка возвратов всех площадок (до 3 кабинетов одновременно)
+      const int MAX_PARALLEL_CABS = 3;
+      var throttler = new SemaphoreSlim(MAX_PARALLEL_CABS);
+
+      var returnTasks = cabinets.Select(async cab =>
+      {
+        await throttler.WaitAsync(ct);
+        try
+        {
+          using var scope = _scopeFactory.CreateScope();
+          var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+          var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
+          var ymSvc = scope.ServiceProvider.GetRequiredService<YMApiService>();
+
+          await ProcessCabinetAsync(cab, db, wbSvc, ymSvc, ct);
+        }
+        catch (Exception ex)
+        {
+          await Extensions.SendDebugMessage(
+              $"Ошибка при синхронизации кабинета #{cab.Id} {cab.Name} ({cab.Marketplace}):\n" +
+              $"{ex.Message}\n{ex.InnerException?.Message}");
+        }
+        finally
+        {
+          throttler.Release();
+        }
+      });
+
+      await Task.WhenAll(returnTasks);
+    }
+
+    #endregion
+
+    #region === обработка товаров OZON (остался ваш метод) ===
+
+
+
+    /// <summary>
+    /// Синхронизирует список товаров из Ozon с локальной БД:
+    /// - группирует продукты по OfferId, чтобы не было двукратной обработки;
+    /// - объединяет все штрихкоды по каждому товару и убирает дубли;
+    /// - добавляет новые штрихкоды, удаляет устаревшие, обновляет имя товара;
+    /// - вставляет в БД полностью новые товары вместе со штрихкодами.
+    /// </summary>
+    private async Task<List<Product>> SyncOzonProducts(Cabinet cabinet)
+    {
+      // 1. Загружаем данные из Ozon
+      var ids = await _ozSvc.GetOfferIdsAsync(cabinet);
+      var allItems = await _ozSvc.GetProductsInfoAsync(cabinet, ids);
+
+      // 2. Группируем товары по OfferId, объединяем штрихкоды
+      var products = allItems
+          .GroupBy(p => p.OfferId)
+          .Select(gr =>
+          {
+            var first = gr.First();
+            var merged = new Product
+            {
+              OfferId = first.OfferId,
+              Name = first.Name,
+              // все поля из first, кроме Barcodes
+              Barcodes = gr
+                  .SelectMany(p => p.Barcodes)
+                  .Select(b => b.Barcode)
+                  .Distinct()
+                  .Select(code => new ProductBarcode { Barcode = code })
+                  .ToList()
+            };
+            return merged;
+          })
+          .ToList();
+
+      using var db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+
+      foreach (var product in products)
+      {
+        try
+        {
+          // 3. Список входных штрихкодов (уже без дублей)
+          var incomingCodes = product.Barcodes
+                                     .Select(b => b.Barcode)
+                                     .ToList();
+
+          // 4. Ищем товар в БД по OfferId
+          var dbProduct = await db.Products.Include(p => p.Barcodes)
+                                   .FirstOrDefaultAsync(p => p.OfferId == product.OfferId);
+
+          if (dbProduct != null)
+          {
+            // --- Обновляем существующий товар ---
+
+            // 4.1. Читаем текущие штрихкоды из БД
+            var existingCodes = await db.ProductBarcodes
+                                        .Where(pb => pb.ProductId == dbProduct.Id)
+                                        .Select(pb => pb.Barcode)
+                                        .ToListAsync();
+
+            // 4.2. Добавляем новые штрихкоды
+            var toAdd = incomingCodes.Except(existingCodes);
+            foreach (var code in toAdd)
+            {
+              db.ProductBarcodes.Add(new ProductBarcode
+              {
+                ProductId = dbProduct.Id,
+                Barcode = code
+              });
+            }
+
+            // 4.3. Удаляем устаревшие штрихкоды
+            var toRemove = existingCodes.Except(incomingCodes);
+            if (toRemove.Any())
+            {
+              var removeEntities = await db.ProductBarcodes
+                                           .Where(pb => pb.ProductId == dbProduct.Id
+                                                     && toRemove.Contains(pb.Barcode))
+                                           .ToListAsync();
+              db.ProductBarcodes.RemoveRange(removeEntities);
+            }
+
+            // 4.4. Обновляем имя (и другие поля, если нужно)
+            dbProduct.Name = product.Name;
+            // изменять навигационную коллекцию здесь не нужно
+          }
+          else
+          {
+            // --- Вставляем новый товар целиком ---
+            db.Products.Add(product);
+          }
+        }
+        catch (Exception exc)
+        {
+          await Extensions.SendDebugObject(
+              product,
+              $"Ошибка синхронизации товара {product.OfferId} ({product.Name}):\n" +
+              $"{exc.Message}\n{exc.InnerException?.Message}");
+        }
+      }
+
+      // 5. Сохраняем одним батчем
+      await db.SaveChangesAsync();
+      return products;
+    }
+
+
+
+    #endregion
+
+    #region === маршрутизация по площадкам ===
+
+    /// <summary>
+    /// Направляет кабинет в нужный обработчик по названию маркетплейса.
+    /// Для поддержки новых площадок достаточно добавить ещё один case.
+    /// </summary>
+    private async Task ProcessCabinetAsync(
+        Cabinet cab,
+        ApplicationDbContext db,
+        WildberriesApiService wbSvc,
+        YMApiService ymSvc,
+        CancellationToken ct)
+    {
+      switch (cab.Marketplace.ToUpperInvariant())
+      {
+        case "OZON":
+        case "OZ":
+        case "ОЗОН":
+        case "ОЗ":
+          await ProcessOzonReturnsAsync(cab, db, ct);
+          break;
+
+        case "WILDBERRIES":
+        case "WB":
+          await ProcessWbReturnsAsync(cab, db, wbSvc, ct);
+          break;
+
+        case "YANDEXMARKET":
+        case "YANDEX MARKET":
+        case "YANDEX":
+        case "ЯНДЕКС":
+        case "ЯМ":
+        case "YM":
+          await ProcessYmReturnsAndSuppliesAsync(cab, db, ymSvc, ct);
+          break;
+
+        default:
+          throw new NotSupportedException($"Неизвестная площадка: {cab.Marketplace}");
+      }
+    }
+
+    #endregion
+
+    #region === OZON: возвраты ===
+
+    private static async Task ProcessOzonReturnsAsync(
+        Cabinet cab,
+        ApplicationDbContext db,
+        CancellationToken ct)
+    {
+      // — ПРИМЕР ОБНОВЛЁННОЙ РЕАЛИЗАЦИИ —
+
+      //var ozSvc = cab.CreateOzonClient();  // условно – создаём client на основе cab
+
+      // ------ 1. получаем существующие возвраты из БД ------
+      var existing = await db.Returns.AsNoTracking()
+          .Where(r => r.CabinetId == cab.Id)
+          .ToDictionaryAsync(r => r.ReturnId, ct);
+
+      // ------ 2. собираем новые/обновлённые возвраты ------
+      var filter = new Services.Ozon.Models.Filter
+      {
+        LogisticReturnDate = new Services.Ozon.Models.DateRange
+        {
+          From = DateTime.UtcNow.AddDays(-40),
+          To = DateTime.UtcNow
+        }
+      };
+
+      var allReturns = new List<Services.Ozon.Models.ReturnInfo>();
+      long lastId = 0;
+      do
+      {
+        var response = await _ozSvc.GetReturnsListAsync(cab, filter, lastId: lastId);
+        if (response == null) break;
+        if (response.Returns != null && response.Returns.Count > 0)
+        {
+          allReturns.AddRange(response.Returns.Where(r => r.Visual?.Status.Id != 34));
+        }
+        if (!response.HasNext) break;
+        lastId = response.Returns[^1].Id;
+      } while (true);
+
+      if (allReturns.Count == 0) return;
+
+      // ------ 3. маппинг и фильтрация «только изменившиеся» ------
+      var changed = new List<Return>();
+      foreach (var ret in allReturns)
+      {
+        if (existing.TryGetValue(ret.Id.ToString(), out var existingReturn) &&
+            existingReturn.ChangedAt == ret.Visual?.ChangeMoment)
+        {
+          continue; // не изменился
+        }
+
+        var model = Return.Parse<Services.Ozon.Models.ReturnInfo>(ret);
+        model.CabinetId = cab.Id;
+        if (model.TargetWarehouse != null)
+          model.TargetWarehouse.Service = cab.Marketplace;
+
+        changed.Add(model);
+      }
+
+      // ------ 4. массовое добавление/обновление ------
+      if (changed.Count > 0)
+        await AddOrUpdateReturnsAsync(changed, db);
+    }
+
+    #endregion
+
+    #region === Wildberries: возвраты ===
+
+    private static async Task ProcessWbReturnsAsync(
+        Cabinet cab,
+        ApplicationDbContext db,
+        WildberriesApiService wbSvc,
+        CancellationToken ct)
+    {
+      var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
+      if (response?.Claims.Count == 0) return;
+
+      // существующие возвраты одним запросом
+      var existing = await db.Returns.AsNoTracking()
+          .Where(r => r.CabinetId == cab.Id)
+          .ToDictionaryAsync(r => r.ReturnId, ct);
+
+      var changed = new List<Return>();
+      foreach (var claim in response.Claims)
+      {
+        if (existing.TryGetValue(claim.Id.ToString(), out var dbRet) &&
+            dbRet.ChangedAt == claim.DtUpdate)
+          continue;
+
+        var model = Return.Parse<Wildberries.Models.Claim>(claim);
+        model.CabinetId = cab.Id;
+        changed.Add(model);
+      }
+
+      if (changed.Count > 0)
+      {
+        await AddOrUpdateReturnsAsync(changed, db);
+        await Extensions.SendDebugObject(changed,
+            $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
+      }
+    }
+
+    #endregion
+
+    #region === Yandex Market: возвраты + поставки ===
+
+    private async Task ProcessYmReturnsAndSuppliesAsync(
+      Cabinet cab,
+      ApplicationDbContext sharedDb,
+      YMApiService ymSvc,
+      CancellationToken ct)
+    {
+      // … ваша логика по возвратам (без изменений) …
+
+      // После того, как вы сохранили возвраты, приступаем к поставкам:
+      var campaigns = await ymSvc.GetCampaignsAsync(cab);
+      foreach (var camp in campaigns.Campaigns)
+      {
+        // 1. Получаем список запросов на поставки из API
+        var suppliesResponse = await ymSvc.GetSupplyRequests(cab, camp);
+        if (suppliesResponse?.Result?.Items == null || suppliesResponse.Result.Items.Count == 0)
+          continue;
+
+        // 2. Для каждого запроса создаём новый scope c fresh DbContext
+        foreach (var supp in suppliesResponse.Result.Items)
+        {
+          try
+          {
+            using var scope = _scopeFactory.CreateScope();
+            var scopedDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // Здесь внутри AddOrUpdateSupplyRequestAsync используем scopedDb,
+            // а не sharedDb, чтобы избежать гонок
+            await ymSvc.AddOrUpdateSupplyRequestAsync(supp, scopedDb);
+            await scopedDb.SaveChangesAsync(ct);
+          }
+          catch (Exception ex)
+          {
+            await Extensions.SendDebugMessage(
+                $"Ошибка при синхронизации SupplyRequest {supp.ExternalId?.Id} " +
+                $"для кабинета {cab.Name} ({cab.Marketplace}): {ex.Message}");
+          }
+        }
+      }
+    }
+
+    #endregion
+
+    #region === хелперы ===
+    /// <summary>
+    /// Массовое добавление или обновление списка возвратов.
+    /// При обновлении сохраняем старый идентификатор базы (PK),
+    /// чтобы EF Core не пытался изменить ключ.
+    /// </summary>
+    private static async Task<List<Return>> AddOrUpdateReturnsAsync(
+        List<Return> returns,
+        ApplicationDbContext db)
+    {
+      if (returns.Count == 0)
+        return returns;
+
+      foreach (var ret in returns)
+      {
+        // Ищем уже сохранённый возврат по внешнему ключу ReturnId
+        var exists = await db.Returns
+            .FirstOrDefaultAsync(r => r.ReturnId == ret.ReturnId);
+
+        if (exists == null)
+        {
+          // Новый возврат — добавляем целиком
+          db.Returns.Add(ret);
+        }
+        else
+        {
+          // Сохраняем PK из БД, чтобы не было конфликта
+          ret.Id = exists.Id;
+
+          // Копируем все поля из ret в существующую сущность,
+          // включая ChangedAt, Status и т.п.
+          db.Entry(exists).CurrentValues.SetValues(ret);
+        }
+      }
+
+      await db.SaveChangesAsync();
+      return returns;
+    }
+
+
+    #endregion
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
     {
       //if (e.ApiDTO != null)
@@ -168,7 +584,9 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-    private async Task SyncAllAsync(CancellationToken ct)
+
+
+    private async Task _SyncAllAsync(CancellationToken ct)
     {
       using var scope = _scopeFactory.CreateScope();
       var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
@@ -374,366 +792,264 @@ namespace automation.mbtdistr.ru.Services
     }
 
 
-    /// <summary>
-    /// Синхронизирует товары из кабинета Ozon с локальной БД.
-    /// </summary>
-    /// <param name="cabinet">Объект кабинета Ozon, содержащий учётные данные и токены.</param>
-    /// <returns>Список актуальных товаров после синхронизации.</returns>
-    /// <remarks>
-    /// Алгоритм:
-    /// 1. Запрашивает у Ozon список offer-идентификаторов и детальную информацию о товарах.
-    /// 2. Для каждого товара:
-    ///    • убирает возможные дубликаты штрихкодов, пришедших из API;<br/>
-    ///    • если товар уже есть в БД — добавляет новые штрихкоды, удаляет отсутствующие, обновляет имя;<br/>
-    ///    • если товара нет — вставляет запись целиком вместе с уникальными штрихкодами.<br/>
-    /// 3. Сохраняет изменения одним батчем.
-    /// </remarks>
-    private async Task<List<Product>> SyncOzonProducts(Cabinet cabinet)
-    {
-      // 1. Получаем актуальные товары из Ozon
-      var ids = await _ozSvc.GetOfferIdsAsync(cabinet);
-      var products = await _ozSvc.GetProductsInfoAsync(cabinet, ids);
-
-      using var db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
-
-      foreach (var product in products)
-      {
-        try
-        {
-          /*------------------------------------------------------
-           * Шаг 1. Удаляем дубли штрихкодов внутри одного товара
-           *-----------------------------------------------------*/
-          product.Barcodes = product.Barcodes
-                               .GroupBy(b => b.Barcode)
-                               .Select(g => g.First())
-                               .ToList();
-
-          /*------------------------------------------------------
-           * Шаг 2. Проверяем, есть ли товар в базе
-           *-----------------------------------------------------*/
-          var dbProduct = db.Products
-                            .FirstOrDefault(p => p.OfferId == product.OfferId);
-
-          if (dbProduct != null)
-          {
-            #region Обновление существующего товара
-
-            // 2.1 Добавляем новые штрихкоды
-            foreach (var b in product.Barcodes)
-            {
-              bool exists = dbProduct.Barcodes
-                                     .Any(bc => bc.Barcode == b.Barcode);
-              if (!exists)
-              {
-                dbProduct.Barcodes.Add(new ProductBarcode
-                {
-                  Barcode = b.Barcode,
-                  ProductId = dbProduct.Id
-                });
-              }
-            }
-
-            // 2.2 Удаляем штрихкоды, которых больше нет в Ozon
-            foreach (var dbBarcode in dbProduct.Barcodes.ToList())
-            {
-              bool stillExists = product.Barcodes
-                                        .Any(b => b.Barcode == dbBarcode.Barcode);
-              if (!stillExists)
-              {
-                db.ProductBarcodes.Remove(dbBarcode);
-              }
-            }
-
-            // 2.3 Обновляем остальные поля товара
-            dbProduct.Name = product.Name;
-
-            db.Products.Update(dbProduct);
-
-            #endregion
-          }
-          else
-          {
-            #region Вставка нового товара
-
-            // Для полностью нового товара штрихкоды уже уникальны
-            db.Products.Add(product);
-
-            #endregion
-          }
-        }
-        catch (Exception exc)
-        {
-          await Extensions.SendDebugObject(
-              product,
-              $"Ошибка при синхронизации товара {product.OfferId} ({product.Name})\n\n" +
-              $"{exc.Message}\n\n{exc?.InnerException?.Message}");
-        }
-      }
-
-      /*----------------------------------------------------------
-       * Шаг 3. Сохраняем изменения в БД одним вызовом
-       *---------------------------------------------------------*/
-      await db.SaveChangesAsync();
-
-      return products;
-    }
-
-    /// <summary>
-    /// Добавление или обновление возвратов в базе данных.
-    /// </summary>
-    /// <param name="returns"> Список возвратов для обработки.</param>
-    /// <param name="db"> Контекст базы данных.</param>
-    /// <returns> Список обработанных возвратов.</returns>
-    public async Task<List<Models.Return>> AddOrUpdateReturnsAsync(List<Return> returns, ApplicationDbContext db)
-    {
-      var existing = _db.Returns
-             .Include(r => r.TargetWarehouse).ThenInclude(w => w.Address)
-             .Include(r => r.CurrentWarehouse).ThenInclude(w => w.Address)
-             .Include(r => r.Cabinet)
-             .ThenInclude(c => c.AssignedWorkers)
-             .ThenInclude(w => w.NotificationOptions)
-             .Include(r => r.Products)
-             .ThenInclude(p => p.Images)
-             .ToList()
-             .Where(r => !string.IsNullOrEmpty(r.ReturnId) && returns.Any(_r => $"{r.ReturnId}_{r.OrderId}" == $"{_r.ReturnId}_{_r.OrderId}"))
-             .ToList();
-
-      foreach (var ret in returns)
-      {
-        try
-        {
-          if (ret.TargetWarehouse != null)
-          {
-            ret.TargetWarehouse.CabinetId = ret.CabinetId;
-            var key = $"{ret.TargetWarehouse.ExternalId}_{ret.TargetWarehouse.Service}";
-            var warehouse = await db.Warehouses
-              .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
-            if (warehouse == null)
-            {
-              // если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
-              if (ret.TargetWarehouse.Address != null && string.IsNullOrEmpty(ret.TargetWarehouse.Address.FullAddress))
-              {
-                ret.TargetWarehouse.Address.FullAddress = $"{ret.TargetWarehouse.Address.Country}, {ret.TargetWarehouse.Address}, {ret.TargetWarehouse.Address.City}, {ret.TargetWarehouse.Address.Street}, {ret.TargetWarehouse.Address.House}, {ret.TargetWarehouse.Address.Office}";
-              }
-              //проверяем если координаты пустые, то заполняем их
-              if (ret?.TargetWarehouse?.Address?.Latitude == 0 && ret.TargetWarehouse.Address.Longitude == 0)
-              {
-                //получаем значение апи ключа YandexGeo из appsettings
-                var apiKey = Program.Configuration.GetSection("YandexGeo:Key").Value;
-                var geoService = new YandexGeocoderService(apiKey);
-                var addressObj = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
-                if (addressObj != null)
-                {
-                  ret.TargetWarehouse.Address = addressObj;
-                }
-              }
-              db.Warehouses.Add(ret.TargetWarehouse);
-              ret.TargetWarehouse = warehouse;
-              await db.SaveChangesAsync();
-            }
-            else
-            {
-              //проверяем если координаты пустые, то заполняем их
-              if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
-              {
-                //получаем значение апи ключа YandexGeo из appsettings
-                var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
-                var geoService = new YandexGeocoderService(apiKey);
-                var addressObj = await geoService.GetAddressAsync(warehouse.Address.FullAddress);
-                if (addressObj != null)
-                {
-                  warehouse.Address = addressObj;
-                }
-              }
-              ret.TargetWarehouse = warehouse;
-            }
-          }
-          if (ret.CurrentWarehouse != null)
-          {
-            ret.CurrentWarehouse.CabinetId = ret.CabinetId;
-            var key = $"{ret.CurrentWarehouse.ExternalId}_{ret.CurrentWarehouse.Service}";
-            var warehouse = await db.Warehouses
-              .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
-            if (warehouse == null)
-            {
-              //если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
-              if (ret.CurrentWarehouse.Address != null && string.IsNullOrEmpty(ret.CurrentWarehouse.Address.FullAddress))
-              {
-                ret.CurrentWarehouse.Address.FullAddress = $"{ret.CurrentWarehouse.Address.Country}, {ret.CurrentWarehouse.Address}, {ret.CurrentWarehouse.Address.City}, {ret.CurrentWarehouse.Address.Street}, {ret.CurrentWarehouse.Address.House}, {ret.CurrentWarehouse.Address.Office}";
-              }
-              if (ret?.CurrentWarehouse?.Address?.Latitude == 0 || ret?.CurrentWarehouse?.Address?.Longitude == 0)
-              {
-                //получаем значение апи ключа YandexGeo из appsettings
-                var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
-                var geoService = new YandexGeocoderService(apiKey);
-                var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
-                if (addressObj != null)
-                {
-                  warehouse.Address = addressObj;
-                }
-              }
-
-              db.Warehouses.Add(ret.CurrentWarehouse);
-              ret.CurrentWarehouse = warehouse;
-              await db.SaveChangesAsync();
-            }
-            else
-            {
-              //проверяем если координаты пустые, то заполняем их
-              if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
-              {
-                //получаем значение апи ключа YandexGeo из appsettings
-                var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
-                var geoService = new YandexGeocoderService(apiKey);
-                var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
-                if (addressObj != null)
-                {
-                  warehouse.Address = addressObj;
-                }
-                warehouse.CabinetId = ret.CabinetId;
-              }
-              ret.CurrentWarehouse = warehouse;
-            }
-          }
-
-          var existingReturn = existing.FirstOrDefault(r => r.ReturnId == ret.ReturnId && r.OrderId == ret.OrderId);
-          if (existingReturn != null)
-          {
-            var oldChangedAt = existingReturn.ChangedAt;
-            var newChangedAt = ret.ChangedAt;
-
-            // Обновляем существующий возврат
-            existingReturn.ChangedAt = ret.ChangedAt;
-            existingReturn.CreatedAt = ret.CreatedAt;
-            existingReturn.OrderedAt = ret.OrderedAt;
-            existingReturn.TargetWarehouseId = ret.TargetWarehouseId;
-
-            //проверяем наличие продуктов в обьекте и если они есть свреям с базой
-            if (ret.Products != null && ret.Products.Count > 0)
-            {
-              foreach (var product in ret.Products)
-              {
-                var existingProduct = db.ReturnProducts
-                  .Include(p => p.Images)
-                  .Include(p => p.Price)
-                  .Include(p => p.Return)
-                  .FirstOrDefault(p => p.Sku == product.Sku && p.ReturnId.ToString() == ret.ReturnId);
-                if (existingProduct != null)
-                {
-                  existingProduct.Count = product.Count;
-                  existingProduct.Images = product.Images;
-                  db.ReturnProducts.Update(existingProduct);
-                }
-                else
-                {
-                  // сбрасываем PK, чтобы EF сгенерировал новый
-                  //product.Id = 0;
-                  //db.ReturnProducts.Add(product);
-                }
-              }
-            }
-            db.Returns.Update(existingReturn);
-            await db.SaveChangesAsync();
-
-            if (oldChangedAt != newChangedAt)
-            {
-              // Отправляем сообщение об обновлении возврата
-              var message = FormatReturnHtmlMessage(existingReturn, db.Cabinets.FirstOrDefault(c => c.Id == existingReturn.CabinetId), false);
-              ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(existingReturn.CabinetId, existingReturn, message));
-            }
-          }
-          else
-          {
-            // Добавляем новый возврат
-            db.Returns.Add(ret);
-            await db.SaveChangesAsync();
-
-            var message = FormatReturnHtmlMessage(ret, db.Cabinets.FirstOrDefault(c => c.Id == ret.CabinetId), true);
-            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(ret.CabinetId, ret, message));
-          }
-
-        }
-        catch (Exception ex)
-        {
-          await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
-        }
-      }
-      return returns;
-    }
-
-    public async Task ProcessYMSupplyRequestsAsync(
-        List<Services.YandexMarket.Models.YMSupplyRequest> supplyRequests,
-        Cabinet cab,
-        ApplicationDbContext db,
-        CancellationToken ct
-      )
-    {
-      try
-      {
-        List<YMSupplyRequestLocation> locations = new List<YMSupplyRequestLocation>();
-
-        //получаем все локации из базы данных
-        var existingLocations = await db.YMLocations
-          .Include(l => l.Address)
-          .ToListAsync(ct);
 
 
-        foreach (var supply in supplyRequests)
-        {
-          //проверяем есть ли такая локация в базе данных
-          var existingLocation = existingLocations.FirstOrDefault(l => l.ServiceId == supply.TargetLocation?.ServiceId || l.ServiceId == supply?.TransitLocation?.ServiceId);
-          if (existingLocation != null)
-          {
-            locations.Add(existingLocation);
-          }
+    ///// <summary>
+    ///// Добавление или обновление возвратов в базе данных.
+    ///// </summary>
+    ///// <param name="returns"> Список возвратов для обработки.</param>
+    ///// <param name="db"> Контекст базы данных.</param>
+    ///// <returns> Список обработанных возвратов.</returns>
+    //public async Task<List<Models.Return>> AddOrUpdateReturnsAsync(List<Return> returns, ApplicationDbContext db)
+    //{
+    //  var existing = _db.Returns
+    //         .Include(r => r.TargetWarehouse).ThenInclude(w => w.Address)
+    //         .Include(r => r.CurrentWarehouse).ThenInclude(w => w.Address)
+    //         .Include(r => r.Cabinet)
+    //         .ThenInclude(c => c.AssignedWorkers)
+    //         .ThenInclude(w => w.NotificationOptions)
+    //         .Include(r => r.Products)
+    //         .ThenInclude(p => p.Images)
+    //         .ToList()
+    //         .Where(r => !string.IsNullOrEmpty(r.ReturnId) && returns.Any(_r => $"{r.ReturnId}_{r.OrderId}" == $"{_r.ReturnId}_{_r.OrderId}"))
+    //         .ToList();
 
-          var existingSupply = await db.YMSupplyRequests
-            .Include(s => s.Cabinet)
-            .ThenInclude(c => c.AssignedWorkers)
-            .Include(c => c.TransitLocation)
-            .ThenInclude(a => a.Address)
-            .Include(s => s.TargetLocation)
-            .ThenInclude(a => a.Address)
-            .FirstOrDefaultAsync(s => s.Id == supply.ExternalId.Id && s.CabinetId == cab.Id, ct);
-          if (existingSupply != null)
-          {
-            var oldChangedAt = existingSupply.UpdatedAt;
-            var newChangedAt = supply.UpdatedAt;
+    //  foreach (var ret in returns)
+    //  {
+    //    try
+    //    {
+    //      if (ret.TargetWarehouse != null)
+    //      {
+    //        ret.TargetWarehouse.CabinetId = ret.CabinetId;
+    //        var key = $"{ret.TargetWarehouse.ExternalId}_{ret.TargetWarehouse.Service}";
+    //        var warehouse = await db.Warehouses
+    //          .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
+    //        if (warehouse == null)
+    //        {
+    //          // если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
+    //          if (ret.TargetWarehouse.Address != null && string.IsNullOrEmpty(ret.TargetWarehouse.Address.FullAddress))
+    //          {
+    //            ret.TargetWarehouse.Address.FullAddress = $"{ret.TargetWarehouse.Address.Country}, {ret.TargetWarehouse.Address}, {ret.TargetWarehouse.Address.City}, {ret.TargetWarehouse.Address.Street}, {ret.TargetWarehouse.Address.House}, {ret.TargetWarehouse.Address.Office}";
+    //          }
+    //          //проверяем если координаты пустые, то заполняем их
+    //          if (ret?.TargetWarehouse?.Address?.Latitude == 0 && ret.TargetWarehouse.Address.Longitude == 0)
+    //          {
+    //            //получаем значение апи ключа YandexGeo из appsettings
+    //            var apiKey = Program.Configuration.GetSection("YandexGeo:Key").Value;
+    //            var geoService = new YandexGeocoderService(apiKey);
+    //            var addressObj = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
+    //            if (addressObj != null)
+    //            {
+    //              ret.TargetWarehouse.Address = addressObj;
+    //            }
+    //          }
+    //          db.Warehouses.Add(ret.TargetWarehouse);
+    //          ret.TargetWarehouse = warehouse;
+    //          await db.SaveChangesAsync();
+    //        }
+    //        else
+    //        {
+    //          //проверяем если координаты пустые, то заполняем их
+    //          if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
+    //          {
+    //            //получаем значение апи ключа YandexGeo из appsettings
+    //            var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
+    //            var geoService = new YandexGeocoderService(apiKey);
+    //            var addressObj = await geoService.GetAddressAsync(warehouse.Address.FullAddress);
+    //            if (addressObj != null)
+    //            {
+    //              warehouse.Address = addressObj;
+    //            }
+    //          }
+    //          ret.TargetWarehouse = warehouse;
+    //        }
+    //      }
+    //      if (ret.CurrentWarehouse != null)
+    //      {
+    //        ret.CurrentWarehouse.CabinetId = ret.CabinetId;
+    //        var key = $"{ret.CurrentWarehouse.ExternalId}_{ret.CurrentWarehouse.Service}";
+    //        var warehouse = await db.Warehouses
+    //          .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
+    //        if (warehouse == null)
+    //        {
+    //          //если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
+    //          if (ret.CurrentWarehouse.Address != null && string.IsNullOrEmpty(ret.CurrentWarehouse.Address.FullAddress))
+    //          {
+    //            ret.CurrentWarehouse.Address.FullAddress = $"{ret.CurrentWarehouse.Address.Country}, {ret.CurrentWarehouse.Address}, {ret.CurrentWarehouse.Address.City}, {ret.CurrentWarehouse.Address.Street}, {ret.CurrentWarehouse.Address.House}, {ret.CurrentWarehouse.Address.Office}";
+    //          }
+    //          if (ret?.CurrentWarehouse?.Address?.Latitude == 0 || ret?.CurrentWarehouse?.Address?.Longitude == 0)
+    //          {
+    //            //получаем значение апи ключа YandexGeo из appsettings
+    //            var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
+    //            var geoService = new YandexGeocoderService(apiKey);
+    //            var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
+    //            if (addressObj != null)
+    //            {
+    //              warehouse.Address = addressObj;
+    //            }
+    //          }
 
-            var oldStatus = existingSupply.Status;
-            existingSupply.Status = supply.Status;
-            existingSupply.UpdatedAt = supply.UpdatedAt;
-            db.YMSupplyRequests.Update(existingSupply);
+    //          db.Warehouses.Add(ret.CurrentWarehouse);
+    //          ret.CurrentWarehouse = warehouse;
+    //          await db.SaveChangesAsync();
+    //        }
+    //        else
+    //        {
+    //          //проверяем если координаты пустые, то заполняем их
+    //          if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
+    //          {
+    //            //получаем значение апи ключа YandexGeo из appsettings
+    //            var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
+    //            var geoService = new YandexGeocoderService(apiKey);
+    //            var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
+    //            if (addressObj != null)
+    //            {
+    //              warehouse.Address = addressObj;
+    //            }
+    //            warehouse.CabinetId = ret.CabinetId;
+    //          }
+    //          ret.CurrentWarehouse = warehouse;
+    //        }
+    //      }
 
-            if (oldChangedAt != newChangedAt)
-            {
-              var message = FormatSupplyHtmlMessage(supply, cab, false, oldStatus);
-              SupplyStatusChanged?.Invoke(new SupplyStatusChangedEventArgs(cab.Id, existingSupply, message));
-            }
-          }
-          else
-          {
-            YMSupplyRequest @supplyRequest = new YMSupplyRequest();
-            @supplyRequest.CabinetId = cab.Id;
-            @supplyRequest.ExternalId = supply.ExternalId;
-            @supplyRequest.Status = supply.Status;
-            @supplyRequest.UpdatedAt = supply.UpdatedAt;
-            @supplyRequest.Type = supply.Type;
-            @supplyRequest.Subtype = supply.Subtype;
-            if (supply.TargetLocation != null)
-              locations.Add(supply.TargetLocation);
-            db.YMSupplyRequests.Add(@supplyRequest);
+    //      var existingReturn = existing.FirstOrDefault(r => r.ReturnId == ret.ReturnId && r.OrderId == ret.OrderId);
+    //      if (existingReturn != null)
+    //      {
+    //        var oldChangedAt = existingReturn.ChangedAt;
+    //        var newChangedAt = ret.ChangedAt;
 
-            var message = FormatSupplyHtmlMessage(@supplyRequest, cab, true);
-            SupplyStatusChanged?.Invoke(new SupplyStatusChangedEventArgs(cab.Id, @supplyRequest, message));
-          }
-        }
-      }
-      catch (Exception ex)
-      {
-        await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
-      }
-    }
+    //        // Обновляем существующий возврат
+    //        existingReturn.ChangedAt = ret.ChangedAt;
+    //        existingReturn.CreatedAt = ret.CreatedAt;
+    //        existingReturn.OrderedAt = ret.OrderedAt;
+    //        existingReturn.TargetWarehouseId = ret.TargetWarehouseId;
+
+    //        //проверяем наличие продуктов в обьекте и если они есть свреям с базой
+    //        if (ret.Products != null && ret.Products.Count > 0)
+    //        {
+    //          foreach (var product in ret.Products)
+    //          {
+    //            var existingProduct = db.ReturnProducts
+    //              .Include(p => p.Images)
+    //              .Include(p => p.Price)
+    //              .Include(p => p.Return)
+    //              .FirstOrDefault(p => p.Sku == product.Sku && p.ReturnId.ToString() == ret.ReturnId);
+    //            if (existingProduct != null)
+    //            {
+    //              existingProduct.Count = product.Count;
+    //              existingProduct.Images = product.Images;
+    //              db.ReturnProducts.Update(existingProduct);
+    //            }
+    //            else
+    //            {
+    //              // сбрасываем PK, чтобы EF сгенерировал новый
+    //              //product.Id = 0;
+    //              //db.ReturnProducts.Add(product);
+    //            }
+    //          }
+    //        }
+    //        db.Returns.Update(existingReturn);
+    //        await db.SaveChangesAsync();
+
+    //        if (oldChangedAt != newChangedAt)
+    //        {
+    //          // Отправляем сообщение об обновлении возврата
+    //          var message = FormatReturnHtmlMessage(existingReturn, db.Cabinets.FirstOrDefault(c => c.Id == existingReturn.CabinetId), false);
+    //          ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(existingReturn.CabinetId, existingReturn, message));
+    //        }
+    //      }
+    //      else
+    //      {
+    //        // Добавляем новый возврат
+    //        db.Returns.Add(ret);
+    //        await db.SaveChangesAsync();
+
+    //        var message = FormatReturnHtmlMessage(ret, db.Cabinets.FirstOrDefault(c => c.Id == ret.CabinetId), true);
+    //        ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(ret.CabinetId, ret, message));
+    //      }
+
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //      await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
+    //    }
+    //  }
+    //  return returns;
+    //}
+
+    //public async Task ProcessYMSupplyRequestsAsync(
+    //    List<Services.YandexMarket.Models.YMSupplyRequest> supplyRequests,
+    //    Cabinet cab,
+    //    ApplicationDbContext db,
+    //    CancellationToken ct
+    //  )
+    //{
+    //  try
+    //  {
+    //    List<YMSupplyRequestLocation> locations = new List<YMSupplyRequestLocation>();
+
+    //    //получаем все локации из базы данных
+    //    var existingLocations = await db.YMLocations
+    //      .Include(l => l.Address)
+    //      .ToListAsync(ct);
+
+
+    //    foreach (var supply in supplyRequests)
+    //    {
+    //      //проверяем есть ли такая локация в базе данных
+    //      var existingLocation = existingLocations.FirstOrDefault(l => l.ServiceId == supply.TargetLocation?.ServiceId || l.ServiceId == supply?.TransitLocation?.ServiceId);
+    //      if (existingLocation != null)
+    //      {
+    //        locations.Add(existingLocation);
+    //      }
+
+    //      var existingSupply = await db.YMSupplyRequests
+    //        .Include(s => s.Cabinet)
+    //        .ThenInclude(c => c.AssignedWorkers)
+    //        .Include(c => c.TransitLocation)
+    //        .ThenInclude(a => a.Address)
+    //        .Include(s => s.TargetLocation)
+    //        .ThenInclude(a => a.Address)
+    //        .FirstOrDefaultAsync(s => s.Id == supply.ExternalId.Id && s.CabinetId == cab.Id, ct);
+    //      if (existingSupply != null)
+    //      {
+    //        var oldChangedAt = existingSupply.UpdatedAt;
+    //        var newChangedAt = supply.UpdatedAt;
+
+    //        var oldStatus = existingSupply.Status;
+    //        existingSupply.Status = supply.Status;
+    //        existingSupply.UpdatedAt = supply.UpdatedAt;
+    //        db.YMSupplyRequests.Update(existingSupply);
+
+    //        if (oldChangedAt != newChangedAt)
+    //        {
+    //          var message = FormatSupplyHtmlMessage(supply, cab, false, oldStatus);
+    //          SupplyStatusChanged?.Invoke(new SupplyStatusChangedEventArgs(cab.Id, existingSupply, message));
+    //        }
+    //      }
+    //      else
+    //      {
+    //        YMSupplyRequest @supplyRequest = new YMSupplyRequest();
+    //        @supplyRequest.CabinetId = cab.Id;
+    //        @supplyRequest.ExternalId = supply.ExternalId;
+    //        @supplyRequest.Status = supply.Status;
+    //        @supplyRequest.UpdatedAt = supply.UpdatedAt;
+    //        @supplyRequest.Type = supply.Type;
+    //        @supplyRequest.Subtype = supply.Subtype;
+    //        if (supply.TargetLocation != null)
+    //          locations.Add(supply.TargetLocation);
+    //        db.YMSupplyRequests.Add(@supplyRequest);
+
+    //        var message = FormatSupplyHtmlMessage(@supplyRequest, cab, true);
+    //        SupplyStatusChanged?.Invoke(new SupplyStatusChangedEventArgs(cab.Id, @supplyRequest, message));
+    //      }
+    //    }
+    //  }
+    //  catch (Exception ex)
+    //  {
+    //    await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
+    //  }
+    //}
 
     public static string FormatReturnHtmlMessage(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
     {
