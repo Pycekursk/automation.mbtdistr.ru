@@ -193,7 +193,6 @@ Html.DevExtreme().DataGrid<Return>()
 <!-- JS-функция рендеринга ячейки "Products" -->
 <script type="text/javascript">
   function productsCellTemplate(container, options) {
-      // console.log("productsCellTemplate called", options);
     var products = options.data.Products;
     if (!products || !products.length) {
       // можно оставить пустую строку или сообщение
@@ -236,11 +235,10 @@ Html.DevExtreme().DataGrid<Return>()
 
   // Существующая функция для показа Popup с каруселью
   function showImages(images) {
-      console.log("showImages called", images);
     var popup = $("#imagesPopup").dxPopup({
       title: "Изображения товара",
       showTitle: true,
-      width: 600,
+      maxWidth: "90vw",
       height: "auto",
       dragEnabled: true,
       resizeEnabled: true,
@@ -248,7 +246,10 @@ Html.DevExtreme().DataGrid<Return>()
         var $carousel = $("<div>").addClass("image-carousel");
         images.forEach(function(img) {
           $carousel.append(
-            $("<div>").append(
+            $("<a>")
+            .attr("href", img.Url)
+            .attr("data-fancybox", "gallery")
+            .append(
               $("<img>")
                 .attr("src", img.Url)
                 .css({
@@ -268,6 +269,8 @@ Html.DevExtreme().DataGrid<Return>()
       visible: true
     }).dxPopup("instance");
   }
+
+
 </script>
 
 <!-- Контейнер для Popup -->
@@ -284,5 +287,8 @@ Html.DevExtreme().DataGrid<Return>()
     .image-carousel img {
       flex: 0 0 auto;
       max-height: 200px;
+    }
+    .fancybox__container {
+        z-index:99999;
     }
 </style>

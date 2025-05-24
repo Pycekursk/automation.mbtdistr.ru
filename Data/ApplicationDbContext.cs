@@ -280,7 +280,8 @@ namespace automation.mbtdistr.ru.Data
           .HasForeignKey(r => r.TargetWarehouseId)
           .HasConstraintName("FK_Returns_DestinationWarehouse")
           .OnDelete(DeleteBehavior.Restrict);
+
+      builder.HasIndex(r => r.ReturnId).HasDatabaseName("IX_Returns_ReturnId");
     }
   }
-
 }

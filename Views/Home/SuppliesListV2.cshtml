@@ -62,7 +62,6 @@
                                             .DataSource(Model)
                                             .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx" }); })
                                             .OnExporting("onExportingHandler")
-
                                             .Columns(columnsBuilder =>
                                             {
                                               foreach (var col in columns)

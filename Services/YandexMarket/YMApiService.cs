@@ -469,24 +469,6 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
           dbLoc.Name = loc.Name;
           dbLoc.Type = loc.Type;
           dbLoc.RequestedDate = loc.RequestedDate;
-
-          if (loc.Address != null)
-          {
-            var dbAddr = await context.YMLocationAddresses
-                .FirstOrDefaultAsync(a => a.Id == loc.Address.Id);
-
-            if (dbAddr != null)
-            {
-              dbAddr.FullAddress = loc.Address.FullAddress;
-              dbAddr.Gps = loc.Address.Gps;
-            }
-            else
-            {
-              context.YMLocationAddresses.Add(loc.Address);
-              dbLoc.Address = loc.Address;
-            }
-          }
-
           return dbLoc;
         }
         else

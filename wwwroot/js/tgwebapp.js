@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }, { passive: true });
 
-
+    Fancybox.bind();
 });
 
 // Мок для локальной разработки

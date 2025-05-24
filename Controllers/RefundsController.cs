@@ -121,170 +121,170 @@ namespace automation.mbtdistr.ru.Controllers
     }
 
 
-    //метод получения заявок на вывоз от яндекс маркета
-    [HttpGet("ym/sync-supplies")]
-    public async Task<IActionResult> SyncYandexMarketSupplies()
-    {
-      var cabinets = await _db.Cabinets
-        .AsNoTracking()
-        .Include(c => c.Settings)
-        .ThenInclude(cs => cs.ConnectionParameters)
-        .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
-        .ToListAsync();
+    ////метод получения заявок на вывоз от яндекс маркета
+    //[HttpGet("ym/sync-supplies")]
+    //public async Task<IActionResult> SyncYandexMarketSupplies()
+    //{
+    //  var cabinets = await _db.Cabinets
+    //    .AsNoTracking()
+    //    .Include(c => c.Settings)
+    //    .ThenInclude(cs => cs.ConnectionParameters)
+    //    .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
+    //    .ToListAsync();
 
-      List<YMSupplyRequest> supplyRequests = new List<YMSupplyRequest>();
+    //  List<YMSupplyRequest> supplyRequests = new List<YMSupplyRequest>();
 
-      foreach (var c in cabinets)
-      {
-        var campaignsResponse = await _ym.GetCampaignsAsync(c);
-        if (campaignsResponse != null && campaignsResponse.Campaigns?.Count > 0)
-        {
-          foreach (var campaign in campaignsResponse.Campaigns)
-          {
-            if (campaign.PlacementType != "FBY") continue;
-            var supplyResponse = await _ym.GetSupplyRequests(c, campaign);
-            if (supplyResponse?.Result?.Items?.Count > 0)
-            {
-              supplyResponse.Result.Items.ForEach(r => r.CabinetId = c.Id);
-              var supplies = supplyResponse.Result.Items;
-              foreach (var supply in supplies)
-              {
-                if (supply.Status == YMSupplyRequestStatusType.Finished || supply.Status == YMSupplyRequestStatusType.Cancelled) continue;
-                var itemsResponse = await _ym.GetSupplyRequestItemsAsync(c, campaign, supply.ExternalId.Id);
-                var items = itemsResponse?.Result?.Items;
-                if (items != null && items.Count > 0)
-                {
-                  supply.Items = items;
-                }
-                else
-                {
-                  supply.Items = new List<YMSupplyRequestItem>();
-                }
-              }
-              supplyRequests.AddRange(supplyResponse.Result.Items);
-            }
-          }
-        }
-      }
+    //  foreach (var c in cabinets)
+    //  {
+    //    var campaignsResponse = await _ym.GetCampaignsAsync(c);
+    //    if (campaignsResponse != null && campaignsResponse.Campaigns?.Count > 0)
+    //    {
+    //      foreach (var campaign in campaignsResponse.Campaigns)
+    //      {
+    //        if (campaign.PlacementType != "FBY") continue;
+    //        var supplyResponse = await _ym.GetSupplyRequests(c, campaign);
+    //        if (supplyResponse?.Result?.Items?.Count > 0)
+    //        {
+    //          supplyResponse.Result.Items.ForEach(r => r.CabinetId = c.Id);
+    //          var supplies = supplyResponse.Result.Items;
+    //          foreach (var supply in supplies)
+    //          {
+    //            if (supply.Status == YMSupplyRequestStatusType.Finished || supply.Status == YMSupplyRequestStatusType.Cancelled) continue;
+    //            var itemsResponse = await _ym.GetSupplyRequestItemsAsync(c, campaign, supply.ExternalId.Id);
+    //            var items = itemsResponse?.Result?.Items;
+    //            if (items != null && items.Count > 0)
+    //            {
+    //              supply.Items = items;
+    //            }
+    //            else
+    //            {
+    //              supply.Items = new List<YMSupplyRequestItem>();
+    //            }
+    //          }
+    //          supplyRequests.AddRange(supplyResponse.Result.Items);
+    //        }
+    //      }
+    //    }
+    //  }
 
-      var saved = new List<YMSupplyRequest>();
-      foreach (var request in supplyRequests)
-      {
-        var supply = await _ym.AddOrUpdateSupplyRequestAsync(request, _db);
+    //  var saved = new List<YMSupplyRequest>();
+    //  foreach (var request in supplyRequests)
+    //  {
+    //    var supply = await _ym.AddOrUpdateSupplyRequestAsync(request, _db);
 
 
 
-        if (supply != null)
-        {
-          saved.Add(supply);
-        }
-      }
+    //    if (supply != null)
+    //    {
+    //      saved.Add(supply);
+    //    }
+    //  }
 
-      var json = Newtonsoft.Json.JsonConvert.SerializeObject(saved, Formatting.Indented, new JsonSerializerSettings()
-      {
-        Culture = System.Globalization.CultureInfo.CurrentCulture,
-        StringEscapeHandling = StringEscapeHandling.Default,
-        Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
-      });
-      ContentResult contentResult = new ContentResult
-      {
-        Content = json,
-        ContentType = "application/json",
-        StatusCode = 200
-      };
-      return contentResult;
-    }
+    //  var json = Newtonsoft.Json.JsonConvert.SerializeObject(saved, Formatting.Indented, new JsonSerializerSettings()
+    //  {
+    //    Culture = System.Globalization.CultureInfo.CurrentCulture,
+    //    StringEscapeHandling = StringEscapeHandling.Default,
+    //    Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
+    //  });
+    //  ContentResult contentResult = new ContentResult
+    //  {
+    //    Content = json,
+    //    ContentType = "application/json",
+    //    StatusCode = 200
+    //  };
+    //  return contentResult;
+    //}
 
-    //метод синхронизации возвратов от яндекс маркета
-    [HttpGet("ym/sync-returns")]
-    public async Task<IActionResult> SyncYandexMarketReturns()
-    {
-      var cabinets = await _db.Cabinets
-        .AsNoTracking()
-        .Include(c => c.Settings)
-        .ThenInclude(cs => cs.ConnectionParameters)
-        .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
-        .ToListAsync();
+    ////метод синхронизации возвратов от яндекс маркета
+    //[HttpGet("ym/sync-returns")]
+    //public async Task<IActionResult> SyncYandexMarketReturns()
+    //{
+    //  var cabinets = await _db.Cabinets
+    //    .AsNoTracking()
+    //    .Include(c => c.Settings)
+    //    .ThenInclude(cs => cs.ConnectionParameters)
+    //    .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
+    //    .ToListAsync();
 
-      if (Program.Environment.IsDevelopment())
-      {
-        cabinets = new List<Cabinet> { cabinets.FirstOrDefault(c => c.Id == 14) };
-      }
+    //  if (Program.Environment.IsDevelopment())
+    //  {
+    //    cabinets = new List<Cabinet> { cabinets.FirstOrDefault(c => c.Id == 14) };
+    //  }
 
-      List<Return> returns = new List<Return>();
-      foreach (var c in cabinets)
-      {
-        var campaignsResponse = await _ym.GetCampaignsAsync(c);
-        if (campaignsResponse != null && campaignsResponse.Campaigns?.Count > 0)
-        {
-          foreach (var campaign in campaignsResponse.Campaigns)
-          {
-            var returnResponse = await _ym.GetReturnsListAsync(c, campaign);
+    //  List<Return> returns = new List<Return>();
+    //  foreach (var c in cabinets)
+    //  {
+    //    var campaignsResponse = await _ym.GetCampaignsAsync(c);
+    //    if (campaignsResponse != null && campaignsResponse.Campaigns?.Count > 0)
+    //    {
+    //      foreach (var campaign in campaignsResponse.Campaigns)
+    //      {
+    //        var returnResponse = await _ym.GetReturnsListAsync(c, campaign);
 
-            if (returnResponse?.Result?.Items?.Count > 0)
-            {
-              foreach (var ret in returnResponse.Result.Items)
-              {
-                var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
-                if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
-                  continue;
+    //        if (returnResponse?.Result?.Items?.Count > 0)
+    //        {
+    //          foreach (var ret in returnResponse.Result.Items)
+    //          {
+    //            var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+    //            if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
+    //              continue;
 
-                ret.Order = (await _ym.GetOrdersAsync(c, campaign, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
-                if (ret.Items?.Count > 0)
-                {
-                  var warehouse = await _ym.GetWarehouseByIdAsync(c, ret.LogisticPickupPoint.Id);
+    //            ret.Order = (await _ym.GetOrdersAsync(c, campaign, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+    //            if (ret.Items?.Count > 0)
+    //            {
+    //              var warehouse = await _ym.GetWarehouseByIdAsync(c, ret.LogisticPickupPoint.Id);
 
-                  foreach (var item in ret.Items)
-                  {
-                    var decision = item?.Decisions?.FirstOrDefault();
-                    if (decision != null && decision.Images?.Count > 0)
-                    {
-                      List<string> imagesUrl = new List<string>();
-                      foreach (var img in decision.Images)
-                      {
-                        var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
-                        var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
-                        var fileDir = Path.GetDirectoryName(filePath);
-                        if (!Directory.Exists(fileDir))
-                          Directory.CreateDirectory(fileDir);
+    //              foreach (var item in ret.Items)
+    //              {
+    //                var decision = item?.Decisions?.FirstOrDefault();
+    //                if (decision != null && decision.Images?.Count > 0)
+    //                {
+    //                  List<string> imagesUrl = new List<string>();
+    //                  foreach (var img in decision.Images)
+    //                  {
+    //                    var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
+    //                    var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
+    //                    var fileDir = Path.GetDirectoryName(filePath);
+    //                    if (!Directory.Exists(fileDir))
+    //                      Directory.CreateDirectory(fileDir);
 
-                        if (System.IO.File.Exists(filePath))
-                          continue;
+    //                    if (System.IO.File.Exists(filePath))
+    //                      continue;
 
-                        var image = await _ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, decision.ReturnItemId, img);
-                        var imageBytes = Convert.FromBase64String(image.Result.ImageData);
-                        await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
-                        var fileUrl = $"{Request.Scheme}://{Request.Host}/images/returns/{fileName}";
-                        imagesUrl.Add(fileUrl);
-                      }
-                      decision.Images = imagesUrl;
-                    }
-                  }
+    //                    var image = await _ym.GetReturnImageAsync(c, campaign, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+    //                    var imageBytes = Convert.FromBase64String(image.Result.ImageData);
+    //                    await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
+    //                    var fileUrl = $"{Request.Scheme}://{Request.Host}/images/returns/{fileName}";
+    //                    imagesUrl.Add(fileUrl);
+    //                  }
+    //                  decision.Images = imagesUrl;
+    //                }
+    //              }
 
-                }
-                var @return = Return.Parse<YMReturn>(ret);
-                @return.CabinetId = c.Id;
-                returns.Add(@return);
-              }
-            }
-          }
-        }
-      }
+    //            }
+    //            var @return = Return.Parse<YMReturn>(ret);
+    //            @return.CabinetId = c.Id;
+    //            returns.Add(@return);
+    //          }
+    //        }
+    //      }
+    //    }
+    //  }
 
-      var json = Newtonsoft.Json.JsonConvert.SerializeObject(returns, Formatting.Indented, new Newtonsoft.Json.JsonSerializerSettings()
-      {
-        Culture = System.Globalization.CultureInfo.CurrentCulture,
-        StringEscapeHandling = StringEscapeHandling.Default,
-        Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
-      });
-      ContentResult contentResult = new ContentResult
-      {
-        Content = json,
-        ContentType = "application/json",
-        StatusCode = 200
-      };
-      return contentResult;
-    }
+    //  var json = Newtonsoft.Json.JsonConvert.SerializeObject(returns, Formatting.Indented, new Newtonsoft.Json.JsonSerializerSettings()
+    //  {
+    //    Culture = System.Globalization.CultureInfo.CurrentCulture,
+    //    StringEscapeHandling = StringEscapeHandling.Default,
+    //    Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
+    //  });
+    //  ContentResult contentResult = new ContentResult
+    //  {
+    //    Content = json,
+    //    ContentType = "application/json",
+    //    StatusCode = 200
+    //  };
+    //  return contentResult;
+    //}
 
     [HttpGet("ym/get-supplies")]
     public async Task<IActionResult> GetYandexMarketSupplyRequests([FromQuery] string[]? filters)

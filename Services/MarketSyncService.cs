@@ -41,40 +41,105 @@ namespace automation.mbtdistr.ru.Services
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeSpan _interval;
     private readonly ITelegramBotClient _botClient;
-    private static OzonApiService _ozSvc;
+    private static OzonApiService? _ozSvc;
+    private static WildberriesApiService? _wbSvc;
+    private static YMApiService? _ymSvc;
     private const int _telegramMaxMessageLength = 4096;
     private readonly ApplicationDbContext _db;
     private readonly IOptions<AppSettings> _options;
-    private static string baseUrl;
+    private static string? baseUrl;
 
-
+    /// <summary>
+    /// Делегат для события изменения статуса возврата.
+    /// </summary>
+    /// <param name="e"></param>
     public delegate void ReturnStatusChangedEventHandler(ReturnStatusChangedEventArgs e);
+
+    /// <summary>
+    /// Событие, вызываемое при изменении статуса возврата.
+    /// </summary>
+    /// <param name="e"></param>
     public delegate void SupplyStatusChangedEventHandler(SupplyStatusChangedEventArgs e);
+
+    /// <summary>
+    /// Событие, вызываемое при изменении статуса возврата.
+    /// </summary>
     public static event ReturnStatusChangedEventHandler? ReturnStatusChanged;
+
+    /// <summary>
+    /// Событие, вызываемое при изменении статуса поставки.
+    /// </summary>
     public static event SupplyStatusChangedEventHandler? SupplyStatusChanged;
 
-    //класс для передачи данных события
+    /// <summary>
+    /// Аргументы события изменения статуса возврата.
+    /// </summary>
     public class ReturnStatusChangedEventArgs : EventArgs
     {
+      /// <summary>
+      /// Возврат, для которого изменился статус.
+      /// </summary>
       public Models.Return Return { get; set; }
+
+      /// <summary>
+      /// Сообщение для уведомления.
+      /// </summary>
       public string Message { get; set; }
+
+      /// <summary>
+      /// Идентификатор кабинета, к которому относится возврат.
+      /// </summary>
       public int CabinetId { get; set; }
 
-      public object? ApiDTO { get; set; } // DTO от API, если нужно
+      /// <summary>
+      /// DTO-объект, полученный от API (опционально).
+      /// </summary>
+      public object? ApiDTO { get; set; }
 
+      /// <summary>
+      /// Конструктор аргументов события изменения статуса возврата.
+      /// </summary>
+      /// <param name="cabinetId">Идентификатор кабинета</param>
+      /// <param name="return">Объект возврата</param>
+      /// <param name="message">Сообщение</param>
+      /// <param name="apiDTO">DTO-объект от API (опционально)</param>
       public ReturnStatusChangedEventArgs(int cabinetId, Models.Return @return, string message, object? apiDTO = null)
       {
         CabinetId = cabinetId;
         Return = @return;
         Message = message;
+        ApiDTO = apiDTO;
       }
     }
 
+    /// <summary>
+    /// Аргументы события изменения статуса поставки.
+    /// Используется для передачи информации о заявке на поставку, сообщении и идентификаторе кабинета.
+    /// </summary>
     public class SupplyStatusChangedEventArgs : EventArgs
     {
+      /// <summary>
+      /// Заявка на поставку, для которой изменился статус.
+      /// </summary>
       public YMSupplyRequest Supply { get; set; }
+
+      /// <summary>
+      /// Сообщение для уведомления.
+      /// </summary>
       public string Message { get; set; }
+
+      /// <summary>
+      /// Идентификатор кабинета, к которому относится заявка.
+      /// </summary>
       public int CabinetId { get; set; }
+
+      /// <summary>
+      /// Конструктор аргументов события изменения статуса поставки.
+      /// </summary>
+      /// <param name="cabinetId">Идентификатор кабинета</param>
+      /// <param name="supply">Объект заявки на поставку</param>
+      /// <param name="message">Сообщение</param>
+      /// <param name="apiDTO">DTO-объект от API (опционально)</param>
       public SupplyStatusChangedEventArgs(int cabinetId, YMSupplyRequest supply, string message, object? apiDTO = null)
       {
         CabinetId = cabinetId;
@@ -83,12 +148,21 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
+    /// <summary>
+    /// Конструктор сервиса синхронизации площадок.
+    /// </summary>
+    /// <param name="scopeFactory"></param>
+    /// <param name="botClient"></param>
+    /// <param name="config"></param>
+    /// <param name="options"></param>
     public MarketSyncService(IServiceScopeFactory scopeFactory, ITelegramBotClient botClient, IConfiguration config, IOptions<AppSettings> options)
     {
       _scopeFactory = scopeFactory;
       var scope = _scopeFactory.CreateScope();
       _db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
       _ozSvc = scope.ServiceProvider.GetRequiredService<OzonApiService>();
+      _wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
+      _ymSvc = scope.ServiceProvider.GetRequiredService<YMApiService>();
       _botClient = botClient;
       var minutes = config.GetValue<int>("MarketSync:IntervalMinutes", 25);
       _interval = TimeSpan.FromMinutes(minutes);
@@ -107,79 +181,346 @@ namespace automation.mbtdistr.ru.Services
         SyncAllAsync(CancellationToken.None);
       }
     }
-    #region === публичный метод, вызываемый из HostedService ===
-
-    // Добавьте в начало класса
-    private static readonly SemaphoreSlim _ozonSyncLock = new SemaphoreSlim(1, 1);
 
     /// <summary>
-    /// Синхронизирует ВСЕ кабинеты:
-    /// • товары OZON — параллельно, но через семафор (одновременный доступ 1)
-    /// • возвраты всех площадок — параллельно с ограничением потоков
+    /// Периодическая синхронизация площадок.
     /// </summary>
-    public async Task SyncAllAsync(CancellationToken ct = default)
+    /// <param name="stoppingToken"></param>
+    /// <returns></returns>
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-      // 1. Получаем все кабинеты без трекинга
-      var cabinets = await _db.Cabinets
-          .AsNoTracking()
-          .Include(c => c.Settings)
-              .ThenInclude(s => s.ConnectionParameters)
-          .ToListAsync(ct);
-
-      // 2. Синхронизация OZON-товаров через семафор
-      var ozonTasks = cabinets
-          .Where(c => c.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase))
-          .Select(c => Task.Run(async () =>
-          {
-            await _ozonSyncLock.WaitAsync(ct);
-            try
-            {
-              await SyncOzonProducts(c);
-            }
-            finally
-            {
-              _ozonSyncLock.Release();
-            }
-          }, ct));
-
-      await Task.WhenAll(ozonTasks);
-
-      // 3. Обработка возвратов всех площадок (до 3 кабинетов одновременно)
-      const int MAX_PARALLEL_CABS = 3;
-      var throttler = new SemaphoreSlim(MAX_PARALLEL_CABS);
-
-      var returnTasks = cabinets.Select(async cab =>
+      using var timer = new PeriodicTimer(_interval);
+      while (await timer.WaitForNextTickAsync(stoppingToken))
       {
-        await throttler.WaitAsync(ct);
         try
         {
-          using var scope = _scopeFactory.CreateScope();
-          var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-          var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
-          var ymSvc = scope.ServiceProvider.GetRequiredService<YMApiService>();
-
-          await ProcessCabinetAsync(cab, db, wbSvc, ymSvc, ct);
+          if (!Program.Environment.IsDevelopment())
+            await SyncAllAsync(stoppingToken);
         }
         catch (Exception ex)
         {
-          await Extensions.SendDebugMessage(
-              $"Ошибка при синхронизации кабинета #{cab.Id} {cab.Name} ({cab.Marketplace}):\n" +
-              $"{ex.Message}\n{ex.InnerException?.Message}");
+          await Extensions.SendDebugMessage($"Ошибка при синхронизации площадок\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
         }
-        finally
-        {
-          throttler.Release();
-        }
-      });
-
-      await Task.WhenAll(returnTasks);
+      }
     }
 
+    #region === публичный метод, вызываемый из HostedService ===
+
+
+    private async Task SyncAllAsync(CancellationToken ct)
+    {
+      List<Cabinet> cabinets = new List<Cabinet>();
+      try
+      {
+        // получаем все кабинеты из базы данных
+        cabinets = await _db.Cabinets
+          .Include(c => c.Settings)
+          .ThenInclude(s => s.ConnectionParameters)
+          .ToListAsync(ct);
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"Ошибка при получении кабинетов из БД\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
+        return;
+      }
+
+      // List<Models.Return> allReturns = new List<Models.Return>();
+
+      //SyncYandexMarketSupplies
+      await Task.WhenAll(
+          cabinets
+              .Where(c => c.Marketplace.ToUpper() == "YANDEXMARKET")
+              .Select(c => SyncYandexMarketSupplies(c))
+      );
+
+
+      // OZON products sync (без возвратов)
+      await Task.WhenAll(
+          cabinets
+              .Where(c => c.Marketplace.ToUpper() == "OZON")
+              .Select(c => SyncOzonProducts(c))
+      );
+
+      // OZON returns
+      var ozonReturns = await Task.WhenAll(
+          cabinets
+              .Where(c => c.Marketplace.ToUpper() == "OZON")
+              .Select(async c => await SyncOzonReturns(c))
+      );
+
+      await AddOrUpdateReturnsAsync(ozonReturns.SelectMany(r => r).ToList());
+
+      // allReturns.AddRange(ozonReturns.SelectMany(r => r));
+
+      // WILDBERRIES returns
+      var wbReturns = await Task.WhenAll(
+          cabinets
+              .Where(c => c.Marketplace.ToUpper() == "WILDBERRIES")
+              .Select(async c => await SyncWildberriesReturns(c))
+      );
+      await AddOrUpdateReturnsAsync(wbReturns.SelectMany(r => r).ToList());
+      //  allReturns.AddRange(wbReturns.SelectMany(r => r));
+
+      // YANDEXMARKET returns (с проверкой двух вариантов написания)
+      var ymReturns = await Task.WhenAll(
+          cabinets
+              .Where(c =>
+                  c.Marketplace.ToUpper() == "YANDEXMARKET")
+              .Select(async c => await SyncYandexMarketReturns(c))
+      );
+      await AddOrUpdateReturnsAsync(ymReturns.SelectMany(r => r).ToList());
+      //allReturns.AddRange(ymReturns.SelectMany(r => r));
+      #region old block
+      //foreach (var cab in cabinets)
+      //{
+      //  try
+      //  {
+      //    //if (cab.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("OZ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗОН", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗ", StringComparison.OrdinalIgnoreCase))
+      //    //{
+
+      //    //}
+
+      //    //if (cab.Marketplace.Equals("WILDBERRIES", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("WB", StringComparison.OrdinalIgnoreCase))
+      //    //{
+      //    //  var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
+      //    //  if (response?.Claims.Count > 0)
+      //    //  {
+      //    //    List<Return> _returns = new List<Return>();
+      //    //    foreach (var claim in response.Claims)
+      //    //    {
+      //    //      var dbChangeDate = _db.Returns.Where(r => r.ReturnId == claim.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+      //    //      if (dbChangeDate != null && dbChangeDate == claim.DtUpdate)
+      //    //        continue;
+      //    //      var @return = Return.Parse<Wildberries.Models.Claim>(claim);
+      //    //      @return.CabinetId = cab.Id;
+      //    //      _returns.Add(@return);
+      //    //    }
+      //    //    if (_returns.Count > 0)
+      //    //    {
+      //    //      _returns = await AddOrUpdateReturnsAsync(_returns, _db);
+      //    //      await Extensions.SendDebugObject<List<Return>>(_returns, $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
+      //    //    }
+      //    //  }
+      //    //}
+
+      //    //else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
+      //    //{
+      //    //  var _campaigns = await ymSvc.GetCampaignsAsync(cab);
+      //    //  List<Return> returns = new List<Return>();
+      //    //  foreach (var camp in _campaigns.Campaigns)
+      //    //  {
+      //    //    var returnResponse = await ymSvc.GetReturnsListAsync(cab, camp);
+      //    //    if (returnResponse?.Result?.Items?.Count > 0)
+      //    //    {
+      //    //      foreach (var ret in returnResponse.Result.Items)
+      //    //      {
+      //    //        var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+      //    //        if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
+      //    //          continue;
+
+      //    //        ret.Order = (await ymSvc.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+      //    //        if (ret.Items?.Count > 0)
+      //    //        {
+      //    //          foreach (var item in ret.Items)
+      //    //          {
+      //    //            var decision = item?.Decisions?.FirstOrDefault();
+      //    //            if (decision != null && decision.Images?.Count > 0)
+      //    //            {
+      //    //              List<string> imagesUrl = new List<string>();
+      //    //              foreach (var img in decision.Images)
+      //    //              {
+      //    //                var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
+      //    //                var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
+      //    //                var fileDir = Path.GetDirectoryName(filePath);
+      //    //                if (!Directory.Exists(fileDir))
+      //    //                  Directory.CreateDirectory(fileDir);
+
+      //    //                if (!System.IO.File.Exists(filePath))
+      //    //                {
+      //    //                  var image = await ymSvc.GetReturnImageAsync(cab, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+      //    //                  var imageBytes = Convert.FromBase64String(image.Result.ImageData);
+      //    //                  await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
+      //    //                }
+      //    //                var fileUrl = $"{baseUrl}/images/returns/{fileName}";
+      //    //                imagesUrl.Add(fileUrl);
+      //    //              }
+      //    //              decision.Images = imagesUrl;
+      //    //            }
+      //    //          }
+      //    //        }
+
+
+      //    //        if (ret.LogisticPickupPoint != null)
+      //    //        {
+      //    //          var warehouse = await ymSvc.GetWarehouseByIdAsync(cab, ret.LogisticPickupPoint.Id);
+      //    //          if (warehouse != null)
+      //    //            ret.FulfillmentWarehouse = warehouse;
+      //    //        }
+      //    //        var @return = Return.Parse<YMReturn>(ret);
+      //    //        @return.CabinetId = cab.Id;
+      //    //        if (@return.TargetWarehouse != null)
+      //    //        {
+      //    //          @return.TargetWarehouse.Service = cab.Marketplace;
+      //    //        }
+      //    //        if (@return.Scheme == SellScheme.FBO)
+      //    //        {
+      //    //          //@return.OrderUrl = $"https://partner.market.yandex.ru/business/{camp.Business.Id}/returns?campaignId={camp.Id}&returnId={ret.Id}&partnerId=179624982&orderId={ret.OrderId}";
+      //    //          //@return.Url = $"https://partner.market.yandex.ru/order/{ret.OrderId}?partnerId=179624982";
+      //    //        }
+      //    //        @return.Products?.ForEach(p => p.Url = $"https://partner.market.yandex.ru/supplier/{camp.Id}/assortment/offer-card?tld=ru&offerId={p.OfferId}");
+      //    //        returns.Add(@return);
+      //    //      }
+      //    //    }
+
+      //    //    if (returns.Count > 0)
+      //    //    {
+      //    //      returns = await AddOrUpdateReturnsAsync(returns, _db);
+      //    //      //await Extensions.SendDebugObject<List<Return>>(returns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
+      //    //    }
+
+      //    //    var supplies = await ymSvc.GetSupplyRequests(cab, camp);
+      //    //    if (supplies?.Result?.Items?.Count > 0)
+      //    //    {
+      //    //      foreach (var supple in supplies.Result.Items)
+      //    //      {
+      //    //        var suppleItems = await ymSvc.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
+      //    //        supple.Items = suppleItems?.Result?.Items;
+      //    //        await ymSvc.AddOrUpdateSupplyRequestAsync(supple, _db);
+      //    //      }
+      //    //    }
+      //    //  }
+      //    //}
+
+      //    // else throw new NotSupportedException($"Неизвестная площадка: {cab.Marketplace}");
+      //  }
+      //  catch (Exception ex)
+      //  {
+      //    await Extensions.SendDebugMessage($"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Name} ({cab.Marketplace})\n\n{ex.Message}\n{ex.StackTrace}\n\n{ex.InnerException?.Message}");
+      //  }
+      //}
+      #endregion
+    }
     #endregion
 
+    private async Task<List<Return>> SyncWildberriesReturns(Cabinet cabinet)
+    {
+      List<Return> _returns = new List<Return>();
+      using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+      var response = await _wbSvc!.GetReturnsListAsync(cabinet) as Wildberries.Models.ReturnsListResponse;
+      if (response?.Claims.Count > 0)
+      {
+        foreach (var claim in response.Claims)
+        {
+          var dbChangeDate = db.Returns.Where(r => r.ReturnId == claim.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+          if (dbChangeDate != null && dbChangeDate == claim.DtUpdate)
+            continue;
+          var @return = Return.Parse<Wildberries.Models.Claim>(claim);
+          @return.CabinetId = cabinet.Id;
+          _returns.Add(@return);
+        }
+      }
+      return _returns;
+    }
+
+    /// <summary>
+    /// Синхронизирует поставки YandexMarket и обновляет их в базе данных.
+    /// </summary>
+    /// <param name="cabinet"></param>
+    /// <returns></returns>
+    private async Task SyncYandexMarketSupplies(Cabinet cabinet)
+    {
+      var _campaigns = await _ymSvc.GetCampaignsAsync(cabinet);
+      foreach (var camp in _campaigns.Campaigns)
+      {
+        var supplies = await _ymSvc.GetSupplyRequests(cabinet, camp);
+        if (supplies?.Result?.Items?.Count > 0)
+        {
+          foreach (var supple in supplies.Result.Items)
+          {
+            var suppleItems = await _ymSvc.GetSupplyRequestItemsAsync(cabinet, camp, supple.ExternalId?.Id ?? 0);
+            supple.Items = suppleItems?.Result?.Items;
+            var dbsupple = await _ymSvc.AddOrUpdateSupplyRequestAsync(supple, _db);
+          }
+        }
+      }
+    }
+
+    /// <summary>
+    /// Парсит возвраты YandexMarket и возвращает список унифицированных возвратов.
+    /// </summary>
+    /// <param name="cabinet"></param>
+    /// <returns></returns>
+    private async Task<List<Return>> SyncYandexMarketReturns(Cabinet cabinet)
+    {
+      var _campaigns = await _ymSvc.GetCampaignsAsync(cabinet);
+      List<Return> returns = new List<Return>();
+      using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+      foreach (var camp in _campaigns.Campaigns)
+      {
+        var returnResponse = await _ymSvc.GetReturnsListAsync(cabinet, camp);
+        if (returnResponse?.Result?.Items?.Count > 0)
+        {
+          foreach (var ret in returnResponse.Result.Items)
+          {
+            var dbChangeDate = db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+            if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
+              continue;
+
+            ret.Order = (await _ymSvc.GetOrdersAsync(cabinet, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+            if (ret.Items?.Count > 0)
+            {
+              foreach (var item in ret.Items)
+              {
+                var decision = item?.Decisions?.FirstOrDefault();
+                if (decision != null && decision.Images?.Count > 0)
+                {
+                  List<string> imagesUrl = new List<string>();
+                  foreach (var img in decision.Images)
+                  {
+                    var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
+                    var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
+                    var fileDir = Path.GetDirectoryName(filePath);
+                    if (!Directory.Exists(fileDir))
+                      Directory.CreateDirectory(fileDir);
+
+                    if (!System.IO.File.Exists(filePath))
+                    {
+                      var image = await _ymSvc.GetReturnImageAsync(cabinet, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
+                      var imageBytes = Convert.FromBase64String(image.Result.ImageData);
+                      await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
+                    }
+                    var fileUrl = $"{baseUrl}/images/returns/{fileName}";
+                    imagesUrl.Add(fileUrl);
+                  }
+                  decision.Images = imagesUrl;
+                }
+              }
+            }
+            if (ret.LogisticPickupPoint != null)
+            {
+              var warehouse = await _ymSvc.GetWarehouseByIdAsync(cabinet, ret.LogisticPickupPoint.Id);
+              if (warehouse != null)
+                ret.FulfillmentWarehouse = warehouse;
+            }
+            var @return = Return.Parse<YMReturn>(ret);
+            @return.CabinetId = cabinet.Id;
+            if (@return.TargetWarehouse != null)
+            {
+              @return.TargetWarehouse.Service = cabinet.Marketplace;
+            }
+            //if (@return.Scheme == SellScheme.FBO)
+            //{
+            //  //@return.OrderUrl = $"https://partner.market.yandex.ru/business/{camp.Business.Id}/returns?campaignId={camp.Id}&returnId={ret.Id}&partnerId=179624982&orderId={ret.OrderId}";
+            //  //@return.Url = $"https://partner.market.yandex.ru/order/{ret.OrderId}?partnerId=179624982";
+            //}
+            @return.Products?.ForEach(p => p.Url = $"https://partner.market.yandex.ru/supplier/{camp.Id}/assortment/offer-card?tld=ru&offerId={p.OfferId}");
+            returns.Add(@return);
+          }
+        }
+      }
+      return returns;
+    }
     #region === обработка товаров OZON (остался ваш метод) ===
-
-
 
     /// <summary>
     /// Синхронизирует список товаров из Ozon с локальной БД:
@@ -286,202 +627,100 @@ namespace automation.mbtdistr.ru.Services
       await db.SaveChangesAsync();
       return products;
     }
-
-
-
     #endregion
 
-    #region === маршрутизация по площадкам ===
-
-    /// <summary>
-    /// Направляет кабинет в нужный обработчик по названию маркетплейса.
-    /// Для поддержки новых площадок достаточно добавить ещё один case.
-    /// </summary>
-    private async Task ProcessCabinetAsync(
-        Cabinet cab,
-        ApplicationDbContext db,
-        WildberriesApiService wbSvc,
-        YMApiService ymSvc,
-        CancellationToken ct)
+    private async Task<List<Return>> SyncOzonReturns(Cabinet cabinet)
     {
-      switch (cab.Marketplace.ToUpperInvariant())
+      List<Return> _returns = new List<Return>();
+      using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+      var filter = new Services.Ozon.Models.Filter();
+      filter.LogisticReturnDate = new Services.Ozon.Models.DateRange
       {
-        case "OZON":
-        case "OZ":
-        case "ОЗОН":
-        case "ОЗ":
-          await ProcessOzonReturnsAsync(cab, db, ct);
-          break;
-
-        case "WILDBERRIES":
-        case "WB":
-          await ProcessWbReturnsAsync(cab, db, wbSvc, ct);
-          break;
-
-        case "YANDEXMARKET":
-        case "YANDEX MARKET":
-        case "YANDEX":
-        case "ЯНДЕКС":
-        case "ЯМ":
-        case "YM":
-          await ProcessYmReturnsAndSuppliesAsync(cab, db, ymSvc, ct);
-          break;
-
-        default:
-          throw new NotSupportedException($"Неизвестная площадка: {cab.Marketplace}");
-      }
-    }
-
-    #endregion
-
-    #region === OZON: возвраты ===
-
-    private static async Task ProcessOzonReturnsAsync(
-        Cabinet cab,
-        ApplicationDbContext db,
-        CancellationToken ct)
-    {
-      // — ПРИМЕР ОБНОВЛЁННОЙ РЕАЛИЗАЦИИ —
-
-      //var ozSvc = cab.CreateOzonClient();  // условно – создаём client на основе cab
-
-      // ------ 1. получаем существующие возвраты из БД ------
-      var existing = await db.Returns.AsNoTracking()
-          .Where(r => r.CabinetId == cab.Id)
-          .ToDictionaryAsync(r => r.ReturnId, ct);
-
-      // ------ 2. собираем новые/обновлённые возвраты ------
-      var filter = new Services.Ozon.Models.Filter
-      {
-        LogisticReturnDate = new Services.Ozon.Models.DateRange
-        {
-          From = DateTime.UtcNow.AddDays(-40),
-          To = DateTime.UtcNow
-        }
+        From = DateTime.UtcNow.AddDays(-40),
+        To = DateTime.UtcNow
       };
-
-      var allReturns = new List<Services.Ozon.Models.ReturnInfo>();
+      List<Ozon.Models.ReturnInfo> returns = new List<Ozon.Models.ReturnInfo>();
       long lastId = 0;
       do
       {
-        var response = await _ozSvc.GetReturnsListAsync(cab, filter, lastId: lastId);
-        if (response == null) break;
+        var response = await _ozSvc.GetReturnsListAsync(cabinet, filter, lastId: lastId);
+        if (response == null)
+        {
+          break;
+        }
         if (response.Returns != null && response.Returns.Count > 0)
         {
-          allReturns.AddRange(response.Returns.Where(r => r.Visual?.Status.Id != 34));
+          //выбираем те возвраты у которых вижуал статус айди не равен 34
+          returns.AddRange(response.Returns.Where(r => r.Visual?.Status.Id != 34));
+          //returns.AddRange(response.Returns);
         }
-        if (!response.HasNext) break;
-        lastId = response.Returns[^1].Id;
+        if (!response.HasNext)
+        {
+          break; // Если нет следующей страницы, выходим из цикла
+        }
+        lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
       } while (true);
 
-      if (allReturns.Count == 0) return;
-
-      // ------ 3. маппинг и фильтрация «только изменившиеся» ------
-      var changed = new List<Return>();
-      foreach (var ret in allReturns)
+      foreach (var ret in returns)
       {
-        if (existing.TryGetValue(ret.Id.ToString(), out var existingReturn) &&
-            existingReturn.ChangedAt == ret.Visual?.ChangeMoment)
-        {
-          continue; // не изменился
-        }
-
-        var model = Return.Parse<Services.Ozon.Models.ReturnInfo>(ret);
-        model.CabinetId = cab.Id;
-        if (model.TargetWarehouse != null)
-          model.TargetWarehouse.Service = cab.Marketplace;
-
-        changed.Add(model);
-      }
-
-      // ------ 4. массовое добавление/обновление ------
-      if (changed.Count > 0)
-        await AddOrUpdateReturnsAsync(changed, db);
-    }
-
-    #endregion
-
-    #region === Wildberries: возвраты ===
-
-    private static async Task ProcessWbReturnsAsync(
-        Cabinet cab,
-        ApplicationDbContext db,
-        WildberriesApiService wbSvc,
-        CancellationToken ct)
-    {
-      var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
-      if (response?.Claims.Count == 0) return;
-
-      // существующие возвраты одним запросом
-      var existing = await db.Returns.AsNoTracking()
-          .Where(r => r.CabinetId == cab.Id)
-          .ToDictionaryAsync(r => r.ReturnId, ct);
-
-      var changed = new List<Return>();
-      foreach (var claim in response.Claims)
-      {
-        if (existing.TryGetValue(claim.Id.ToString(), out var dbRet) &&
-            dbRet.ChangedAt == claim.DtUpdate)
+        var returnId = ret.Id.ToString();
+        var dbChangeDate = db.Returns
+            .Where(r => r.ReturnId == returnId)
+            .Select(r => r.ChangedAt)
+            .FirstOrDefault();
+        if (DateTime.Equals(dbChangeDate, ret.Visual?.ChangeMoment))
           continue;
 
-        var model = Return.Parse<Wildberries.Models.Claim>(claim);
-        model.CabinetId = cab.Id;
-        changed.Add(model);
+        var @return = Return.Parse<Ozon.Models.ReturnInfo>(ret);
+        @return.CabinetId = cabinet.Id;
+        _returns.Add(@return);
       }
-
-      if (changed.Count > 0)
-      {
-        await AddOrUpdateReturnsAsync(changed, db);
-        await Extensions.SendDebugObject(changed,
-            $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
-      }
+      return _returns;
     }
 
-    #endregion
 
-    #region === Yandex Market: возвраты + поставки ===
 
-    private async Task ProcessYmReturnsAndSuppliesAsync(
-      Cabinet cab,
-      ApplicationDbContext sharedDb,
-      YMApiService ymSvc,
-      CancellationToken ct)
-    {
-      // … ваша логика по возвратам (без изменений) …
 
-      // После того, как вы сохранили возвраты, приступаем к поставкам:
-      var campaigns = await ymSvc.GetCampaignsAsync(cab);
-      foreach (var camp in campaigns.Campaigns)
-      {
-        // 1. Получаем список запросов на поставки из API
-        var suppliesResponse = await ymSvc.GetSupplyRequests(cab, camp);
-        if (suppliesResponse?.Result?.Items == null || suppliesResponse.Result.Items.Count == 0)
-          continue;
 
-        // 2. Для каждого запроса создаём новый scope c fresh DbContext
-        foreach (var supp in suppliesResponse.Result.Items)
-        {
-          try
-          {
-            using var scope = _scopeFactory.CreateScope();
-            var scopedDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    //#region === Wildberries: возвраты ===
 
-            // Здесь внутри AddOrUpdateSupplyRequestAsync используем scopedDb,
-            // а не sharedDb, чтобы избежать гонок
-            await ymSvc.AddOrUpdateSupplyRequestAsync(supp, scopedDb);
-            await scopedDb.SaveChangesAsync(ct);
-          }
-          catch (Exception ex)
-          {
-            await Extensions.SendDebugMessage(
-                $"Ошибка при синхронизации SupplyRequest {supp.ExternalId?.Id} " +
-                $"для кабинета {cab.Name} ({cab.Marketplace}): {ex.Message}");
-          }
-        }
-      }
-    }
+    //private static async Task ProcessWbReturnsAsync(
+    //    Cabinet cab,
+    //    ApplicationDbContext db,
+    //    WildberriesApiService wbSvc,
+    //    CancellationToken ct)
+    //{
+    //  var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
+    //  if (response?.Claims.Count == 0) return;
 
-    #endregion
+    //  // существующие возвраты одним запросом
+    //  var existing = await db.Returns.AsNoTracking()
+    //      .Where(r => r.CabinetId == cab.Id)
+    //      .ToDictionaryAsync(r => r.ReturnId, ct);
+
+    //  var changed = new List<Return>();
+    //  foreach (var claim in response.Claims)
+    //  {
+    //    if (existing.TryGetValue(claim.Id.ToString(), out var dbRet) &&
+    //        dbRet.ChangedAt == claim.DtUpdate)
+    //      continue;
+
+    //    var model = Return.Parse<Wildberries.Models.Claim>(claim);
+    //    model.CabinetId = cab.Id;
+    //    changed.Add(model);
+    //  }
+
+    //  if (changed.Count > 0)
+    //  {
+    //    await AddOrUpdateReturnsAsync(changed, db);
+    //    await Extensions.SendDebugObject(changed,
+    //        $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
+    //  }
+    //}
+
+    // #endregion
+
+
 
     #region === хелперы ===
     /// <summary>
@@ -489,41 +728,124 @@ namespace automation.mbtdistr.ru.Services
     /// При обновлении сохраняем старый идентификатор базы (PK),
     /// чтобы EF Core не пытался изменить ключ.
     /// </summary>
-    private static async Task<List<Return>> AddOrUpdateReturnsAsync(
-        List<Return> returns,
-        ApplicationDbContext db)
+    private static async Task<List<Return>> AddOrUpdateReturnsAsync(List<Return> returns)
     {
       if (returns.Count == 0)
         return returns;
 
-      foreach (var ret in returns)
+      using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+
+
+      try
       {
-        // Ищем уже сохранённый возврат по внешнему ключу ReturnId
-        var exists = await db.Returns
-            .FirstOrDefaultAsync(r => r.ReturnId == ret.ReturnId);
+        var geoApiKey = Program.Configuration.GetValue<string>("YandexGeo:ApiKey");
+        var geoService = new YandexGeocoderService(geoApiKey);
 
-        if (exists == null)
+        foreach (var ret in returns)
         {
-          // Новый возврат — добавляем целиком
-          db.Returns.Add(ret);
-        }
-        else
-        {
-          // Сохраняем PK из БД, чтобы не было конфликта
-          ret.Id = exists.Id;
+          var cabinet = await db.Cabinets
+               .FirstOrDefaultAsync(c => c.Id == ret.CabinetId);
+          if (cabinet != null)
+            ret.Cabinet = cabinet;
 
-          // Копируем все поля из ret в существующую сущность,
-          // включая ChangedAt, Status и т.п.
-          db.Entry(exists).CurrentValues.SetValues(ret);
+          if (ret.CurrentWarehouse != null)
+          {
+            // проверяем, что склад существует в БД
+            var existingWarehouse = await db.Warehouses
+                .FirstOrDefaultAsync(w => w.ExternalId == ret.CurrentWarehouse.ExternalId);
+            if (existingWarehouse == null)
+            {
+              if (string.IsNullOrEmpty(ret.CurrentWarehouse?.Address?.FullAddress))
+              {
+                ret.CurrentWarehouse!.Address!.FullAddress = string.Empty;
+                if (!string.IsNullOrEmpty(ret.CurrentWarehouse.Address.Country))
+                  ret.CurrentWarehouse.Address.FullAddress += $"{ret.CurrentWarehouse.Address.Country}, ";
+                if (!string.IsNullOrEmpty(ret.CurrentWarehouse.Address.City))
+                  ret.CurrentWarehouse.Address.FullAddress += $"{ret.CurrentWarehouse.Address.City}, ";
+                if (!string.IsNullOrEmpty(ret.CurrentWarehouse.Address.Street))
+                  ret.CurrentWarehouse.Address.FullAddress += $"{ret.CurrentWarehouse.Address.Street}, ";
+                if (!string.IsNullOrEmpty(ret.CurrentWarehouse.Address.House))
+                  ret.CurrentWarehouse.Address.FullAddress += $"{ret.CurrentWarehouse.Address.House}, ";
+                if (!string.IsNullOrEmpty(ret.CurrentWarehouse.Address.ZipCode))
+                  ret.CurrentWarehouse.Address.FullAddress += $"{ret.CurrentWarehouse.Address.ZipCode}";
+              }
+              if (ret.CurrentWarehouse.Address?.Latitude == 0 || ret.CurrentWarehouse.Address?.Longitude == 0)
+                ret.CurrentWarehouse.Address = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
+
+              ret.CurrentWarehouse.Service = ret.Cabinet.Marketplace;
+              db.Warehouses.Add(ret.CurrentWarehouse);
+            }
+            else
+            {
+              ret.CurrentWarehouse = existingWarehouse;
+            }
+          }
+          if (ret.TargetWarehouse != null)
+          {
+            // проверяем, что склад существует в БД
+            var existingWarehouse = await db.Warehouses
+                .FirstOrDefaultAsync(w => w.ExternalId == ret.TargetWarehouse.ExternalId);
+            if (existingWarehouse == null)
+            {
+              if (string.IsNullOrEmpty(ret.TargetWarehouse?.Address?.FullAddress))
+              {
+                ret.TargetWarehouse!.Address!.FullAddress = string.Empty;
+                if (!string.IsNullOrEmpty(ret.TargetWarehouse.Address.Country))
+                  ret.TargetWarehouse.Address.FullAddress += $"{ret.TargetWarehouse.Address.Country}, ";
+                if (!string.IsNullOrEmpty(ret.TargetWarehouse.Address.City))
+                  ret.TargetWarehouse.Address.FullAddress += $"{ret.TargetWarehouse.Address.City}, ";
+                if (!string.IsNullOrEmpty(ret.TargetWarehouse.Address.Street))
+                  ret.TargetWarehouse.Address.FullAddress += $"{ret.TargetWarehouse.Address.Street}, ";
+                if (!string.IsNullOrEmpty(ret.TargetWarehouse.Address.House))
+                  ret.TargetWarehouse.Address.FullAddress += $"{ret.TargetWarehouse.Address.House}, ";
+                if (!string.IsNullOrEmpty(ret.TargetWarehouse.Address.ZipCode))
+                  ret.TargetWarehouse.Address.FullAddress += $"{ret.TargetWarehouse.Address.ZipCode}";
+              }
+              if (ret.TargetWarehouse.Address?.Latitude == 0 || ret.TargetWarehouse.Address?.Longitude == 0)
+                ret.TargetWarehouse.Address = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
+              ret.TargetWarehouse.Service = ret.Cabinet.Marketplace;
+              db.Warehouses.Add(ret.TargetWarehouse);
+              await db.SaveChangesAsync(); // Сохраняем склад сразу, чтобы избежать конфликта при добавлении возврата
+            }
+            else
+            {
+              ret.TargetWarehouse = existingWarehouse;
+            }
+          }
+
+          // Ищем уже сохранённый возврат по внешнему ключу ReturnId
+          var exists = await db.Returns
+              .FirstOrDefaultAsync(r => r.ReturnId == ret.ReturnId);
+
+          if (exists == null)
+          {
+            // Новый возврат — добавляем целиком
+            db.Returns.Add(ret);
+          }
+          else
+          {
+            // Сохраняем PK из БД, чтобы не было конфликта
+            ret.Id = exists.Id;
+
+            // Копируем все поля из ret в существующую сущность,
+            // включая ChangedAt, Status и т.п.
+            db.Entry(exists).CurrentValues.SetValues(ret);
+          }
         }
+        await db.SaveChangesAsync();
+      }
+      catch (Exception exc)
+      {
+        await Extensions.SendDebugMessage($"Ошибка при добавлении или обновлении складов: {exc.Message}\n{exc.InnerException?.Message}");
       }
 
-      await db.SaveChangesAsync();
       return returns;
     }
 
 
     #endregion
+
+    #region === обработчики событий возвратов и поставок ===
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
     {
       //if (e.ApiDTO != null)
@@ -567,490 +889,9 @@ namespace automation.mbtdistr.ru.Services
       }
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-      using var timer = new PeriodicTimer(_interval);
-      while (await timer.WaitForNextTickAsync(stoppingToken))
-      {
-        try
-        {
-          if (!Program.Environment.IsDevelopment())
-            await SyncAllAsync(stoppingToken);
-        }
-        catch (Exception ex)
-        {
-          await Extensions.SendDebugMessage($"Ошибка при синхронизации площадок\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-        }
-      }
-    }
+    #endregion
 
-
-
-    private async Task _SyncAllAsync(CancellationToken ct)
-    {
-      using var scope = _scopeFactory.CreateScope();
-      var wbSvc = scope.ServiceProvider.GetRequiredService<WildberriesApiService>();
-
-      var ymSvc = scope.ServiceProvider.GetRequiredService<YMApiService>();
-
-      List<Cabinet> cabinets = new List<Cabinet>();
-      try
-      {
-        // получаем все кабинеты из базы данных
-        cabinets = await _db.Cabinets
-          .Include(c => c.Settings)
-          .ThenInclude(s => s.ConnectionParameters)
-          .ToListAsync(ct);
-      }
-      catch (Exception ex)
-      {
-        await Extensions.SendDebugMessage($"Ошибка при получении кабинетов из БД\n{ex.Message}\n{ex.InnerException?.Message}\n{ex.StackTrace}");
-        return;
-      }
-
-      await Task.WhenAll(cabinets.Where(c => c.Marketplace.ToUpper() == "OZON").Select(c => SyncOzonProducts(c)));
-
-      List<Models.Return> allReturns = new List<Models.Return>();
-      foreach (var cab in cabinets)
-      {
-        try
-        {
-          if (cab.Marketplace.Equals("OZON", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("OZ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗОН", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ОЗ", StringComparison.OrdinalIgnoreCase))
-          {
-
-
-
-
-            var filter = new Services.Ozon.Models.Filter();
-            filter.LogisticReturnDate = new Services.Ozon.Models.DateRange
-            {
-              From = DateTime.UtcNow.AddDays(-40),
-              To = DateTime.UtcNow
-            };
-            List<Ozon.Models.ReturnInfo> returns = new List<Ozon.Models.ReturnInfo>();
-            long lastId = 0;
-            do
-            {
-              var response = await _ozSvc.GetReturnsListAsync(cab, filter, lastId: lastId);
-              if (response == null)
-              {
-
-                break;
-              }
-              if (response.Returns != null && response.Returns.Count > 0)
-              {
-                //выбираем те возвраты у которых вижуал статус айди не равен 34
-                returns.AddRange(response.Returns.Where(r => r.Visual?.Status.Id != 34));
-                //returns.AddRange(response.Returns);
-              }
-              if (!response.HasNext)
-              {
-                break; // Если нет следующей страницы, выходим из цикла
-              }
-              lastId = response.Returns[^1].Id; // Получаем ID последнего возврата для следующего запроса
-            } while (true);
-
-
-            List<Return> _returns = new List<Return>();
-            foreach (var ret in returns)
-            {
-              var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
-              if (dbChangeDate != null && dbChangeDate == ret.Visual?.ChangeMoment)
-                continue;
-              var @return = Return.Parse<Ozon.Models.ReturnInfo>(ret);
-              @return.CabinetId = cab.Id;
-              if (@return.TargetWarehouse != null)
-                @return.TargetWarehouse.Service = cab.Marketplace;
-              _returns.Add(@return);
-            }
-            if (_returns.Count > 0)
-            {
-              _returns = await AddOrUpdateReturnsAsync(_returns, _db);
-              //await Extensions.SendDebugObject<List<Return>>(_returns, $"Возвраты Ozon для кабинета {cab.Name} ({cab.Marketplace})");
-            }
-            //allReturns.AddRange(await ProcessOzonReturnsAsync(returns, cab, _db, ct));
-          }
-
-          else if (cab.Marketplace.Equals("WILDBERRIES", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("WB", StringComparison.OrdinalIgnoreCase))
-          {
-            var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
-            if (response?.Claims.Count > 0)
-            {
-              List<Return> _returns = new List<Return>();
-              foreach (var claim in response.Claims)
-              {
-                var dbChangeDate = _db.Returns.Where(r => r.ReturnId == claim.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
-                if (dbChangeDate != null && dbChangeDate == claim.DtUpdate)
-                  continue;
-                var @return = Return.Parse<Wildberries.Models.Claim>(claim);
-                @return.CabinetId = cab.Id;
-                _returns.Add(@return);
-              }
-              if (_returns.Count > 0)
-              {
-                _returns = await AddOrUpdateReturnsAsync(_returns, _db);
-                await Extensions.SendDebugObject<List<Return>>(_returns, $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
-              }
-            }
-          }
-
-          else if (cab.Marketplace.Equals("YANDEXMARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX MARKET", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YANDEX", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯНДЕКС", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("ЯМ", StringComparison.OrdinalIgnoreCase) || cab.Marketplace.Equals("YM", StringComparison.OrdinalIgnoreCase))
-          {
-            var _campaigns = await ymSvc.GetCampaignsAsync(cab);
-            List<Return> returns = new List<Return>();
-            foreach (var camp in _campaigns.Campaigns)
-            {
-              var returnResponse = await ymSvc.GetReturnsListAsync(cab, camp);
-              if (returnResponse?.Result?.Items?.Count > 0)
-              {
-                foreach (var ret in returnResponse.Result.Items)
-                {
-                  var dbChangeDate = _db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
-                  if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
-                    continue;
-
-                  ret.Order = (await ymSvc.GetOrdersAsync(cab, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
-                  if (ret.Items?.Count > 0)
-                  {
-                    foreach (var item in ret.Items)
-                    {
-                      var decision = item?.Decisions?.FirstOrDefault();
-                      if (decision != null && decision.Images?.Count > 0)
-                      {
-                        List<string> imagesUrl = new List<string>();
-                        foreach (var img in decision.Images)
-                        {
-                          var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
-                          var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
-                          var fileDir = Path.GetDirectoryName(filePath);
-                          if (!Directory.Exists(fileDir))
-                            Directory.CreateDirectory(fileDir);
-
-                          if (!System.IO.File.Exists(filePath))
-                          {
-                            var image = await ymSvc.GetReturnImageAsync(cab, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
-                            var imageBytes = Convert.FromBase64String(image.Result.ImageData);
-                            await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
-                          }
-                          var fileUrl = $"{baseUrl}/images/returns/{fileName}";
-                          imagesUrl.Add(fileUrl);
-                        }
-                        decision.Images = imagesUrl;
-                      }
-                    }
-                  }
-
-
-                  if (ret.LogisticPickupPoint != null)
-                  {
-                    var warehouse = await ymSvc.GetWarehouseByIdAsync(cab, ret.LogisticPickupPoint.Id);
-                    if (warehouse != null)
-                      ret.FulfillmentWarehouse = warehouse;
-                  }
-                  var @return = Return.Parse<YMReturn>(ret);
-                  @return.CabinetId = cab.Id;
-                  if (@return.TargetWarehouse != null)
-                  {
-                    @return.TargetWarehouse.Service = cab.Marketplace;
-                  }
-                  if (@return.Scheme == SellScheme.FBO)
-                  {
-                    //@return.OrderUrl = $"https://partner.market.yandex.ru/business/{camp.Business.Id}/returns?campaignId={camp.Id}&returnId={ret.Id}&partnerId=179624982&orderId={ret.OrderId}";
-                    //@return.Url = $"https://partner.market.yandex.ru/order/{ret.OrderId}?partnerId=179624982";
-                  }
-                  @return.Products?.ForEach(p => p.Url = $"https://partner.market.yandex.ru/supplier/{camp.Id}/assortment/offer-card?tld=ru&offerId={p.OfferId}");
-                  returns.Add(@return);
-                }
-              }
-
-              if (returns.Count > 0)
-              {
-                returns = await AddOrUpdateReturnsAsync(returns, _db);
-                //await Extensions.SendDebugObject<List<Return>>(returns, $"Возвраты ЯндексМаркет для кабинета {cab.Name} ({cab.Marketplace})");
-              }
-
-              var supplies = await ymSvc.GetSupplyRequests(cab, camp);
-              if (supplies?.Result?.Items?.Count > 0)
-              {
-                foreach (var supple in supplies.Result.Items)
-                {
-                  var suppleItems = await ymSvc.GetSupplyRequestItemsAsync(cab, camp, supple.ExternalId?.Id ?? 0);
-                  supple.Items = suppleItems?.Result?.Items;
-                  await ymSvc.AddOrUpdateSupplyRequestAsync(supple, _db);
-                }
-              }
-            }
-          }
-
-          else throw new NotSupportedException($"Неизвестная площадка: {cab.Marketplace}");
-        }
-        catch (Exception ex)
-        {
-          await Extensions.SendDebugMessage($"Ошибка при синхронизации кабинета #{cab.Id}\n{cab.Name} ({cab.Marketplace})\n\n{ex.Message}\n{ex.StackTrace}\n\n{ex.InnerException?.Message}");
-        }
-      }
-    }
-
-
-
-
-    ///// <summary>
-    ///// Добавление или обновление возвратов в базе данных.
-    ///// </summary>
-    ///// <param name="returns"> Список возвратов для обработки.</param>
-    ///// <param name="db"> Контекст базы данных.</param>
-    ///// <returns> Список обработанных возвратов.</returns>
-    //public async Task<List<Models.Return>> AddOrUpdateReturnsAsync(List<Return> returns, ApplicationDbContext db)
-    //{
-    //  var existing = _db.Returns
-    //         .Include(r => r.TargetWarehouse).ThenInclude(w => w.Address)
-    //         .Include(r => r.CurrentWarehouse).ThenInclude(w => w.Address)
-    //         .Include(r => r.Cabinet)
-    //         .ThenInclude(c => c.AssignedWorkers)
-    //         .ThenInclude(w => w.NotificationOptions)
-    //         .Include(r => r.Products)
-    //         .ThenInclude(p => p.Images)
-    //         .ToList()
-    //         .Where(r => !string.IsNullOrEmpty(r.ReturnId) && returns.Any(_r => $"{r.ReturnId}_{r.OrderId}" == $"{_r.ReturnId}_{_r.OrderId}"))
-    //         .ToList();
-
-    //  foreach (var ret in returns)
-    //  {
-    //    try
-    //    {
-    //      if (ret.TargetWarehouse != null)
-    //      {
-    //        ret.TargetWarehouse.CabinetId = ret.CabinetId;
-    //        var key = $"{ret.TargetWarehouse.ExternalId}_{ret.TargetWarehouse.Service}";
-    //        var warehouse = await db.Warehouses
-    //          .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
-    //        if (warehouse == null)
-    //        {
-    //          // если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
-    //          if (ret.TargetWarehouse.Address != null && string.IsNullOrEmpty(ret.TargetWarehouse.Address.FullAddress))
-    //          {
-    //            ret.TargetWarehouse.Address.FullAddress = $"{ret.TargetWarehouse.Address.Country}, {ret.TargetWarehouse.Address}, {ret.TargetWarehouse.Address.City}, {ret.TargetWarehouse.Address.Street}, {ret.TargetWarehouse.Address.House}, {ret.TargetWarehouse.Address.Office}";
-    //          }
-    //          //проверяем если координаты пустые, то заполняем их
-    //          if (ret?.TargetWarehouse?.Address?.Latitude == 0 && ret.TargetWarehouse.Address.Longitude == 0)
-    //          {
-    //            //получаем значение апи ключа YandexGeo из appsettings
-    //            var apiKey = Program.Configuration.GetSection("YandexGeo:Key").Value;
-    //            var geoService = new YandexGeocoderService(apiKey);
-    //            var addressObj = await geoService.GetAddressAsync(ret.TargetWarehouse.Address.FullAddress);
-    //            if (addressObj != null)
-    //            {
-    //              ret.TargetWarehouse.Address = addressObj;
-    //            }
-    //          }
-    //          db.Warehouses.Add(ret.TargetWarehouse);
-    //          ret.TargetWarehouse = warehouse;
-    //          await db.SaveChangesAsync();
-    //        }
-    //        else
-    //        {
-    //          //проверяем если координаты пустые, то заполняем их
-    //          if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
-    //          {
-    //            //получаем значение апи ключа YandexGeo из appsettings
-    //            var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
-    //            var geoService = new YandexGeocoderService(apiKey);
-    //            var addressObj = await geoService.GetAddressAsync(warehouse.Address.FullAddress);
-    //            if (addressObj != null)
-    //            {
-    //              warehouse.Address = addressObj;
-    //            }
-    //          }
-    //          ret.TargetWarehouse = warehouse;
-    //        }
-    //      }
-    //      if (ret.CurrentWarehouse != null)
-    //      {
-    //        ret.CurrentWarehouse.CabinetId = ret.CabinetId;
-    //        var key = $"{ret.CurrentWarehouse.ExternalId}_{ret.CurrentWarehouse.Service}";
-    //        var warehouse = await db.Warehouses
-    //          .FirstOrDefaultAsync(w => w.ExternalId + "_" + w.Service == key);
-    //        if (warehouse == null)
-    //        {
-    //          //если у склада есть адрес и у адреса пустая строка TextAddress, то назначаем TextAddress значение суммы полей Address
-    //          if (ret.CurrentWarehouse.Address != null && string.IsNullOrEmpty(ret.CurrentWarehouse.Address.FullAddress))
-    //          {
-    //            ret.CurrentWarehouse.Address.FullAddress = $"{ret.CurrentWarehouse.Address.Country}, {ret.CurrentWarehouse.Address}, {ret.CurrentWarehouse.Address.City}, {ret.CurrentWarehouse.Address.Street}, {ret.CurrentWarehouse.Address.House}, {ret.CurrentWarehouse.Address.Office}";
-    //          }
-    //          if (ret?.CurrentWarehouse?.Address?.Latitude == 0 || ret?.CurrentWarehouse?.Address?.Longitude == 0)
-    //          {
-    //            //получаем значение апи ключа YandexGeo из appsettings
-    //            var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
-    //            var geoService = new YandexGeocoderService(apiKey);
-    //            var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
-    //            if (addressObj != null)
-    //            {
-    //              warehouse.Address = addressObj;
-    //            }
-    //          }
-
-    //          db.Warehouses.Add(ret.CurrentWarehouse);
-    //          ret.CurrentWarehouse = warehouse;
-    //          await db.SaveChangesAsync();
-    //        }
-    //        else
-    //        {
-    //          //проверяем если координаты пустые, то заполняем их
-    //          if (warehouse.Address?.Latitude == 0 && warehouse.Address.Longitude == 0)
-    //          {
-    //            //получаем значение апи ключа YandexGeo из appsettings
-    //            var apiKey = Program.Configuration.GetSection("YandexGeo:ApiKey").Value;
-    //            var geoService = new YandexGeocoderService(apiKey);
-    //            var addressObj = await geoService.GetAddressAsync(ret.CurrentWarehouse.Address.FullAddress);
-    //            if (addressObj != null)
-    //            {
-    //              warehouse.Address = addressObj;
-    //            }
-    //            warehouse.CabinetId = ret.CabinetId;
-    //          }
-    //          ret.CurrentWarehouse = warehouse;
-    //        }
-    //      }
-
-    //      var existingReturn = existing.FirstOrDefault(r => r.ReturnId == ret.ReturnId && r.OrderId == ret.OrderId);
-    //      if (existingReturn != null)
-    //      {
-    //        var oldChangedAt = existingReturn.ChangedAt;
-    //        var newChangedAt = ret.ChangedAt;
-
-    //        // Обновляем существующий возврат
-    //        existingReturn.ChangedAt = ret.ChangedAt;
-    //        existingReturn.CreatedAt = ret.CreatedAt;
-    //        existingReturn.OrderedAt = ret.OrderedAt;
-    //        existingReturn.TargetWarehouseId = ret.TargetWarehouseId;
-
-    //        //проверяем наличие продуктов в обьекте и если они есть свреям с базой
-    //        if (ret.Products != null && ret.Products.Count > 0)
-    //        {
-    //          foreach (var product in ret.Products)
-    //          {
-    //            var existingProduct = db.ReturnProducts
-    //              .Include(p => p.Images)
-    //              .Include(p => p.Price)
-    //              .Include(p => p.Return)
-    //              .FirstOrDefault(p => p.Sku == product.Sku && p.ReturnId.ToString() == ret.ReturnId);
-    //            if (existingProduct != null)
-    //            {
-    //              existingProduct.Count = product.Count;
-    //              existingProduct.Images = product.Images;
-    //              db.ReturnProducts.Update(existingProduct);
-    //            }
-    //            else
-    //            {
-    //              // сбрасываем PK, чтобы EF сгенерировал новый
-    //              //product.Id = 0;
-    //              //db.ReturnProducts.Add(product);
-    //            }
-    //          }
-    //        }
-    //        db.Returns.Update(existingReturn);
-    //        await db.SaveChangesAsync();
-
-    //        if (oldChangedAt != newChangedAt)
-    //        {
-    //          // Отправляем сообщение об обновлении возврата
-    //          var message = FormatReturnHtmlMessage(existingReturn, db.Cabinets.FirstOrDefault(c => c.Id == existingReturn.CabinetId), false);
-    //          ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(existingReturn.CabinetId, existingReturn, message));
-    //        }
-    //      }
-    //      else
-    //      {
-    //        // Добавляем новый возврат
-    //        db.Returns.Add(ret);
-    //        await db.SaveChangesAsync();
-
-    //        var message = FormatReturnHtmlMessage(ret, db.Cabinets.FirstOrDefault(c => c.Id == ret.CabinetId), true);
-    //        ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(ret.CabinetId, ret, message));
-    //      }
-
-    //    }
-    //    catch (Exception ex)
-    //    {
-    //      await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
-    //    }
-    //  }
-    //  return returns;
-    //}
-
-    //public async Task ProcessYMSupplyRequestsAsync(
-    //    List<Services.YandexMarket.Models.YMSupplyRequest> supplyRequests,
-    //    Cabinet cab,
-    //    ApplicationDbContext db,
-    //    CancellationToken ct
-    //  )
-    //{
-    //  try
-    //  {
-    //    List<YMSupplyRequestLocation> locations = new List<YMSupplyRequestLocation>();
-
-    //    //получаем все локации из базы данных
-    //    var existingLocations = await db.YMLocations
-    //      .Include(l => l.Address)
-    //      .ToListAsync(ct);
-
-
-    //    foreach (var supply in supplyRequests)
-    //    {
-    //      //проверяем есть ли такая локация в базе данных
-    //      var existingLocation = existingLocations.FirstOrDefault(l => l.ServiceId == supply.TargetLocation?.ServiceId || l.ServiceId == supply?.TransitLocation?.ServiceId);
-    //      if (existingLocation != null)
-    //      {
-    //        locations.Add(existingLocation);
-    //      }
-
-    //      var existingSupply = await db.YMSupplyRequests
-    //        .Include(s => s.Cabinet)
-    //        .ThenInclude(c => c.AssignedWorkers)
-    //        .Include(c => c.TransitLocation)
-    //        .ThenInclude(a => a.Address)
-    //        .Include(s => s.TargetLocation)
-    //        .ThenInclude(a => a.Address)
-    //        .FirstOrDefaultAsync(s => s.Id == supply.ExternalId.Id && s.CabinetId == cab.Id, ct);
-    //      if (existingSupply != null)
-    //      {
-    //        var oldChangedAt = existingSupply.UpdatedAt;
-    //        var newChangedAt = supply.UpdatedAt;
-
-    //        var oldStatus = existingSupply.Status;
-    //        existingSupply.Status = supply.Status;
-    //        existingSupply.UpdatedAt = supply.UpdatedAt;
-    //        db.YMSupplyRequests.Update(existingSupply);
-
-    //        if (oldChangedAt != newChangedAt)
-    //        {
-    //          var message = FormatSupplyHtmlMessage(supply, cab, false, oldStatus);
-    //          SupplyStatusChanged?.Invoke(new SupplyStatusChangedEventArgs(cab.Id, existingSupply, message));
-    //        }
-    //      }
-    //      else
-    //      {
-    //        YMSupplyRequest @supplyRequest = new YMSupplyRequest();
-    //        @supplyRequest.CabinetId = cab.Id;
-    //        @supplyRequest.ExternalId = supply.ExternalId;
-    //        @supplyRequest.Status = supply.Status;
-    //        @supplyRequest.UpdatedAt = supply.UpdatedAt;
-    //        @supplyRequest.Type = supply.Type;
-    //        @supplyRequest.Subtype = supply.Subtype;
-    //        if (supply.TargetLocation != null)
-    //          locations.Add(supply.TargetLocation);
-    //        db.YMSupplyRequests.Add(@supplyRequest);
-
-    //        var message = FormatSupplyHtmlMessage(@supplyRequest, cab, true);
-    //        SupplyStatusChanged?.Invoke(new SupplyStatusChangedEventArgs(cab.Id, @supplyRequest, message));
-    //      }
-    //    }
-    //  }
-    //  catch (Exception ex)
-    //  {
-    //    await Extensions.SendDebugMessage($"Ошибка при обработке возвратов ЯндексМаркет\n{ex.Message}");
-    //  }
-    //}
-
+    #region === форматирование сообщений для возвратов и поставок ===
     public static string FormatReturnHtmlMessage(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
     {
       var sb = new StringBuilder();
@@ -1245,6 +1086,6 @@ namespace automation.mbtdistr.ru.Services
       sb.AppendLine($"<b>Обновлен:</b> {supply.UpdatedAt:dd.MM.yyyy HH:mm:ss}");
       return sb.ToString();
     }
-
+    #endregion
   }
 }

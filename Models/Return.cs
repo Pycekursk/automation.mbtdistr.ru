@@ -135,7 +135,7 @@ namespace automation.mbtdistr.ru.Models
     public SellScheme Scheme { get; set; }
 
     [JsonProperty("products")]
-    [Display(Name ="Товары")]
+    [Display(Name = "Товары")]
     public List<ReturnProduct>? Products { get; set; }
 
     /// <summary>
@@ -144,6 +144,20 @@ namespace automation.mbtdistr.ru.Models
     [JsonProperty("returnType")]
     [Display(Name = "Тип возврата")]
     public ReturnType ReturnType { get; set; }
+
+    /// <summary>
+    /// Подробности о хранении (стоимость, ключевых даты и т.д.)
+    /// </summary>
+    [JsonProperty("storage")]
+    [Display(Name = "Хранение")]
+    public Storage? Storage { get; set; }
+
+    /// <summary>
+    /// Активность возврата (активен или нет)
+    /// </summary>
+    [JsonProperty("active")]
+    [Display(Name = "Активный")]
+    public bool Active { get; set; } = true;
 
     /// <summary>
     /// Метод преобразования объекта возврата в общий объект возврата.
@@ -238,7 +252,7 @@ namespace automation.mbtdistr.ru.Models
       else
         @return.ReturnType = Models.ReturnType.Unknown;
 
-      @return.Scheme = returnInfo.Schema?.ToUpper() == "FBS" ? SellScheme.FBS : returnInfo.Schema?.ToUpper() == "FBO" ? SellScheme.FBO : SellScheme.Unknown;
+      @return.Scheme = returnInfo?.Schema?.ToUpper() == "FBS" ? SellScheme.FBS : returnInfo?.Schema?.ToUpper() == "FBO" ? SellScheme.FBO : SellScheme.Unknown;
 
       if (returnInfo.Product != null)
       {
@@ -258,18 +272,41 @@ namespace automation.mbtdistr.ru.Models
         };
         @return.Products = new List<ReturnProduct> { returnProduct };
       }
-
       if (returnInfo.Place != null)
+
       {
         //id, name, address
-        @return.TargetWarehouse = new Warehouse()
+        @return.CurrentWarehouse = new Warehouse()
         {
           ExternalId = returnInfo.Place.Id.ToString(),
           Name = returnInfo.Place.Name,
+          Service = "OZON",
           Address = new Address()
           {
             FullAddress = returnInfo.Place.Address,
           }
+        };
+      }
+      if (returnInfo.TargetPlace != null)
+      {
+        //id, name, address
+        @return.TargetWarehouse = new Warehouse()
+        {
+          ExternalId = returnInfo.TargetPlace.Id.ToString(),
+          Name = returnInfo.TargetPlace.Name,
+          Service = "OZON",
+          Address = new Address()
+          {
+            FullAddress = returnInfo.TargetPlace.Address,
+          }
+        };
+      }
+      if (returnInfo.Storage != null)
+      {
+        @return.Storage = new Storage()
+        {
+          ArrivedDate = returnInfo.Storage.ArrivedMoment,
+          UtilizationForecastDate = returnInfo.Storage.UtilizationForecastDate,
         };
       }
     }
@@ -284,8 +321,11 @@ namespace automation.mbtdistr.ru.Models
       @return.OrderNumber = ymReturn?.OrderId.ToString();
       @return.ReturnType = ymReturn.ReturnType;
       @return.Scheme = ymReturn?.ShipmentRecipientType == YMShipmentRecipientType.Shop ? SellScheme.FBS : SellScheme.FBO;
-      @return.Products ??= new List<ReturnProduct>();
+      @return.ResolvedAt = ymReturn?.RefundStatus == YMRefundStatus.Refunded ? ymReturn.UpdateDate : null;
+      @return.Active = @return.ResolvedAt != null ? false : true;
 
+
+      @return.Products ??= new List<ReturnProduct>();
       if (ymReturn?.Items?.Count > 0)
         foreach (var item in ymReturn.Items)
         {
@@ -312,26 +352,49 @@ namespace automation.mbtdistr.ru.Models
         }
       if (ymReturn?.FulfillmentWarehouse != null)
       {
-        @return.TargetWarehouse = new Warehouse()
+        if (ymReturn.ShipmentStatus == YMReturnShipmentStatusType.InTransit)
         {
-          ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
-          Name = ymReturn.FulfillmentWarehouse.Name,
-          Address = new Address()
+          @return.TargetWarehouse = new Warehouse()
           {
-            City = ymReturn.FulfillmentWarehouse.Address?.City,
-            Street = ymReturn.FulfillmentWarehouse.Address?.Street,
-            House = ymReturn.FulfillmentWarehouse.Address?.Building,
-            Office = ymReturn.FulfillmentWarehouse.Address?.Number,
+            ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
+            Name = ymReturn.FulfillmentWarehouse.Name,
+            Address = new Address()
+            {
+              City = ymReturn.FulfillmentWarehouse.Address?.City,
+              Street = ymReturn.FulfillmentWarehouse.Address?.Street,
+              House = ymReturn.FulfillmentWarehouse.Address?.Building,
+              Office = ymReturn.FulfillmentWarehouse.Address?.Number,
+            }
+          };
+          if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
+          {
+            @return.TargetWarehouse.Address.Latitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
+            @return.TargetWarehouse.Address.Longitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
           }
-        };
-        @return.TargetWarehouse.Address.FullAddress = $"{@return.TargetWarehouse.Address.City}, {@return.TargetWarehouse.Address.Street} {@return.TargetWarehouse.Address.House} {@return.TargetWarehouse.Address.Office}";
-        if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
+
+        }
+        else
         {
-          @return.TargetWarehouse.Address.Latitude = ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
-          @return.TargetWarehouse.Address.Longitude = ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
+
+          @return.CurrentWarehouse = new Warehouse()
+          {
+            ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
+            Name = ymReturn.FulfillmentWarehouse.Name,
+            Address = new Address()
+            {
+              City = ymReturn.FulfillmentWarehouse.Address?.City,
+              Street = ymReturn.FulfillmentWarehouse.Address?.Street,
+              House = ymReturn.FulfillmentWarehouse.Address?.Building,
+              Office = ymReturn.FulfillmentWarehouse.Address?.Number,
+            }
+          };
+          if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
+          {
+            @return.CurrentWarehouse.Address.Latitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
+            @return.CurrentWarehouse.Address.Longitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
+          }
         }
       }
-
     }
   }
 }

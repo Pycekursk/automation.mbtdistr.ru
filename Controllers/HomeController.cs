@@ -14,19 +14,32 @@ using Microsoft.EntityFrameworkCore;
 
 namespace automation.mbtdistr.ru.Controllers
 {
+  /// <summary>
+  /// Контроллер для отображения главного меню и связанных разделов веб-приложения телеграм-бота.
+  /// Содержит методы для отображения меню, кабинетов, возвратов, заявок, складов и информации по заявкам/возвратам.
+  /// </summary>
   [ApiExplorerSettings(IgnoreApi = true)]
   public class HomeController : Controller
   {
     private readonly ILogger<HomeController> _logger;
     private readonly ApplicationDbContext _db;
 
+    /// <summary>
+    /// Конструктор контроллера HomeController.
+    /// </summary>
+    /// <param name="logger"></param>
+    /// <param name="db"></param>
     public HomeController(ILogger<HomeController> logger, ApplicationDbContext db)
     {
       _db = db;
       _logger = logger;
     }
 
-    // Controllers/HomeController.cs
+    /// <summary>
+    /// Проверяет наличие пользователя по ID и перенаправляет на бота, если ID не указан.
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <returns></returns>
     public IActionResult Index([FromRoute(Name = "id")] int? userId)
     {
       if (userId == null)
@@ -45,17 +58,6 @@ namespace automation.mbtdistr.ru.Controllers
         Menu = mainMenu
       };
       return View(model);
-    }
-
-    public IActionResult Privacy()
-    {
-      return View();
-    }
-
-    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult Error()
-    {
-      return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 
     /// <summary>
@@ -108,6 +110,14 @@ namespace automation.mbtdistr.ru.Controllers
 
               Action = "supplieslist",
               Title = "Заявки",
+              CSS = "btn btn-outline-primary",
+              Icon = "bi bi-box-seam"
+            },
+                 new MenuItem
+            {
+
+              Action = "warehouseslist",
+              Title = "Склады",
               CSS = "btn btn-outline-primary",
               Icon = "bi bi-box-seam"
             },
@@ -183,6 +193,11 @@ namespace automation.mbtdistr.ru.Controllers
       return View(mainMenu);
     }
 
+    /// <summary>
+    /// Отображает список кабинетов, закрепленных за пользователем.
+    /// </summary>
+    /// <param name="id">Идентификатор пользователя</param>
+    /// <returns>View с моделью меню по кабинетам</returns>
     [HttpGet("botmenu/{id?}/cabinetslist")]
     public IActionResult BotMenuCabinetsList([FromRoute] long id)
     {
@@ -200,7 +215,6 @@ namespace automation.mbtdistr.ru.Controllers
         WorkerId = user.Id
       };
 
-
       foreach (var cabinet in user?.AssignedCabinets!)
       {
         mainMenu.Menu.Add(new MenuItem
@@ -215,6 +229,12 @@ namespace automation.mbtdistr.ru.Controllers
       return View(mainMenu);
     }
 
+    /// <summary>
+    /// Отображает меню действий для выбранного кабинета.
+    /// </summary>
+    /// <param name="id">Идентификатор пользователя</param>
+    /// <param name="cabinetId">Идентификатор кабинета</param>
+    /// <returns>View с моделью меню по действиям в кабинете</returns>
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}")]
     public IActionResult BotMenuCabinet([FromRoute] long id, [FromRoute] int? cabinetId)
     {
@@ -261,6 +281,12 @@ namespace automation.mbtdistr.ru.Controllers
       return View(mainMenu);
     }
 
+    /// <summary>
+    /// Заглушка для списка заказов по кабинету.
+    /// </summary>
+    /// <param name="id">Идентификатор пользователя</param>
+    /// <param name="cabinetId">Идентификатор кабинета</param>
+    /// <returns>NoContent</returns>
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/orderslist")]
     public IActionResult OrdersList([FromRoute] long id, [FromRoute] int? cabinetId)
     {
@@ -474,6 +500,12 @@ namespace automation.mbtdistr.ru.Controllers
       return View(mainMenu);
     }
 
+    /// <summary>
+    /// Отображает список складов, связанных с кабинетом.
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="cabinetId"></param>
+    /// <returns></returns>
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/warehouseslist")]
     public IActionResult WarehousesList([FromRoute] long id, [FromRoute] int? cabinetId)
     {
@@ -483,6 +515,33 @@ namespace automation.mbtdistr.ru.Controllers
         return Redirect("https://t.me/MbtdistrBot");
       }
       var warehouses = _db.Warehouses.Include(w => w.CurrentReturns).Include(w => w.DestinationReturns).ToList();
+      if (warehouses?.Count > 0)
+      {
+        ViewData["GreetingMessage"] = $"Склады ({warehouses.Count} шт.)";
+        foreach (var warehouse in warehouses)
+        {
+          ViewData["GreetingMessage"] += $"\n{warehouse.Name} ({warehouse.CurrentReturns.Count} возвратов)";
+        }
+      }
+      else
+      {
+        ViewData["GreetingMessage"] = "У кабинета нет активных возвратов.";
+      }
+      return View("/Views/Home/Warehouses.cshtml", warehouses);
+    }
+
+    /// <summary>
+    /// Отображает список всех складов в системе.
+    /// </summary>
+    [HttpGet("botmenu/{id?}/warehouseslist")]
+    public IActionResult WarehousesList([FromRoute] int id)
+    {
+      var worker = _db.Workers.Include(w => w.AssignedCabinets).FirstOrDefault(w => w.Id == id);
+      if (worker == null)
+      {
+        return Redirect("https://t.me/MbtdistrBot");
+      }
+      var warehouses = _db.Warehouses.Include(w => w.CurrentReturns).Include(w => w.DestinationReturns).Include(w => w.Cabinet).ToList();
       if (warehouses?.Count > 0)
       {
         ViewData["GreetingMessage"] = $"Склады ({warehouses.Count} шт.)";

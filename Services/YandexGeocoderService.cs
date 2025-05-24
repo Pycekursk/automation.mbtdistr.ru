@@ -46,8 +46,8 @@ namespace automation.mbtdistr.ru.Services
           .GetProperty("pos")
           .GetString()!; // формат "lon lat"
       var parts = pos.Split(' ');
-      var lon = decimal.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
-      var lat = decimal.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+      var lon = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+      var lat = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
 
       // 2) Полный адрес (текстовый)
       var meta = geoObject
