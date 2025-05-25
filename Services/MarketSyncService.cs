@@ -439,7 +439,8 @@ namespace automation.mbtdistr.ru.Services
           {
             var suppleItems = await _ymSvc.GetSupplyRequestItemsAsync(cabinet, camp, supple.ExternalId?.Id ?? 0);
             supple.Items = suppleItems?.Result?.Items;
-            var dbsupple = await _ymSvc.AddOrUpdateSupplyRequestAsync(supple, _db);
+            supple.CabinetId = cabinet.Id;
+            var dbsupple = await _ymSvc.AddOrUpdateSupplyRequestAsync(supple);
           }
         }
       }

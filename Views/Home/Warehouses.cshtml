@@ -42,24 +42,26 @@
   .ToList();
 }
 @(
-Html.DevExtreme().DataGrid<Warehouse>()
+    Html.DevExtreme().DataGrid<Warehouse>()
      .ID("gridContainer")
-      .KeyExpr("Id")
-                                            .ColumnAutoWidth(true)
-                                                 .Height("95vh")
-                                            .ShowRowLines(true)
-                                            .ShowBorders(true)
-                                            .DataSource(Model)
-                                            .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx" }); })
-                                            .OnExporting("onExportingHandler")
-      .Pager(p =>
-                                          {
-                                            p.Visible(true);
-                                            p.ShowPageSizeSelector(true);
-                                            p.AllowedPageSizes(new int[] { 20, 50, 100 });
-                                          })
-                                            .Paging(p => p.PageSize(20))
-      .Columns(columnsBuilder =>
+     .KeyExpr("Id")
+     .ColumnAutoWidth(true)
+     .Height("95vh")
+     .ShowRowLines(true)
+     .ShowBorders(true)
+     .AllowColumnReordering(true)
+     .AllowColumnResizing(true)
+     .DataSource(Model)
+     .Export(e => { e.Enabled(true); e.Formats(new string[] { "xlsx" }); })
+     .OnExporting("onExportingHandler")
+     .Pager(p =>
+      {
+        p.Visible(true);
+        p.ShowPageSizeSelector(true);
+        p.AllowedPageSizes(new int[] { 20, 50, 100 });
+      })
+     .Paging(p => p.PageSize(20))
+     .Columns(columnsBuilder =>
       {
         foreach (var col in columns)
         {
@@ -97,10 +99,10 @@ Html.DevExtreme().DataGrid<Warehouse>()
           }
         }
       })
-       .ColumnChooser(cc =>
+     .ColumnChooser(cc =>
       {
         cc.Enabled(true)
-         .Height("95vh")
+         .Height("400px")
         .Mode(GridColumnChooserMode.Select)
         .Position(pc => pc
         .My(HorizontalAlignment.Right, VerticalAlignment.Top)
@@ -119,7 +121,7 @@ Html.DevExtreme().DataGrid<Warehouse>()
         .Recursive(true)
         );
       })
-        .Toolbar(toolbar =>
+     .Toolbar(toolbar =>
       {
         toolbar.Items(items =>
         {
@@ -144,14 +146,11 @@ Html.DevExtreme().DataGrid<Warehouse>()
      .LoadPanel(loadPanel => loadPanel.Enabled(true))
      .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
      .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
-     .Paging(p => p.PageSize(20)).AllowColumnReordering(true)
-     .AllowColumnResizing(true)
-     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"{modelName}_grid"))
+     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"DataGridState_{Context.Request.Path.ToString().Trim('/').Replace('/', '_')}"))
      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
      .HeaderFilter(h => h.Visible(true))
      .Selection(s => s.Mode(SelectionMode.Single))
-     .FilterRow(f => f.Visible(true))
-     .KeyExpr("Id").HeaderFilter(hf => hf.Search(hfs => hfs.Enabled(true)))
+     .KeyExpr("Id")
 )
 
 

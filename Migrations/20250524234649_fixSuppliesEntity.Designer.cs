@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250524234649_fixSuppliesEntity")]
+    partial class fixSuppliesEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1022,7 +1025,8 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RelatedRequestId");
+                    b.HasIndex("RelatedRequestId")
+                        .IsUnique();
 
                     b.HasIndex("RequestId");
 
@@ -1507,11 +1511,12 @@ namespace automation.mbtdistr.ru.Migrations
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestReference", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", "RelatedRequest")
-                        .WithMany()
-                        .HasForeignKey("RelatedRequestId");
+                        .WithOne("ParentLink")
+                        .HasForeignKey("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestReference", "RelatedRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", "Request")
-                        .WithMany()
+                        .WithMany("ChildrenLinks")
                         .HasForeignKey("RequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1582,7 +1587,11 @@ namespace automation.mbtdistr.ru.Migrations
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.Models.YMSupplyRequest", b =>
                 {
+                    b.Navigation("ChildrenLinks");
+
                     b.Navigation("Items");
+
+                    b.Navigation("ParentLink");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Services.YandexMarket.YMSupplyRequestItem", b =>

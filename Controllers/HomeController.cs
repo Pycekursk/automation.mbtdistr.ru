@@ -413,7 +413,7 @@ namespace automation.mbtdistr.ru.Controllers
       ViewBag.Statuses = Extensions.ToLookup<YMSupplyRequestStatusType>();
       ViewBag.Types = Extensions.ToLookup<YMSupplyRequestType>();
       ViewBag.SubType = Extensions.ToLookup<YMSupplyRequestSubType>();
-      return View("/Views/Home/SuppliesListV2.cshtml", supplies);
+      return View(supplies);
     }
 
     [HttpGet("botmenu/{id?}/cabinet/{cabinetId?}/supplieslist")]
@@ -456,7 +456,7 @@ namespace automation.mbtdistr.ru.Controllers
       ViewBag.SubType = Extensions.ToLookup<YMSupplyRequestSubType>();
       //ViewBag.supplies = supplies;
 
-      return View("/Views/Home/SuppliesListV2.cshtml", supplies);
+      return View(supplies);
     }
 
     [HttpGet("botmenu/{id?}/supplyinfo/{supplyId?}")]

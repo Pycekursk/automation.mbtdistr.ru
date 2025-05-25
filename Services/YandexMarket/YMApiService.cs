@@ -445,188 +445,416 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <summary>
     /// Добавление или обновление заявки в БД на поставку.
     /// </summary>
-    public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(
-    YMSupplyRequest incoming,
-    ApplicationDbContext context)
+    public async Task<YMSupplyRequest> _AddOrUpdateSupplyRequestAsync(
+    YMSupplyRequest incoming)
     {
-      // 1) Подгружаем существующую заявку без ссылок
-      var existing = await context.YMSupplyRequests
-          .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
-          .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
-          .Include(r => r.Items).ThenInclude(i => i.Price)
-          .Include(r => r.Items).ThenInclude(i => i.Counters)
-          .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
-
-      // 2.1) Локальная функция для Location
-      async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation loc)
+      try
       {
-        var dbLoc = await context.YMSupplyRequestLocations
-            .Include(l => l.Address)
-            .FirstOrDefaultAsync(l => l.ServiceId == loc.ServiceId);
+        using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
 
-        if (dbLoc != null)
+        // 1) Подгружаем существующую заявку без ссылок
+        var existing = await context.YMSupplyRequests
+            .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+            .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+            .Include(r => r.Items).ThenInclude(i => i.Price)
+            .Include(r => r.Items).ThenInclude(i => i.Counters)
+            .Include(r => r.ChildrenLinks)
+            .Include(r => r.ParentLink)
+            .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
+
+        // 2.1) Локальная функция для Location
+        async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation loc)
         {
-          dbLoc.Name = loc.Name;
-          dbLoc.Type = loc.Type;
-          dbLoc.RequestedDate = loc.RequestedDate;
-          return dbLoc;
+          var dbLoc = await context.YMSupplyRequestLocations
+              .Include(l => l.Address)
+              .FirstOrDefaultAsync(l => l.ServiceId == loc.ServiceId);
+
+          if (dbLoc != null)
+          {
+            dbLoc.Name = loc.Name;
+            dbLoc.Type = loc.Type;
+            dbLoc.RequestedDate = loc.RequestedDate;
+            return dbLoc;
+          }
+          else
+          {
+            if (loc.Address != null)
+              context.YMLocationAddresses.Add(loc.Address);
+
+            context.YMSupplyRequestLocations.Add(loc);
+            context.SaveChanges(); // чтобы получить loc.Id
+            return loc;
+          }
+        }
+
+        // 2.2) Локальная функция для Item (+ Counters + Price)
+        async Task<YMSupplyRequestItem> ResolveItemAsync(YMSupplyRequestItem item, YMSupplyRequest parent)
+        {
+          var dbItem = existing?.Items?
+              .FirstOrDefault(i => i.OfferId == item.OfferId);
+
+          if (dbItem != null)
+          {
+            dbItem.Name = item.Name;
+            if (dbItem.Price != null)
+            {
+              dbItem.Price.CurrencyId = item.Price.CurrencyId;
+              dbItem.Price.Value = item.Price.Value;
+            }
+            dbItem.Counters.DefectCount = item.Counters.DefectCount;
+            dbItem.Counters.FactCount = item.Counters.FactCount;
+            dbItem.Counters.PlanCount = item.Counters.PlanCount;
+            dbItem.Counters.ShortageCount = item.Counters.ShortageCount;
+            dbItem.Counters.SurplusCount = item.Counters.SurplusCount;
+            return dbItem;
+          }
+          else
+          {
+            item.SupplyRequest = parent;
+            context.YMSupplyRequestItems.Add(item);
+            return item;
+          }
+        }
+
+        // 3) Сохраняем заявку + вложенные Locations и Items
+        if (existing == null)
+        {
+          // Новая заявка
+          var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+          var transitLoc = incoming.TransitLocation != null
+              ? await ResolveLocationAsync(incoming.TransitLocation)
+              : null;
+
+          incoming.TargetLocation = targetLoc;
+          incoming.TargetLocationServiceId = targetLoc.ServiceId;
+
+          if (transitLoc != null)
+          {
+            incoming.TransitLocation = transitLoc;
+            incoming.TransitLocationServiceId = transitLoc.ServiceId;
+          }
+
+          if (incoming.Items != null)
+            foreach (var it in incoming.Items.ToList())
+              await ResolveItemAsync(it, incoming);
+
+          context.YMSupplyRequests.Add(incoming);
+          await context.SaveChangesAsync();  // чтобы получить incoming.Id
+          existing = incoming;
         }
         else
         {
+          // Обновление
+          existing.Status = incoming.Status;
+          existing.Subtype = incoming.Subtype;
+          existing.Type = incoming.Type;
+          existing.UpdatedAt = DateTime.UtcNow;
+
+          var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+          var transitLoc = incoming.TransitLocation != null
+              ? await ResolveLocationAsync(incoming.TransitLocation)
+              : null;
+
+          existing.TargetLocation = targetLoc;
+          existing.TargetLocationServiceId = targetLoc.ServiceId;
+
+          if (transitLoc != null)
+          {
+            existing.TransitLocation = transitLoc;
+            existing.TransitLocationServiceId = transitLoc.ServiceId;
+          }
+          else
+          {
+            existing.TransitLocation = null;
+            existing.TransitLocationServiceId = null;
+          }
+
+          if (incoming.Items != null)
+          {
+            // удаляем отсутствующие
+            var toRemove = existing.Items
+                .Where(i => !incoming.Items.Any(ii => ii.OfferId == i.OfferId))
+                .ToList();
+            context.YMSupplyRequestItems.RemoveRange(toRemove);
+
+            // добавляем/обновляем
+            foreach (var it in incoming.Items)
+              await ResolveItemAsync(it, existing);
+          }
+
+          await context.SaveChangesAsync();
+        }
+
+        // 4) Удаляем все старые ссылки — теперь это приведёт к физическому DELETE
+        var oldRefs = await context.YMSupplyRequestReferences
+            .Where(rf => rf.RequestId == existing.Id || rf.RelatedRequestId == existing.Id)
+            .ToListAsync();
+        context.YMSupplyRequestReferences.RemoveRange(oldRefs);
+        await context.SaveChangesAsync();
+
+        // 5) Локальная функция для добавления одной ссылки, пропуская отсутствующие
+        async Task AddReferenceAsync(YMSupplyRequestReference link, bool isParentLink)
+        {
+          var related = await context.YMSupplyRequests
+              .FirstOrDefaultAsync(r => r.ExternalIdId == link.YMSupplyRequestId!.Id);
+          if (related == null)
+            return; // пропускаем, чтобы не нарушить FK
+
+          if (isParentLink)
+          {
+            link.RequestId = related.Id;
+            link.RelatedRequestId = existing.Id;
+          }
+          else
+          {
+            link.RequestId = existing.Id;
+            link.RelatedRequestId = related.Id;
+          }
+          context.YMSupplyRequestReferences.Add(link);
+        }
+
+        // 6) Добавляем новые ссылки
+        if (incoming.ChildrenLinks != null)
+          foreach (var link in incoming.ChildrenLinks)
+            await AddReferenceAsync(link, isParentLink: false);
+
+        if (incoming.ParentLink != null)
+          await AddReferenceAsync(incoming.ParentLink, isParentLink: true);
+
+        await context.SaveChangesAsync();
+
+        // 7) Возвращаем полностью загруженную заявку
+        return await context.YMSupplyRequests
+            .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+            .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+            .Include(r => r.Items).ThenInclude(i => i.Price)
+            .Include(r => r.Items).ThenInclude(i => i.Counters)
+            .Include(r => r.ChildrenLinks)
+            .Include(r => r.ParentLink)
+            .FirstAsync(r => r.Id == existing.Id);
+      }
+      catch (Exception exc)
+      {
+        string message = $"Ошибка при добавлении или обновлении заявки: {exc.Message}\n{exc.InnerException?.Message}";
+        await Extensions.SendDebugMessage(message);
+        throw;
+      }
+    }
+
+    /// <summary>
+    /// Добавление или обновление заявки в БД на поставку.
+    /// </summary>
+    public async Task<YMSupplyRequest> AddOrUpdateSupplyRequestAsync(
+        YMSupplyRequest incoming)
+    {
+      try
+      {
+        // Используем DI-контекст или стандартную конфигурацию
+        using var context = new ApplicationDbContext(
+            new DbContextOptions<ApplicationDbContext>());
+
+        // 1) Подгружаем существующую заявку со всеми нужными зависимостями
+        var existing = await context.YMSupplyRequests
+            .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+            .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+            .Include(r => r.Items).ThenInclude(i => i.Price)
+            .Include(r => r.Items).ThenInclude(i => i.Counters)
+            //.Include(r => r.ChildrenLinks)
+            //.Include(r => r.ParentLink)
+            .Include(r => r.ExternalId)
+            .FirstOrDefaultAsync(r => r.ExternalIdId == incoming.ExternalId.Id);
+
+        // Локальные функции для разрешения вложенных сущностей
+        async Task<YMSupplyRequestLocation> ResolveLocationAsync(YMSupplyRequestLocation loc)
+        {
+          var found = await context.YMSupplyRequestLocations
+              .Include(l => l.Address)
+              .FirstOrDefaultAsync(l => l.ServiceId == loc.ServiceId);
+
+          if (found != null)
+          {
+            // Обновляем существующую запись
+            found.Name = loc.Name;
+            found.Type = loc.Type;
+            found.RequestedDate = loc.RequestedDate;
+            return found;
+          }
+
+          // Новая локация
           if (loc.Address != null)
             context.YMLocationAddresses.Add(loc.Address);
 
           context.YMSupplyRequestLocations.Add(loc);
+          await context.SaveChangesAsync(); // чтобы получить loc.Id
           return loc;
         }
-      }
 
-      // 2.2) Локальная функция для Item (+ Counters + Price)
-      async Task<YMSupplyRequestItem> ResolveItemAsync(YMSupplyRequestItem item, YMSupplyRequest parent)
-      {
-        var dbItem = existing?.Items?
-            .FirstOrDefault(i => i.OfferId == item.OfferId);
-
-        if (dbItem != null)
+        async Task<YMSupplyRequestItem> ResolveItemAsync(YMSupplyRequestItem item, YMSupplyRequest parent)
         {
-          dbItem.Name = item.Name;
-          if (dbItem.Price != null)
+          var found = existing?.Items
+              .FirstOrDefault(i => i.OfferId == item.OfferId);
+
+          if (found != null)
           {
-            dbItem.Price.CurrencyId = item.Price.CurrencyId;
-            dbItem.Price.Value = item.Price.Value;
+            // Обновляем поля
+            found.Name = item.Name;
+            if (found.Price != null && item.Price != null)
+            {
+              found.Price.CurrencyId = item.Price.CurrencyId;
+              found.Price.Value = item.Price.Value;
+            }
+            found.Counters.DefectCount = item.Counters.DefectCount;
+            found.Counters.FactCount = item.Counters.FactCount;
+            found.Counters.PlanCount = item.Counters.PlanCount;
+            found.Counters.ShortageCount = item.Counters.ShortageCount;
+            found.Counters.SurplusCount = item.Counters.SurplusCount;
+            return found;
           }
-          dbItem.Counters.DefectCount = item.Counters.DefectCount;
-          dbItem.Counters.FactCount = item.Counters.FactCount;
-          dbItem.Counters.PlanCount = item.Counters.PlanCount;
-          dbItem.Counters.ShortageCount = item.Counters.ShortageCount;
-          dbItem.Counters.SurplusCount = item.Counters.SurplusCount;
-          return dbItem;
-        }
-        else
-        {
+
+          // Новый элемент
           item.SupplyRequest = parent;
           context.YMSupplyRequestItems.Add(item);
           return item;
         }
-      }
 
-      // 3) Сохраняем заявку + вложенные Locations и Items
-      if (existing == null)
-      {
-        // Новая заявка
-        var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
-        var transitLoc = incoming.TransitLocation != null
-            ? await ResolveLocationAsync(incoming.TransitLocation)
-            : null;
-
-        incoming.TargetLocation = targetLoc;
-        incoming.TargetLocationServiceId = targetLoc.ServiceId;
-
-        if (transitLoc != null)
+        // 2) Добавление или обновление самой заявки
+        if (existing == null)
         {
-          incoming.TransitLocation = transitLoc;
-          incoming.TransitLocationServiceId = transitLoc.ServiceId;
-        }
+          // Новая заявка
+          var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+          var transitLoc = incoming.TransitLocation != null
+              ? await ResolveLocationAsync(incoming.TransitLocation)
+              : null;
 
-        if (incoming.Items != null)
-          foreach (var it in incoming.Items.ToList())
-            await ResolveItemAsync(it, incoming);
+          incoming.TargetLocation = targetLoc;
+          incoming.TargetLocationServiceId = targetLoc.ServiceId;
+          if (transitLoc != null)
+          {
+            incoming.TransitLocation = transitLoc;
+            incoming.TransitLocationServiceId = transitLoc.ServiceId;
+          }
 
-        context.YMSupplyRequests.Add(incoming);
-        await context.SaveChangesAsync();  // чтобы получить incoming.Id
-        existing = incoming;
-      }
-      else
-      {
-        // Обновление
-        existing.Status = incoming.Status;
-        existing.Subtype = incoming.Subtype;
-        existing.Type = incoming.Type;
-        existing.UpdatedAt = DateTime.UtcNow;
+          if (incoming.Items != null)
+            foreach (var it in incoming.Items.ToList())
+              await ResolveItemAsync(it, incoming);
 
-        var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
-        var transitLoc = incoming.TransitLocation != null
-            ? await ResolveLocationAsync(incoming.TransitLocation)
-            : null;
-
-        existing.TargetLocation = targetLoc;
-        existing.TargetLocationServiceId = targetLoc.ServiceId;
-
-        if (transitLoc != null)
-        {
-          existing.TransitLocation = transitLoc;
-          existing.TransitLocationServiceId = transitLoc.ServiceId;
+          context.YMSupplyRequests.Add(incoming);
+          await context.SaveChangesAsync();  // получаем incoming.Id
+          existing = incoming;
         }
         else
         {
-          existing.TransitLocation = null;
-          existing.TransitLocationServiceId = null;
+
+         // context.Entry(existing).CurrentValues.SetValues(incoming);
+
+          //// Обновление заявки
+          //existing.Status = incoming.Status;
+          //existing.Subtype = incoming.Subtype;
+          //existing.Type = incoming.Type;
+          //existing.UpdatedAt = DateTime.UtcNow;
+
+          //var targetLoc = await ResolveLocationAsync(incoming.TargetLocation);
+          //var transitLoc = incoming.TransitLocation != null
+          //    ? await ResolveLocationAsync(incoming.TransitLocation)
+          //    : null;
+
+          //existing.TargetLocation = targetLoc;
+          //existing.TargetLocationServiceId = targetLoc.ServiceId;
+          //if (transitLoc != null)
+          //{
+          //  existing.TransitLocation = transitLoc;
+          //  existing.TransitLocationServiceId = transitLoc.ServiceId;
+          //}
+          //else
+          //{
+          //  existing.TransitLocation = null;
+          //  existing.TransitLocationServiceId = null;
+          //}
+
+          //if (incoming.Items != null)
+          //{
+          //  // Удаляем отсутствующие элементы
+          //  var toRemove = existing.Items
+          //      .Where(i => !incoming.Items.Any(ii => ii.OfferId == i.OfferId))
+          //      .ToList();
+          //  context.YMSupplyRequestItems.RemoveRange(toRemove);
+
+          //  // Добавляем или обновляем
+          //  foreach (var it in incoming.Items)
+          //    await ResolveItemAsync(it, existing);
+          //}
+
+       //   await context.SaveChangesAsync();
         }
 
-        if (incoming.Items != null)
+        // 3) Обновляем связи между заявками (Parent / Children)
+        // Сначала удаляем старые
+        var oldRefs = await context.YMSupplyRequestReferences
+            .Where(rf => rf.RequestId == existing.Id || rf.RelatedRequestId == existing.Id)
+            .ToListAsync();
+        context.YMSupplyRequestReferences.RemoveRange(oldRefs);
+        await context.SaveChangesAsync();
+
+        // Затем добавляем новые, используя только первичные ключи
+        // Дочерние ссылки
+        if (incoming.ChildrenLinks != null)
         {
-          // удаляем отсутствующие
-          var toRemove = existing.Items
-              .Where(i => !incoming.Items.Any(ii => ii.OfferId == i.OfferId))
-              .ToList();
-          context.YMSupplyRequestItems.RemoveRange(toRemove);
+          foreach (var link in incoming.ChildrenLinks)
+          {
+            // Предполагается, что в link хранится ExternalId связанной заявки
+            var childExtId = link.YMSupplyRequestId?.Id;
+            if (childExtId == null) continue;
 
-          // добавляем/обновляем
-          foreach (var it in incoming.Items)
-            await ResolveItemAsync(it, existing);
+            var child = await context.YMSupplyRequests
+                .FirstOrDefaultAsync(r => r.ExternalIdId == childExtId.Value);
+            if (child == null) continue;
+
+            // Добавляем новую ссылку
+            context.YMSupplyRequestReferences.Add(new YMSupplyRequestReference
+            {
+              RequestId = existing.Id,
+              RelatedRequestId = child.Id
+            });
+          }
         }
+
+        // Родительская ссылка
+        //if (incoming.ParentLink != null)
+        //{
+        //  var parentExtId = incoming.ParentLink.YMSupplyRequestId?.Id;
+        //  if (parentExtId != null)
+        //  {
+        //    var parent = await context.YMSupplyRequests
+        //        .FirstOrDefaultAsync(r => r.ExternalIdId == parentExtId.Value);
+        //    if (parent != null)
+        //    {
+        //      context.YMSupplyRequestReferences.Add(new YMSupplyRequestReference
+        //      {
+        //        RequestId = parent.Id,
+        //        RelatedRequestId = existing.Id
+        //      });
+        //    }
+        //  }
+        //}
 
         await context.SaveChangesAsync();
+
+        // 4) Возвращаем полностью загруженную заявку
+        return await context.YMSupplyRequests
+            .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
+            .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
+            .Include(r => r.Items).ThenInclude(i => i.Price)
+            .Include(r => r.Items).ThenInclude(i => i.Counters)
+            //.Include(r => r.ChildrenLinks)
+            //.Include(r => r.ParentLink)
+            .FirstAsync(r => r.Id == existing.Id);
       }
-
-      // 4) Удаляем все старые ссылки — теперь это приведёт к физическому DELETE
-      var oldRefs = await context.YMSupplyRequestReferences
-          .Where(rf => rf.RequestId == existing.Id || rf.RelatedRequestId == existing.Id)
-          .ToListAsync();
-      context.YMSupplyRequestReferences.RemoveRange(oldRefs);
-      await context.SaveChangesAsync();
-
-
-      // 5) Локальная функция для добавления одной ссылки, пропуская отсутствующие
-      async Task AddReferenceAsync(YMSupplyRequestReference link, bool isParentLink)
+      catch (Exception exc)
       {
-        var related = await context.YMSupplyRequests
-            .FirstOrDefaultAsync(r => r.ExternalIdId == link.YMSupplyRequestId!.Id);
-        if (related == null)
-          return; // пропускаем, чтобы не нарушить FK
-
-        if (isParentLink)
-        {
-          link.RequestId = related.Id;
-          link.RelatedRequestId = existing.Id;
-        }
-        else
-        {
-          link.RequestId = existing.Id;
-          link.RelatedRequestId = related.Id;
-        }
-        context.YMSupplyRequestReferences.Add(link);
+        var msg = $"Ошибка при добавлении или обновлении заявки: {exc.Message}\n{exc.InnerException?.Message}";
+        await Extensions.SendDebugMessage(msg);
+        throw;
       }
-
-      // 6) Добавляем новые ссылки
-      if (incoming.ChildrenLinks != null)
-        foreach (var link in incoming.ChildrenLinks)
-          await AddReferenceAsync(link, isParentLink: false);
-
-      if (incoming.ParentLink != null)
-        await AddReferenceAsync(incoming.ParentLink, isParentLink: true);
-
-      await context.SaveChangesAsync();
-
-      // 7) Возвращаем полностью загруженную заявку
-      return await context.YMSupplyRequests
-          .Include(r => r.TargetLocation).ThenInclude(l => l.Address)
-          .Include(r => r.TransitLocation).ThenInclude(l => l.Address)
-          .Include(r => r.Items).ThenInclude(i => i.Price)
-          .Include(r => r.Items).ThenInclude(i => i.Counters)
-          .Include(r => r.ChildrenLinks)
-          .Include(r => r.ParentLink)
-          .FirstAsync(r => r.Id == existing.Id);
     }
 
     /// <summary>

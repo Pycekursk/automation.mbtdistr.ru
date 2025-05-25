@@ -77,11 +77,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     // ─── Виртуальные связи (не сохраняются) ────────────
 
     [JsonProperty("childrenLinks")]
-    [Display(Name = "Ссылки на дочерние заявки"), InverseProperty(nameof(YMSupplyRequestReference.Request))]
+    [Display(Name = "Ссылки на дочерние заявки"), InverseProperty(nameof(YMSupplyRequestReference.Request)), NotMapped, DataGrid(false)]
     public List<YMSupplyRequestReference>? ChildrenLinks { get; set; }
 
     [JsonProperty("parentLink")]
-    [Display(Name = "Ссылка на родительскую заявку"), InverseProperty(nameof(YMSupplyRequestReference.RelatedRequest))]
+    [Display(Name = "Ссылка на родительскую заявку"), InverseProperty(nameof(YMSupplyRequestReference.RelatedRequest)), NotMapped, DataGrid(false)]
     public YMSupplyRequestReference? ParentLink { get; set; }
   }
 }
