@@ -121,6 +121,20 @@
                .ToList();
     }
 
+    public async Task GetSupplyRequests(Cabinet cabinet, int limit = 500)
+    {
+      var body = new
+      {
+        limit
+      };
+      var response = await _ozonSellerApiHttpClient.SendRequestAsync(MarketApiRequestType.SupplyRequests, cabinet, body);
+      response.EnsureSuccessStatusCode();
+      var json = await response.Content.ReadAsStringAsync();
+      _logger.LogInformation("Supplies: {json}", json);
+
+
+    }
+
     #region ProductInfoDTOs
 
     private class ProductListResponse

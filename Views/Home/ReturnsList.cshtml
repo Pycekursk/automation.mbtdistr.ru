@@ -92,6 +92,14 @@ Html.DevExtreme().DataGrid<Return>()
                 .CalculateCellValue(@"function(data) { return data.Cabinet ? data.Cabinet.Name +'\n'+ data.Cabinet.Marketplace : ''; }").AllowFiltering(true)
 .AllowSorting(false);
           }
+          else if (col.Field == "Storage")
+          {
+            column = columnsBuilder.Add()
+            .Caption(col.Caption)
+            .CssClass("wrap-text-cell")
+            .CalculateCellValue(@"function(data) { return data.Storage ? data.Storage.ArrivedDate +'\n'+ data.Storage.UtilizationForecastDate : ''; }")
+            .AllowFiltering(true);
+          }
           else
           {
             column = columnsBuilder.Add()
@@ -196,11 +204,8 @@ Html.DevExtreme().DataGrid<Return>()
     // создаём список
     var $ul = $("<ul>").css({ paddingLeft: "1em", margin: 0 });
     products.forEach(function(p, i) {
-      var $li = $("<li>").css("margin-bottom", "0.5em");
+      var $li = $("<li>").css("margin-bottom", "0.5em").css("list-style", "none");
       $li.text((i + 1) + ". " + p.Name + " (" + p.OfferId + ")");
-
-      console.log(p.Images, p.images);
-
       // если есть изображения — добавляем кнопку
       if (p.Images && p.Images.length) {
         var button = $("<div>").dxButton({
@@ -285,7 +290,8 @@ Html.DevExtreme().DataGrid<Return>()
       flex: 0 0 auto;
       max-height: 200px;
     }
-    .fancybox__container {
-        z-index:99999;
-    }
+
+  .fancybox__container {
+    z-index: 99999;
+  }
 </style>

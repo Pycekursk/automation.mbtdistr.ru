@@ -353,10 +353,10 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     {
       try
       {
-        var query = new Dictionary<string, object>();
-        query.Add("limit", limit);
-        if (!string.IsNullOrEmpty(pageToken))
-          query.Add("page_token", pageToken);
+        //var query = new Dictionary<string, object>();
+        //query.Add("limit", limit);
+        //if (!string.IsNullOrEmpty(pageToken))
+        //  query.Add("page_token", pageToken);
 
         var response = await _yMApiHttpClient.SendRequestAsync(
             MarketApiRequestType.SupplyItems,
@@ -365,7 +365,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
             {
               RequestId = requestId
             },
-            query: query,
+            //query: query,
             pathParams: new Dictionary<string, object>
             {
                         { "campaignId", campaign.Id }
@@ -745,7 +745,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         else
         {
 
-         // context.Entry(existing).CurrentValues.SetValues(incoming);
+          // context.Entry(existing).CurrentValues.SetValues(incoming);
 
           //// Обновление заявки
           //existing.Status = incoming.Status;
@@ -784,7 +784,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
           //    await ResolveItemAsync(it, existing);
           //}
 
-       //   await context.SaveChangesAsync();
+          //   await context.SaveChangesAsync();
         }
 
         // 3) Обновляем связи между заявками (Parent / Children)
@@ -797,26 +797,26 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
         // Затем добавляем новые, используя только первичные ключи
         // Дочерние ссылки
-        if (incoming.ChildrenLinks != null)
-        {
-          foreach (var link in incoming.ChildrenLinks)
-          {
-            // Предполагается, что в link хранится ExternalId связанной заявки
-            var childExtId = link.YMSupplyRequestId?.Id;
-            if (childExtId == null) continue;
+        //if (incoming.ChildrenLinks != null)
+        //{
+        //  foreach (var link in incoming.ChildrenLinks)
+        //  {
+        //    // Предполагается, что в link хранится ExternalId связанной заявки
+        //    var childExtId = link.YMSupplyRequestId?.Id;
+        //    if (childExtId == null) continue;
 
-            var child = await context.YMSupplyRequests
-                .FirstOrDefaultAsync(r => r.ExternalIdId == childExtId.Value);
-            if (child == null) continue;
+        //    var child = await context.YMSupplyRequests
+        //        .FirstOrDefaultAsync(r => r.ExternalIdId == childExtId.Value);
+        //    if (child == null) continue;
 
-            // Добавляем новую ссылку
-            context.YMSupplyRequestReferences.Add(new YMSupplyRequestReference
-            {
-              RequestId = existing.Id,
-              RelatedRequestId = child.Id
-            });
-          }
-        }
+        //    // Добавляем новую ссылку
+        //    context.YMSupplyRequestReferences.Add(new YMSupplyRequestReference
+        //    {
+        //      RequestId = existing.Id,
+        //      RelatedRequestId = child.Id
+        //    });
+        //  }
+        //}
 
         // Родительская ссылка
         //if (incoming.ParentLink != null)
@@ -957,6 +957,43 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
 
     #endregion
 
+
+    #region Orders
+
+    public async Task<YMOrder> GetOrderInfo(YMCampaign campaign, long orderId)
+    {
+      try
+      {
+        var response = await _yMApiHttpClient.SendRequestAsync(
+            MarketApiRequestType.OrderInfo,
+            null,
+            query: new Dictionary<string, object>
+            {
+              { "orderId", orderId }
+            },
+            pathParams: new Dictionary<string, object>
+            {
+              { "campaignId", campaign.Id }
+            });
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var order = JsonConvert.DeserializeObject<YMOrder>(json, new JsonSerializerSettings
+        {
+          StringEscapeHandling = StringEscapeHandling.Default,
+          Culture = System.Globalization.CultureInfo.CurrentCulture,
+          Converters = { new StringEnumConverter() }
+        });
+        return order;
+      }
+      catch (Exception ex)
+      {
+        await SendDebugMessage($"Ошибка получения информации о заказе: {ex.Message}");
+        return null;
+      }
+
+    }
+
+    #endregion
   }
 
 

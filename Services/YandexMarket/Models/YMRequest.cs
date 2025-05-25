@@ -14,8 +14,9 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     /// </summary>
     [Display(Name = "Идентификатор заявки")]
     [JsonProperty("requestId")]
+    [System.Text.Json.Serialization.JsonPropertyName("requestId")]
     [Required]
     public long RequestId { get; set; }
   }
-  
+
 }

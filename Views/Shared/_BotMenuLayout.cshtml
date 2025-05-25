@@ -16,21 +16,28 @@
   <script src="~/js/devextreme/polyfill.min.js"></script>
   <script src="~/js/devextreme/exceljs.js"></script>
   <script src="~/js/devextreme/jszip.js"></script>
-  @* <script src="~/js/devextreme/jspdf.umd.js"></script> *@
-
+ 
   <script type="text/javascript" src="~/js/devextreme/dx.all.js"></script>
 
   <script src="~/js/devextreme/aspnet/dx.aspnet.data.js"></script>
   <script src="~/js/devextreme/aspnet/dx.aspnet.mvc.js"></script>
 
   <script src="~/js/devextreme/localization/dx.messages.ru.js"></script>
-
+  <link rel="manifest" href="/manifest.json" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <script src="~/lib/fancybox/fancybox.js"></script>
   <link rel="stylesheet" href="~/lib/fancybox/fancybox.css" />
 
-
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(reg => console.log('ServiceWorker зарегистрирован: ', reg))
+        .catch(err => console.error('Ошибка регистрации ServiceWorker:', err));
+    });
+  }
+</script>
   <script>
           // Синхронные ошибки
     window.onerror = function (message, source, lineno, colno, error) {
@@ -94,7 +101,7 @@
     });
      const tg = window.Telegram.WebApp;
     tg.ready();
-
+    tg.expand();
     const userId = tg.initDataUnsafe?.user?.id;
 
   </script>

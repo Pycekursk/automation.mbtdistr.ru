@@ -233,6 +233,12 @@ namespace automation.mbtdistr.ru.Services
               .Select(c => SyncYandexMarketSupplies(c))
       );
 
+      await Task.WhenAll(
+          cabinets
+              .Where(c => c.Marketplace.ToUpper() == "OZON")
+              .Select(c => SyncOzonSupplies(c))
+      );
+
 
       // OZON products sync (без возвратов)
       await Task.WhenAll(
@@ -432,15 +438,26 @@ namespace automation.mbtdistr.ru.Services
       var _campaigns = await _ymSvc.GetCampaignsAsync(cabinet);
       foreach (var camp in _campaigns.Campaigns)
       {
+        if (camp.PlacementType == "FBS")
+          continue; // Пропускаем FBS кампании, т.к. поставки для них не актуальны
         var supplies = await _ymSvc.GetSupplyRequests(cabinet, camp);
         if (supplies?.Result?.Items?.Count > 0)
         {
           foreach (var supple in supplies.Result.Items)
           {
-            var suppleItems = await _ymSvc.GetSupplyRequestItemsAsync(cabinet, camp, supple.ExternalId?.Id ?? 0);
-            supple.Items = suppleItems?.Result?.Items;
-            supple.CabinetId = cabinet.Id;
-            var dbsupple = await _ymSvc.AddOrUpdateSupplyRequestAsync(supple);
+            try
+            {
+              var suppleItems = await _ymSvc.GetSupplyRequestItemsAsync(cabinet, camp, supple.ExternalId?.Id ?? 0);
+              supple.Items = suppleItems?.Result?.Items;
+              supple.CabinetId = cabinet.Id;
+              var dbsupple = await _ymSvc.AddOrUpdateSupplyRequestAsync(supple);
+            }
+            catch (Exception exc)
+            {
+              var message = $"Ошибка при синхронизации поставки {supple.Id} для кабинета {cabinet.Name} ({cabinet.Marketplace})\n{exc.Message}\n{exc.InnerException?.Message}\n{exc.StackTrace}";
+              await Extensions.SendDebugMessage(message);
+            }
+
           }
         }
       }
@@ -521,6 +538,74 @@ namespace automation.mbtdistr.ru.Services
       }
       return returns;
     }
+
+    private async Task SyncOzonSupplies(Cabinet cabinet)
+    {
+      await _ozSvc!.GetSupplyRequests(cabinet);
+      //if (supplies?.Count > 0)
+      //{
+      //  using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+      //  foreach (var supply in supplies)
+      //  {
+      //    try
+      //    {
+      //      var dbSupply = await db.Supplies
+      //          .Include(s => s.Items)
+      //          .FirstOrDefaultAsync(s => s.SupplyId == supply.Id && s.CabinetId == cabinet.Id);
+      //      if (dbSupply != null)
+      //      {
+      //        // Обновляем существующую поставку
+      //        dbSupply.Status = supply.Status;
+      //        dbSupply.ChangedAt = DateTime.UtcNow;
+      //        // Обновляем товары в поставке
+      //        foreach (var item in supply.Items)
+      //        {
+      //          var dbItem = dbSupply.Items.FirstOrDefault(i => i.ProductId == item.ProductId);
+      //          if (dbItem != null)
+      //          {
+      //            dbItem.Quantity = item.Quantity;
+      //          }
+      //          else
+      //          {
+      //            dbSupply.Items.Add(new SupplyItem
+      //            {
+      //              ProductId = item.ProductId,
+      //              Quantity = item.Quantity
+      //            });
+      //          }
+      //        }
+      //      }
+      //      else
+      //      {
+      //        // Добавляем новую поставку
+      //        dbSupply = new Supply
+      //        {
+      //          SupplyId = supply.Id,
+      //          CabinetId = cabinet.Id,
+      //          Status = supply.Status,
+      //          CreatedAt = DateTime.UtcNow,
+      //          ChangedAt = DateTime.UtcNow,
+      //          Items = supply.Items.Select(i => new SupplyItem
+      //          {
+      //            ProductId = i.ProductId,
+      //            Quantity = i.Quantity
+      //          }).ToList()
+      //        };
+      //        db.Supplies.Add(dbSupply);
+      //      }
+      //    }
+      //    catch (Exception exc)
+      //    {
+      //      await Extensions.SendDebugObject(
+      //          supply,
+      //          $"Ошибка синхронизации поставки {supply.Id} для кабинета {cabinet.Name} ({cabinet.Marketplace}):\n" +
+      //          $"{exc.Message}\n{exc.InnerException?.Message}");
+      //    }
+      //  }
+      //  await db.SaveChangesAsync();
+      //}
+    }
+
     #region === обработка товаров OZON (остался ваш метод) ===
 
     /// <summary>
@@ -822,6 +907,10 @@ namespace automation.mbtdistr.ru.Services
           {
             // Новый возврат — добавляем целиком
             db.Returns.Add(ret);
+
+            await db.SaveChangesAsync();
+
+            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cabinet.Id, ret, null));
           }
           else
           {
@@ -831,9 +920,13 @@ namespace automation.mbtdistr.ru.Services
             // Копируем все поля из ret в существующую сущность,
             // включая ChangedAt, Status и т.п.
             db.Entry(exists).CurrentValues.SetValues(ret);
+
+            await db.SaveChangesAsync();
+
+            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cabinet.Id, ret, null));
           }
         }
-        await db.SaveChangesAsync();
+
       }
       catch (Exception exc)
       {
@@ -849,8 +942,6 @@ namespace automation.mbtdistr.ru.Services
     #region === обработчики событий возвратов и поставок ===
     private async void OnReturnStatusChanged(ReturnStatusChangedEventArgs e)
     {
-      //if (e.ApiDTO != null)
-      //  await Extensions.SendDebugObject(e.ApiDTO, $"Обьект возврата: {e.Return.Id}");
       using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
       var workers = context.Cabinets
         .Include(c => c.AssignedWorkers)
@@ -858,9 +949,12 @@ namespace automation.mbtdistr.ru.Services
         .FirstOrDefault(c => c.Id == e.CabinetId)?.AssignedWorkers;
       if (workers == null)
         return;
+
+      e.Message ??= FormatReturnHtmlMessage(e.Return, e.Return.CreatedAt == e.Return.ChangedAt ? true : false);
+
       if (Program.Environment.IsDevelopment())
       {
-        // await _botClient.SendMessage("1406950293", e.Message, ParseMode.Html);
+        await _botClient.SendMessage("1406950293", e.Message, ParseMode.Html);
         return;
       }
       foreach (var worker in workers)
@@ -893,18 +987,18 @@ namespace automation.mbtdistr.ru.Services
     #endregion
 
     #region === форматирование сообщений для возвратов и поставок ===
-    public static string FormatReturnHtmlMessage(Return x, Cabinet cab, bool? isNew, ReturnStatus? oldStatus = null)
+    public static string FormatReturnHtmlMessage(Return x, bool? isNew, ReturnStatus? oldStatus = null)
     {
       var sb = new StringBuilder();
       // Реализация аналогичная с FormatReturnHtmlContent за исключением того, что здесь вместо <br> используется StringBuilder.AppendLine(" ")
       if (isNew.HasValue && isNew.Value)
       {
-        sb.AppendLine($"<b>Новый возврат в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine($"<b>Новый возврат в {x.Cabinet.Marketplace.ToUpper()} / {x.Cabinet.Name}</b>");
         sb.AppendLine(" ");
       }
       else if (isNew.HasValue && !isNew.Value)
       {
-        sb.AppendLine($"<b>Обновление возврата в {cab.Marketplace.ToUpper()} / {cab.Name}</b>");
+        sb.AppendLine($"<b>Обновление возврата в {x.Cabinet.Marketplace.ToUpper()} / {x.Cabinet.Name}</b>");
         sb.AppendLine(" ");
       }
       sb.AppendLine($"<b>Схема:</b> {x.Scheme}");

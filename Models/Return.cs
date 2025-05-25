@@ -157,6 +157,7 @@ namespace automation.mbtdistr.ru.Models
     /// </summary>
     [JsonProperty("active")]
     [Display(Name = "Активный")]
+    [DataGrid(false)]
     public bool Active { get; set; } = true;
 
     /// <summary>

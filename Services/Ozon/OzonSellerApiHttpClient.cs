@@ -24,6 +24,8 @@
                   new EndpointDefinition("/v3/product/list", HttpMethod.Post) },
                 { MarketApiRequestType.ProductInfo,
                   new EndpointDefinition("/v3/product/info/list", HttpMethod.Post) },
+                { MarketApiRequestType.SupplyRequests,
+                  new EndpointDefinition("/v1/return/giveout/list", HttpMethod.Post) }
       };
 
     public OzonSellerApiHttpClient()
@@ -82,6 +84,6 @@
     }
 
 
-  
+
   }
 }

@@ -1,0 +1,21 @@
+{
+  "name": "МБТ Дистрибуция",
+  "short_name": "МБТ",
+  "start_url": "/BotMenu",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "description": "Мобильное приложение для управления дистрибуцией МБТ",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

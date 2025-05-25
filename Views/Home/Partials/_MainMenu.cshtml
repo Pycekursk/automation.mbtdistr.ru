@@ -1,0 +1,17 @@
+﻿@model automation.mbtdistr.ru.Models.MainMenuModel
+
+@if (Model?.Buttons != null && Model.Buttons.Any())
+{
+  <div class="widget-container">
+    <div id="menu" class="widget-wrapper widget-wrapper-horizontal">
+      @(Html.DevExtreme().Tabs()
+          .ID("withIconAndText")
+          .Width("auto")
+          .SelectedIndex(Model?.Selected?.Id != null ? Model.Selected.Id : 0)
+          .DataSource(Model?.Buttons)
+          .StylingMode(TabsStyle.Secondary)
+          .IconPosition(TabsIconPosition.Top)
+          )
+    </div>
+  </div>
+})
