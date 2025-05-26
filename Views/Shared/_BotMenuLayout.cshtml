@@ -16,66 +16,72 @@
   <script src="~/js/devextreme/polyfill.min.js"></script>
   <script src="~/js/devextreme/exceljs.js"></script>
   <script src="~/js/devextreme/jszip.js"></script>
- 
+
   <script type="text/javascript" src="~/js/devextreme/dx.all.js"></script>
 
   <script src="~/js/devextreme/aspnet/dx.aspnet.data.js"></script>
   <script src="~/js/devextreme/aspnet/dx.aspnet.mvc.js"></script>
-
   <script src="~/js/devextreme/localization/dx.messages.ru.js"></script>
+
   <link rel="manifest" href="/manifest.json" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <script src="~/lib/fancybox/fancybox.js"></script>
   <link rel="stylesheet" href="~/lib/fancybox/fancybox.css" />
 
+  <script src="~/js/swipe.js" asp-append-version="true"></script>
+
   <script>
-  if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(reg => console.log('ServiceWorker зарегистрирован: ', reg))
-        .catch(err => console.error('Ошибка регистрации ServiceWorker:', err));
+    navigator.serviceWorker.register('/service-worker.js')
+    .then(reg => console.log('ServiceWorker зарегистрирован: ', reg))
+    .catch(err => console.error('Ошибка регистрации ServiceWorker:', err));
     });
-  }
-</script>
-  <script>
-          // Синхронные ошибки
+    }
+    // Синхронные ошибки
     window.onerror = function (message, source, lineno, colno, error) {
-      alert(`Ошибка: ${message}\nФайл: ${source}\nСтрока: ${lineno}:${colno}`);
+    alert(`Ошибка: ${message}\nФайл: ${source}\nСтрока: ${lineno}:${colno}`);
     };
 
     // Ошибки в промисах без .catch()
     window.addEventListener("unhandledrejection", function (event) {
-      alert(`Ошибка в промисе: ${event.reason}`);
+    alert(`Ошибка в промисе: ${event.reason}`);
     });
 
-        // Целевой селектор
+    // Целевой селектор
     const targetSelector = 'dx-license';
 
     // Функция для поиска второго вложенного элемента
     function handleDxLicenseAppeared(licenseElement) {
-        const children = licenseElement.children;
-        if (children.length >= 2) {
-            const secondChild = children[1];
-            secondChild.click();
-        }
+    const children = licenseElement.children;
+    if (children.length >= 2) {
+    const secondChild = children[1];
+    secondChild.click();
+    }
     }
 
     const observer = new MutationObserver((mutations, obs) => {
-        const licenseElement = document.querySelector(targetSelector);
-        if (licenseElement) {
-            handleDxLicenseAppeared(licenseElement);
-            obs.disconnect(); // Отключаем наблюдатель после нахождения
-        }
+    const licenseElement = document.querySelector(targetSelector);
+    if (licenseElement) {
+    handleDxLicenseAppeared(licenseElement);
+    obs.disconnect(); // Отключаем наблюдатель после нахождения
+    }
     });
-
-
-          DevExpress.localization.locale('ru');
-
-
-
+    DevExpress.localization.locale('ru');
   </script>
   <style>
+
+    body {
+      height: 100vh;
+    }
+
+    .widget-container {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+    }
+
     .menu-buttons {
       display: flex;
       justify-content: center;
@@ -91,78 +97,80 @@
       white-space: pre-wrap !important;
       word-wrap: break-word; /* переносит длинные слова */
     }
+
+    .dx-item.dx-tab {
+    padding-bottom: 14px;
+}
   </style>
 </head>
 <body class="dx-viewport">
   <script>
     observer.observe(document.body, {
-        childList: true,
-        subtree: true
+    childList: true,
+    subtree: true
     });
-     const tg = window.Telegram.WebApp;
+
+    const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
     const userId = tg.initDataUnsafe?.user?.id;
-
   </script>
   <div class="dx-viewport-inner">
-
     <script>
-
-
-
       function onExportingHandler(e) {
-          const workbook  = new ExcelJS.Workbook();
-          const worksheet = workbook.addWorksheet('Возвраты');
+      const workbook  = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Возвраты');
+      DevExpress.excelExporter.exportDataGrid({
+      component: e.component,
+      worksheet: worksheet,
+      topLeftCell: { row: 1, column: 1 }
+      }).then(() => {
+      return workbook.xlsx.writeBuffer();
+      }).then(buffer => {
+      // Собираем Blob и конвертим в base64
+      const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+      const reader = new FileReader();
+      reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      const fileName = defaultExportFileName + '.xlsx';
+      // Шлём на сервер
+      fetch('/api/TelegramBot/sendReturnsExcel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+      chatId:   userId,
+      fileName: fileName,
+      base64:   base64
+      })
+      }).then(resp => {
+      if (!resp.ok) alert('Ошибка отправки отчёта' + userId);
+      });
+      };
+      reader.readAsDataURL(blob);
+      });
 
-          DevExpress.excelExporter.exportDataGrid({
-              component: e.component,
-              worksheet: worksheet,
-              topLeftCell: { row: 1, column: 1 }
-          }).then(() => {
-              return workbook.xlsx.writeBuffer();
-          }).then(buffer => {
-              // Собираем Blob и конвертим в base64
-              const blob = new Blob([buffer], {
-                  type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              });
-              const reader = new FileReader();
-              reader.onload = () => {
-                  const base64 = reader.result.split(',')[1];
-                  const fileName = defaultExportFileName + '.xlsx';
-                  // Шлём на сервер
-                  fetch('/api/TelegramBot/sendReturnsExcel', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                  chatId:   userId,
-                          fileName: fileName,
-                          base64:   base64
-                      })
-                  }).then(resp => {
-                      if (!resp.ok) alert('Ошибка отправки отчёта' + userId);
-                  });
-              };
-              reader.readAsDataURL(blob);
-          });
-
-          // отменяем стандартный экспорт
-          e.cancel = true;
+      // отменяем стандартный экспорт
+      e.cancel = true;
       }
 
-      // Функция «Назад»
       function goBack() {
-          window.history.back();
+      window.history.back();
       }
     </script>
-
 
     <div class="container-fluid py-3">
       <main role="main">
         @RenderBody()
       </main>
     </div>
+    @if (ViewBag.MainMenuTabbar is MainMenuModel menu)
+    {
+      await Html.RenderPartialAsync("/Views/Home/Partials/_MainMenu.cshtml", menu);
 
+      //Html.Partial("/Views/Home/Partials/_MainMenu.cshtml", menu);
+    }
   </div>
 
   <script src="~/js/tgwebapp.js" asp-append-version="true"></script>

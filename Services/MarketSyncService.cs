@@ -82,6 +82,11 @@ namespace automation.mbtdistr.ru.Services
       public Models.Return Return { get; set; }
 
       /// <summary>
+      /// Предыдущий возврат, если есть (для сравнения изменений).
+      /// </summary>
+      public Models.Return? OldReturn { get; set; }
+
+      /// <summary>
       /// Сообщение для уведомления.
       /// </summary>
       public string Message { get; set; }
@@ -92,23 +97,18 @@ namespace automation.mbtdistr.ru.Services
       public int CabinetId { get; set; }
 
       /// <summary>
-      /// DTO-объект, полученный от API (опционально).
-      /// </summary>
-      public object? ApiDTO { get; set; }
-
-      /// <summary>
       /// Конструктор аргументов события изменения статуса возврата.
       /// </summary>
       /// <param name="cabinetId">Идентификатор кабинета</param>
       /// <param name="return">Объект возврата</param>
       /// <param name="message">Сообщение</param>
-      /// <param name="apiDTO">DTO-объект от API (опционально)</param>
-      public ReturnStatusChangedEventArgs(int cabinetId, Models.Return @return, string message, object? apiDTO = null)
+      /// <param name="oldReturn">Предыдущий возврат (опционально)</param>
+      public ReturnStatusChangedEventArgs(int cabinetId, Models.Return @return, string message, Return? oldReturn = null)
       {
         CabinetId = cabinetId;
         Return = @return;
         Message = message;
-        ApiDTO = apiDTO;
+        OldReturn = oldReturn;
       }
     }
 
@@ -176,10 +176,10 @@ namespace automation.mbtdistr.ru.Services
       MarketSyncService.ReturnStatusChanged += OnReturnStatusChanged;
       MarketSyncService.SupplyStatusChanged += OnSupplyStatusChanged;
 
-      if (Program.Environment.IsDevelopment())
-      {
-        SyncAllAsync(CancellationToken.None);
-      }
+      //if (Program.Environment.IsDevelopment())
+      //{
+      //  SyncAllAsync(CancellationToken.None);
+      //}
     }
 
     /// <summary>
@@ -901,7 +901,13 @@ namespace automation.mbtdistr.ru.Services
 
           // Ищем уже сохранённый возврат по внешнему ключу ReturnId
           var exists = await db.Returns
+            .Include(r => r.TargetWarehouse)
+            .ThenInclude(r => r.Address)
+            .Include(r => r.CurrentWarehouse)
+            .ThenInclude(r => r.Address)
               .FirstOrDefaultAsync(r => r.ReturnId == ret.ReturnId);
+
+
 
           if (exists == null)
           {
@@ -914,6 +920,8 @@ namespace automation.mbtdistr.ru.Services
           }
           else
           {
+            var existsCopy = exists;
+
             // Сохраняем PK из БД, чтобы не было конфликта
             ret.Id = exists.Id;
 
@@ -923,7 +931,7 @@ namespace automation.mbtdistr.ru.Services
 
             await db.SaveChangesAsync();
 
-            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cabinet.Id, ret, null));
+            ReturnStatusChanged?.Invoke(new ReturnStatusChangedEventArgs(cabinet.Id, ret, null, existsCopy));
           }
         }
 
@@ -961,6 +969,16 @@ namespace automation.mbtdistr.ru.Services
       {
         if (worker.NotificationOptions.IsReceiveNotification)
           await _botClient.SendMessage(worker.TelegramId, e.Message, ParseMode.Html);
+      }
+
+      if (e.OldReturn != null)
+      {
+        var obj = new
+        {
+          New = e.Return,
+          Old = e.OldReturn,
+        };
+        await Extensions.SendDebugObject<dynamic>(obj);
       }
     }
 

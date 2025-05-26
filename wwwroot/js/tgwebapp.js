@@ -54,8 +54,6 @@ if (!window.Telegram) {
     };
 }
 
-
-
 Telegram.WebApp.BackButton.show();
 Telegram.WebApp.BackButton.onClick(() => {
     window.history.back();

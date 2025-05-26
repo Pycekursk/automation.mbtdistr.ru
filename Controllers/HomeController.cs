@@ -184,6 +184,8 @@ namespace automation.mbtdistr.ru.Controllers
             }
           };
         }
+
+        ViewBag.MainMenuTabbar = MainMenuModel.Create(user);
       }
       else
       {

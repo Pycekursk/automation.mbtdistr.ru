@@ -6,7 +6,7 @@
     <div id="menu" class="widget-wrapper widget-wrapper-horizontal">
       @(Html.DevExtreme().Tabs()
           .ID("withIconAndText")
-          .Width("auto")
+          .Width("100%")
           .SelectedIndex(Model?.Selected?.Id != null ? Model.Selected.Id : 0)
           .DataSource(Model?.Buttons)
           .StylingMode(TabsStyle.Secondary)
@@ -14,4 +14,23 @@
           )
     </div>
   </div>
-})
+
+  <script>
+          $(function() {
+        var tabs = $("#withIconAndText").dxTabs("instance");
+        var disabledIndexes = [];
+    @foreach (var btn in Model!.Buttons.Select((b, i) => new { b.IsActive, Index = i }))
+    {
+      if (!btn.IsActive)
+      {
+        @:disabledIndexes.push(@btn.Index);
+      }
+    }
+
+        disabledIndexes.forEach(function(idx) {
+            tabs.option("items[" + idx + "].disabled", true);
+        });
+    });
+  </script>
+}
+
