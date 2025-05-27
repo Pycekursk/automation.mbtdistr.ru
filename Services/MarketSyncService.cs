@@ -400,46 +400,79 @@ namespace automation.mbtdistr.ru.Services
     /// </summary>
     /// <param name="cabinet"></param>
     /// <returns></returns>
+    /// <summary>
+    /// Синхронизирует возвраты из Yandex Market для заданного кабинета.
+    /// </summary>
+    /// <param name="cabinet">Объект кабинета с данными авторизации и настройками marketplace.</param>
+    /// <returns>Список внутренних объектов возвратов.</returns>
     private async Task<List<Return>> SyncYandexMarketReturns(Cabinet cabinet)
     {
+      // Получаем список кампаний для данного кабинета
       var _campaigns = await _ymSvc!.GetCampaignsAsync(cabinet);
       List<Return> returns = new List<Return>();
+
+      // Создаем новый контекст базы данных
       using ApplicationDbContext db = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+
+      // Обходим каждую кампанию для получения возвратов
       foreach (var camp in _campaigns.Campaigns)
       {
+        // Получаем список возвратов для текущей кампании
         var returnResponse = await _ymSvc.GetReturnsListAsync(cabinet, camp);
+
+        // Проверяем, есть ли элементы возврата
         if (returnResponse?.Result?.Items?.Count > 0)
         {
           foreach (var ret in returnResponse.Result.Items)
           {
+            // Устанавливаем схему продажи в зависимости от типа размещения
             ret.SellScheme = camp.PlacementType == "FBS" ? SellScheme.FBS : SellScheme.FBO;
-            var dbChangeDate = db.Returns.Where(r => r.ReturnId == ret.Id.ToString()).Select(r => r.ChangedAt).FirstOrDefault();
+
+            // Проверяем, был ли этот возврат уже обработан (по дате изменения)
+            var dbChangeDate = db.Returns
+                .Where(r => r.ReturnId == ret.Id.ToString())
+                .Select(r => r.ChangedAt)
+                .FirstOrDefault();
+
+            // Если дата изменения не изменилась, пропускаем текущий возврат
             if (dbChangeDate != null && dbChangeDate == ret.UpdateDate)
               continue;
 
-            var ymOrder = (await _ymSvc.GetOrdersAsync(cabinet, camp, new long[] { ret.OrderId }))?.Items?.FirstOrDefault();
+            // Получаем информацию о заказе, связанном с возвратом
+            var ymOrder = (await _ymSvc.GetOrdersAsync(cabinet, camp, new long[] { ret.OrderId }))
+                ?.Items?.FirstOrDefault();
+
             if (ymOrder != null)
             {
+              // Поиск существующего заказа в БД по внешнему идентификатору
               var existingOrder = db.Orders.FirstOrDefault(o => o.ExternalId == ymOrder.Id.ToString());
+
+              // Парсим входящий объект заказа и устанавливаем схему продажи
               var incomingOrder = Order.Parse<YMOrder>(ymOrder, cabinet.Id);
               incomingOrder.SellScheme = ret.SellScheme;
+
               if (existingOrder != null)
               {
+                // Обновляем существующий заказ
                 incomingOrder.Id = existingOrder.Id;
                 db.Entry(existingOrder).CurrentValues.SetValues(incomingOrder);
               }
               else
               {
+                // Добавляем новый заказ в базу данных
                 incomingOrder.ExternalId = ymOrder.Id.ToString();
                 incomingOrder.CabinetId = cabinet.Id;
                 db.Orders.Add(incomingOrder);
               }
 
+              // Сохраняем изменения в контексте
               await db.SaveChangesAsync();
 
+              // Привязываем объект заказа к возврату
               ret.Order = ymOrder;
             }
 
+            // Обработка изображений для каждого элемента возврата
             if (ret.Items?.Count > 0)
             {
               foreach (var item in ret.Items)
@@ -448,43 +481,72 @@ namespace automation.mbtdistr.ru.Services
                 if (decision != null && decision.Images?.Count > 0)
                 {
                   List<string> imagesUrl = new List<string>();
+
                   foreach (var img in decision.Images)
                   {
+                    // Формируем имя и путь файла
                     var fileName = $"{ret.OrderId}_{ret.Id}_{decision.ReturnItemId}_{img}.jpg";
                     var filePath = Path.Combine("wwwroot", "images", "returns", fileName);
                     var fileDir = Path.GetDirectoryName(filePath);
+
+                    // Создаем директорию, если она не существует
                     if (!Directory.Exists(fileDir))
                       Directory.CreateDirectory(fileDir);
 
+                    // Скачиваем и сохраняем изображение, если его нет на диске
                     if (!System.IO.File.Exists(filePath))
                     {
                       var image = await _ymSvc.GetReturnImageAsync(cabinet, camp, ret.OrderId, ret.Id, decision.ReturnItemId, img);
                       var imageBytes = Convert.FromBase64String(image.Result.ImageData);
                       await System.IO.File.WriteAllBytesAsync(filePath, imageBytes);
                     }
+
+                    // Формируем URL для доступа к изображению
                     var fileUrl = $"{baseUrl}/images/returns/{fileName}";
                     imagesUrl.Add(fileUrl);
                   }
+
+                  // Заменяем ID изображений на URL
                   decision.Images = imagesUrl;
                 }
               }
             }
 
+            // Повторное получение заказа из базы данных для связи с внутренним объектом возврата
             var order = await db.Orders.FirstOrDefaultAsync(o => o.ExternalId == ret.OrderId.ToString());
 
+            // Парсим внутренний объект возврата и заполняем дополнительными данными
             var @return = Return.Parse<YMReturn>(ret, order);
 
-            if (@return.TargetWarehouse != null)
+            // Устанавливаем информацию о целевом складе
+            if (ret.LogisticPickupPoint != null)
             {
+              Warehouse? existing = await db.Warehouses
+                  .Include(w => w.Address)
+                  .FirstOrDefaultAsync(w => w.ExternalId == ret.LogisticPickupPoint.Id.ToString());
+              if (existing != null)
+                @return.TargetWarehouse = existing;
+              //else
+              //{
+
+              //}
               @return.TargetWarehouse.Service = cabinet.Marketplace;
             }
-            @return.Products?.ForEach(p => p.Url = $"https://partner.market.yandex.ru/supplier/{camp.Id}/assortment/offer-card?tld=ru&offerId={p.OfferId}");
+
+            // Формируем URL товара для отображения в партнерском интерфейсе
+            @return.Products?.ForEach(p => p.Url =
+                $"https://partner.market.yandex.ru/supplier/{camp.Id}/assortment/offer-card?tld=ru&offerId={p.OfferId}");
+
+            // Добавляем готовый объект возврата в результирующий список
             returns.Add(@return);
           }
         }
       }
+
+      // Возвращаем список всех обработанных возвратов
       return returns;
     }
+
 
     private async Task SyncOzonSupplies(Cabinet cabinet)
     {
@@ -732,49 +794,6 @@ namespace automation.mbtdistr.ru.Services
       }
       return _returns;
     }
-
-
-
-
-
-    //#region === Wildberries: возвраты ===
-
-    //private static async Task ProcessWbReturnsAsync(
-    //    Cabinet cab,
-    //    ApplicationDbContext db,
-    //    WildberriesApiService wbSvc,
-    //    CancellationToken ct)
-    //{
-    //  var response = await wbSvc.GetReturnsListAsync(cab) as Wildberries.Models.ReturnsListResponse;
-    //  if (response?.Claims.Count == 0) return;
-
-    //  // существующие возвраты одним запросом
-    //  var existing = await db.Returns.AsNoTracking()
-    //      .Where(r => r.CabinetId == cab.Id)
-    //      .ToDictionaryAsync(r => r.ReturnId, ct);
-
-    //  var changed = new List<Return>();
-    //  foreach (var claim in response.Claims)
-    //  {
-    //    if (existing.TryGetValue(claim.Id.ToString(), out var dbRet) &&
-    //        dbRet.ChangedAt == claim.DtUpdate)
-    //      continue;
-
-    //    var model = Return.Parse<Wildberries.Models.Claim>(claim);
-    //    model.CabinetId = cab.Id;
-    //    changed.Add(model);
-    //  }
-
-    //  if (changed.Count > 0)
-    //  {
-    //    await AddOrUpdateReturnsAsync(changed, db);
-    //    await Extensions.SendDebugObject(changed,
-    //        $"Возвраты Wildberries для кабинета {cab.Name} ({cab.Marketplace})");
-    //  }
-    //}
-
-    // #endregion
-
 
 
     #region === хелперы ===
