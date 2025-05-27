@@ -7,6 +7,7 @@
       @(Html.DevExtreme().Tabs()
           .ID("withIconAndText")
           .Width("100%")
+          .OnItemClick("handleTabClick")
           .SelectedIndex(Model?.Selected?.Id != null ? Model.Selected.Id : 0)
           .DataSource(Model?.Buttons)
           .StylingMode(TabsStyle.Secondary)
@@ -16,9 +17,9 @@
   </div>
 
   <script>
-          $(function() {
-        var tabs = $("#withIconAndText").dxTabs("instance");
-        var disabledIndexes = [];
+                $(function() {
+              var tabs = $("#withIconAndText").dxTabs("instance");
+              var disabledIndexes = [];
     @foreach (var btn in Model!.Buttons.Select((b, i) => new { b.IsActive, Index = i }))
     {
       if (!btn.IsActive)
@@ -27,10 +28,32 @@
       }
     }
 
-        disabledIndexes.forEach(function(idx) {
-            tabs.option("items[" + idx + "].disabled", true);
-        });
-    });
+              disabledIndexes.forEach(function(idx) {
+                  tabs.option("items[" + idx + "].disabled", true);
+              });
+          });
+
+
+              function handleTabClick(e) {
+        var itemData = e.itemData;
+        if (itemData && itemData.action) {
+            var data = {
+                action: itemData.action,
+                workerId: @Model?.WorkerId
+            };
+            sendData(data);
+        }
+
+        function sendData(data) {
+            $('#loadIndicator').css('display', 'block');
+            let url = `/botmenu/${data.workerId}/${data.action}`;
+            if (data.entityId) {
+                url += `?entityId=${data.entityId}`;
+            }
+            window.location.href = url;
+        }
+    }
+
   </script>
 }
 

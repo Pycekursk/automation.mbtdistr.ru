@@ -51,7 +51,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     public YMLogisticPickupPoint? LogisticPickupPoint { get; set; }
 
     [JsonIgnore]
-    public YMFulfillmentWarehouse? FulfillmentWarehouse { get; set; }
+    public Warehouse? FulfillmentWarehouse { get; set; }
 
 
     /// <summary>
@@ -101,5 +101,8 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
     [JsonProperty("order")]
     [NotMapped]
     public YMOrder? Order { get; set; }
+
+    [JsonIgnoreAttribute]
+    public SellScheme SellScheme { get; set; } = SellScheme.Unknown;
   }
 }

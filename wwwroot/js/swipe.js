@@ -39,7 +39,18 @@
     }, { passive: true });
 
     function handleSwipeRight() {
-        // Ваш код (например, возврат назад или закрытие меню)
-        history.back();
+        if (history.length == 1) {
+            triggerVibration([100, 50, 100]);
+        }
+        else {
+            triggerVibration(200);
+            history.back();
+        }
+    }
+
+    function triggerVibration(pattern) {
+        if (navigator.vibrate) {
+            navigator.vibrate(pattern);
+        }
     }
 });

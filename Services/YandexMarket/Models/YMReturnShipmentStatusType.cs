@@ -13,7 +13,7 @@ public enum YMReturnShipmentStatusType
   [EnumMember(Value = "CREATED")]
   [JsonPropertyName("CREATED")]
   [JsonProperty("CREATED")]
-  [Display(Name = "Возврат создан")]
+  [Display(Name = "Создан")]
   Created,
 
   [EnumMember(Value = "RECEIVED")]
@@ -25,7 +25,7 @@ public enum YMReturnShipmentStatusType
   [EnumMember(Value = "IN_TRANSIT")]
   [JsonPropertyName("IN_TRANSIT")]
   [JsonProperty("IN_TRANSIT")]
-  [Display(Name = "Возврат в пути")]
+  [Display(Name = "В пути")]
   InTransit,
 
   [EnumMember(Value = "READY_FOR_PICKUP")]

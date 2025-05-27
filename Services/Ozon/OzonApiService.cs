@@ -135,6 +135,46 @@
 
     }
 
+
+    public async Task<OZPosting> GetPostingAsync(Cabinet cabinet, string postingNumber, SellScheme sellScheme)
+    {
+      var body = new { posting_number = postingNumber };
+      HttpResponseMessage? response = null;
+      if (sellScheme == SellScheme.FBS)
+        response = await _ozonSellerApiHttpClient.SendRequestAsync(MarketApiRequestType.PostingFBS, cabinet, body);
+      else if (sellScheme == SellScheme.FBO)
+        response = await _ozonSellerApiHttpClient.SendRequestAsync(MarketApiRequestType.PostingFBO, cabinet, body);
+      response?.EnsureSuccessStatusCode();
+      var json = await response?.Content?.ReadAsStringAsync();
+      if (string.IsNullOrEmpty(json))
+        throw new Exception("Response content is empty");
+      var posting = JsonConvert.DeserializeObject<OZPostingResponse>(json);
+      if (posting == null || posting.Result == null)
+        throw new Exception("Failed to deserialize OZPostingResponse from response");
+      return posting.Result;
+    }
+
+    public class OZPostingResponse
+    {
+      [JsonProperty("result")]
+      public OZPosting Result { get; set; } = default!;
+
+      [JsonProperty("status")]
+      public string Status { get; set; } = default!;
+    }
+
+    public class OZPosting
+    {
+      [JsonProperty("posting_number")]
+      public string PostingNumber { get; set; } = default!;
+
+      [JsonProperty("status")]
+      public string Status { get; set; } = default!;
+
+      [JsonProperty("in_process_at")]
+      public DateTime InProcessAt { get; set; }
+    }
+
     #region ProductInfoDTOs
 
     private class ProductListResponse

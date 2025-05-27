@@ -182,7 +182,7 @@ Html.DevExtreme().DataGrid<Return>()
      .AllowColumnResizing(true)
      .StateStoring(
          s => s.Enabled(true)
-        .Type(StateStoringType.SessionStorage)
+        .Type(StateStoringType.LocalStorage)
         .StorageKey($"DataGridState_{Context.Request.Path.ToString().Trim('/').Replace('/', '_')}"))
      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
      .HeaderFilter(hf => hf.Visible(true))

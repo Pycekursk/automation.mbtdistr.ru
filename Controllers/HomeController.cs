@@ -70,127 +70,15 @@ namespace automation.mbtdistr.ru.Controllers
     {
       var user = _db.Workers.FirstOrDefault(w => w.TelegramId == id.ToString());
       MainMenuViewModel mainMenu = new MainMenuViewModel();
-      if (user?.Role == RoleType.Guest)
-      {
-        mainMenu.GreetingMessage = "Вы зарегистрированы в системе как гость. Пожалуйста, свяжитесь с администратором для получения доступа.";
-        return View(mainMenu);
-      }
       if (user != null)
       {
         mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
         mainMenu.WorkerId = user.Id;
-
-        if (user.Role == RoleType.Admin)
-        {
-          mainMenu.Menu = new List<MenuItem>
-          {
-            new MenuItem
-            {
-              Icon = "bi bi-gear-fill",
-              Action = "orderslist",
-              Title = "Заказы",
-              CSS = "btn btn-outline-success disabled"
-            },
-            new MenuItem
-            {
-              Icon = "bi bi-building",
-              Action = "cabinetslist",
-              Title = "Кабинеты",
-              CSS = "btn btn-outline-primary"
-            },
-            new MenuItem
-            {
-              Icon = "bi bi-box-seam",
-              Action = "returnslist",
-              Title = "Возвраты",
-              CSS = "btn btn-outline-danger"
-            },
-               new MenuItem
-            {
-
-              Action = "supplieslist",
-              Title = "Заявки",
-              CSS = "btn btn-outline-primary",
-              Icon = "bi bi-box-seam"
-            },
-                 new MenuItem
-            {
-
-              Action = "warehouseslist",
-              Title = "Склады",
-              CSS = "btn btn-outline-primary",
-              Icon = "bi bi-box-seam"
-            },
-                new MenuItem
-            {
-              Icon = "bi bi-gear-fill",
-              Action = "workersettings",
-              Title = "Настройки",
-              CSS = "btn btn-outline-light disabled"
-            }
-          };
-        }
-        else if (user.Role == RoleType.ClaimsManager || user.Role == RoleType.CabinetManager)
-        {
-          mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
-
-          //меню с кнопками: Кабинеты, Возвраты, Настройки
-          mainMenu.Menu = new List<MenuItem>
-          {
-            new MenuItem
-            {
-              Action = "cabinetslist",
-              Title = "Кабинеты",
-              CSS = "btn btn-outline-primary",
-              Icon = "bi bi-building"
-            },
-            new MenuItem
-            {
-
-              Action = "returnslist",
-              Title = "Возвраты",
-              CSS = "btn btn-outline-primary",
-              Icon = "bi bi-box-seam"
-            },
-               new MenuItem
-            {
-
-              Action = "supplieslist",
-              Title = "Заявки",
-              CSS = "btn btn-outline-danger",
-              Icon = "bi bi-box-seam"
-            }
-          };
-        }
-        else if (user.Role == RoleType.Courier)
-        {
-          mainMenu.GreetingMessage = $"Привет, {user.Name}! Вы {user.Role.GetDisplayName()}";
-          //меню с кнопками: Кабинеты, Возвраты, Настройки
-          mainMenu.Menu = new List<MenuItem>
-          {
-            new MenuItem
-            {
-              Action = "warehouseslist",
-              Title = "Склады",
-              CSS = "btn btn-outline-primary",
-              Icon = "bi bi-building"
-            },
-            new MenuItem
-            {
-            Action = "supplieslist",
-            Title = "Заявки",
-            CSS = "btn btn-outline-primary",
-            Icon = "bi bi-box-seam"
-            }
-          };
-        }
-
         ViewBag.MainMenuTabbar = MainMenuModel.Create(user);
       }
-      else
+      if (user?.Role == RoleType.Guest)
       {
-        mainMenu.GreetingMessage = "Вы не зарегистрированы в системе. Пожалуйста, свяжитесь с администратором.";
-        mainMenu.Menu = new List<MenuItem>();
+        mainMenu.GreetingMessage = "Вы зарегистрированы в системе как гость. Пожалуйста, свяжитесь с администратором для получения доступа.";
       }
       return View(mainMenu);
     }

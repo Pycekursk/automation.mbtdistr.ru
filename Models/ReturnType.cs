@@ -30,12 +30,30 @@ namespace automation.mbtdistr.ru.Models
     Return,
 
     /// <summary>
+    /// Частичный возврат.
+    /// </summary>
+    [EnumMember(Value = "PARTIAL_RETURN")]
+    [JsonProperty("PARTIAL_RETURN")]
+    [System.Text.Json.Serialization.JsonPropertyName("PARTIAL_RETURN")]
+    [Display(Name = "Частичный отказ при вручении")]
+    PartialReturn,
+
+    /// <summary>
     /// Неизвестный тип.
     /// </summary>
     [EnumMember(Value = "UNKNOWN")]
     [JsonProperty("UNKNOWN")]
     [System.Text.Json.Serialization.JsonPropertyName("UNKNOW")]
     [Display(Name = "Неизвестный")]
-    Unknown
+    Unknown,
+
+    /// <summary>
+    /// Полный отказ при вручении.
+    /// </summary>
+    [EnumMember(Value = "FULL_RETURN")]
+    [JsonProperty("FULL_RETURN")]
+    [System.Text.Json.Serialization.JsonPropertyName("FULL_RETURN")]
+    [Display(Name = "Полный отказ при вручении")]
+    FullReturn
   }
 }

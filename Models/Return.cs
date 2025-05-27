@@ -1,5 +1,8 @@
-﻿using automation.mbtdistr.ru.Services.Wildberries.Models;
+﻿using automation.mbtdistr.ru.Services.Ozon.Models;
+using automation.mbtdistr.ru.Services.Wildberries.Models;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
+
+using DevExpress.Data.Utils;
 
 using Newtonsoft.Json;
 
@@ -44,7 +47,7 @@ namespace automation.mbtdistr.ru.Models
     [JsonProperty("orderId")]
 
     [Display(Name = "ID заказа")]
-    public string? OrderId { get; set; } // идентификатор заказа в системе Ozon/Wildberries/ЯндексМаркет
+    public string? OrderExternalId { get; set; } // идентификатор заказа в системе Ozon/Wildberries/ЯндексМаркет
 
     /// <summary>
     /// Номер заказа в системе Ozon/Wildberries/ЯндексМаркет
@@ -66,7 +69,18 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Дата создания")]
     public DateTime? CreatedAt { get; set; }
 
+    /// <summary>
+    /// Номер отправления в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
+    [JsonProperty("postingNumber")]
+    [Display(Name = "Номер отправления")]
+    public string? PostingNumber { get; set; }
+
+    /// <summary>
+    /// Дата завершения возврата в системе Ozon/Wildberries/ЯндексМаркет
+    /// </summary>
     [Display(Name = "Дата завершения")]
+    [JsonProperty("resolvedAt")]
     public DateTime? ResolvedAt { get; set; }
 
     /// <summary>
@@ -85,6 +99,12 @@ namespace automation.mbtdistr.ru.Models
     [Display(Name = "Компенсация")]
     public Compensation? Compensation { get; set; }
 
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    [ForeignKey(nameof(Order))]
+    public int? OrderId { get; set; } // идентификатор заказа, к которому относится возврат 
+
+    [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    public Order? Order { get; set; } // заказ, к которому относится возврат
 
     /// <summary>
     /// Идентификатор склада/ПВЗ, где находится возврат
@@ -153,6 +173,13 @@ namespace automation.mbtdistr.ru.Models
     public Storage? Storage { get; set; }
 
     /// <summary>
+    /// Статус транспортировки возврата
+    /// </summary>
+    [JsonProperty("shipmentStatus")]
+    [Display(Name = "Статус отправления")]
+    public YMReturnShipmentStatusType ShipmentStatus { get; set; } = YMReturnShipmentStatusType.Unknown;
+
+    /// <summary>
     /// Активность возврата (активен или нет)
     /// </summary>
     [JsonProperty("active")]
@@ -167,10 +194,12 @@ namespace automation.mbtdistr.ru.Models
     /// <param name="apiReturnObject"></param>
     /// <returns></returns>
     /// <exception cref="NotImplementedException"></exception>
-    public static Return Parse<T>(object apiReturnObject)
+    public static Return Parse<T>(object apiReturnObject, Order? order = null)
     {
       Return @return = new Return();
       var type = typeof(T);
+
+      Extensions.SendDebugObject(apiReturnObject);
 
       switch (type.Name)
       {
@@ -184,7 +213,7 @@ namespace automation.mbtdistr.ru.Models
           break;
         case nameof(YMReturn):
           var ymReturn = (YMReturn)apiReturnObject;
-          ParseYMReturn(ref @return, ymReturn);
+          ParseYMReturn(ref @return, ymReturn, order);
           break;
         default:
           throw new NotImplementedException($"Неизвестный тип возврата: {type.Name}");
@@ -196,7 +225,7 @@ namespace automation.mbtdistr.ru.Models
     private static void ParseClaim(ref Return @return, Claim claim)
     {
       @return.ReturnId = claim.Id;
-      @return.OrderId = claim.Srid;
+      @return.OrderExternalId = claim.Srid;
       @return.ChangedAt = claim.DtUpdate;
       @return.OrderedAt = claim.OrderDt;
       @return.CreatedAt = claim.Dt;
@@ -242,20 +271,34 @@ namespace automation.mbtdistr.ru.Models
     {
       @return.ChangedAt = returnInfo.Visual?.ChangeMoment;
       @return.ReturnId = returnInfo.Id.ToString();
-      @return.OrderId = returnInfo.OrderId.ToString();
+      @return.OrderExternalId = returnInfo.OrderId.ToString();
       @return.OrderNumber = returnInfo.OrderNumber?.ToString();
       @return.ReturnReason = returnInfo.ReturnReasonName;
       @return.CreatedAt = returnInfo.Logistic?.ReturnDate;
+      @return.PostingNumber = returnInfo.PostingNumber;
+
       if (returnInfo?.Type?.ToLower() == "cancellation")
         @return.ReturnType = Models.ReturnType.Unredeemed;
       else if (returnInfo?.Type?.ToLower() == "clientreturn")
         @return.ReturnType = Models.ReturnType.Return;
+      else if (returnInfo?.Type?.ToLower() == "partialreturn")
+        @return.ReturnType = Models.ReturnType.PartialReturn;
+      else if (returnInfo?.Type?.ToLower() == "fullreturn")
+        @return.ReturnType = Models.ReturnType.FullReturn;
       else
         @return.ReturnType = Models.ReturnType.Unknown;
 
       @return.Scheme = returnInfo?.Schema?.ToUpper() == "FBS" ? SellScheme.FBS : returnInfo?.Schema?.ToUpper() == "FBO" ? SellScheme.FBO : SellScheme.Unknown;
 
-      if (returnInfo.Product != null)
+      if (returnInfo?.Visual?.Status?.SysName != null)
+        @return.ShipmentStatus = OzStatusMapper.ToReturnShipmentStatus(returnInfo.Visual.Status.SysName.GetValueOrDefault());
+
+      if (returnInfo?.Logistic?.FinalMoment != null)
+        @return.ResolvedAt = returnInfo?.Logistic?.FinalMoment;
+
+      @return.Active = @return.ResolvedAt == null ? true : false;
+
+      if (returnInfo?.Product != null)
       {
         ReturnProduct returnProduct = new ReturnProduct()
         {
@@ -265,16 +308,13 @@ namespace automation.mbtdistr.ru.Models
           Name = returnInfo.Product.Name,
           Price = new Price()
           {
-            Amount = (decimal?)returnInfo.Product.Price.Price,
+            Amount = (double?)returnInfo.Product.Price.Price,
             Currency = returnInfo.Product.Price.CurrencyCode,
           },
-
-          //получаем все картинки из всех решений
         };
         @return.Products = new List<ReturnProduct> { returnProduct };
       }
-      if (returnInfo.Place != null)
-
+      if (returnInfo?.Place != null)
       {
         //id, name, address
         @return.CurrentWarehouse = new Warehouse()
@@ -288,9 +328,8 @@ namespace automation.mbtdistr.ru.Models
           }
         };
       }
-      if (returnInfo.TargetPlace != null)
+      if (returnInfo?.TargetPlace != null)
       {
-        //id, name, address
         @return.TargetWarehouse = new Warehouse()
         {
           ExternalId = returnInfo.TargetPlace.Id.ToString(),
@@ -302,29 +341,36 @@ namespace automation.mbtdistr.ru.Models
           }
         };
       }
-      if (returnInfo.Storage != null)
+      if (returnInfo?.Storage != null)
       {
         @return.Storage = new Storage()
         {
           ArrivedDate = returnInfo.Storage.ArrivedMoment,
           UtilizationForecastDate = returnInfo.Storage.UtilizationForecastDate,
+          Days = returnInfo.Storage.Days,
+          Price = returnInfo.Storage.Sum.Price
         };
       }
     }
 
-    private static void ParseYMReturn(ref Return @return, YMReturn ymReturn)
+    private static void ParseYMReturn(ref Return @return, YMReturn ymReturn, Order? order = null)
     {
       @return.ChangedAt = ymReturn.UpdateDate;
       @return.OrderedAt = ymReturn?.Order?.CreationDate;
       @return.CreatedAt = ymReturn?.CreationDate;
       @return.ReturnId = ymReturn?.Id.ToString();
-      @return.OrderId = ymReturn?.OrderId.ToString();
+      @return.OrderExternalId = ymReturn?.OrderId.ToString();
       @return.OrderNumber = ymReturn?.OrderId.ToString();
       @return.ReturnType = ymReturn.ReturnType;
-      @return.Scheme = ymReturn?.ShipmentRecipientType == YMShipmentRecipientType.Shop ? SellScheme.FBS : SellScheme.FBO;
+      @return.Scheme = ymReturn.SellScheme;
+
+      @return.Order = order ?? null;
+      @return.CabinetId = @return.Order?.CabinetId ?? 0;
+
       @return.ResolvedAt = ymReturn?.RefundStatus == YMRefundStatus.Refunded ? ymReturn.UpdateDate : null;
       @return.Active = @return.ResolvedAt != null ? false : true;
 
+      @return.ShipmentStatus = ymReturn?.ShipmentStatus ?? YMReturnShipmentStatusType.Unknown;
 
       @return.Products ??= new List<ReturnProduct>();
       if (ymReturn?.Items?.Count > 0)
@@ -338,7 +384,7 @@ namespace automation.mbtdistr.ru.Models
             Name = ymReturn?.Order?.Items?.FirstOrDefault(i => i.OfferId == item.ShopSku)?.OfferName,
             Price = new Price()
             {
-              Amount = (decimal?)ymReturn?.Order?.Items?.FirstOrDefault(i => i.OfferId == item.ShopSku)?.Price,
+              Amount = (double?)ymReturn?.Order?.Items?.FirstOrDefault(i => i.OfferId == item.ShopSku)?.Price,
               Currency = ymReturn?.Order?.Currency.ToString(),
             },
             //получаем все картинки из всех решений
@@ -351,51 +397,112 @@ namespace automation.mbtdistr.ru.Models
           }
           @return.Products.Add(returnProduct);
         }
-      if (ymReturn?.FulfillmentWarehouse != null)
-      {
-        if (ymReturn.ShipmentStatus == YMReturnShipmentStatusType.InTransit)
-        {
-          @return.TargetWarehouse = new Warehouse()
-          {
-            ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
-            Name = ymReturn.FulfillmentWarehouse.Name,
-            Address = new Address()
-            {
-              City = ymReturn.FulfillmentWarehouse.Address?.City,
-              Street = ymReturn.FulfillmentWarehouse.Address?.Street,
-              House = ymReturn.FulfillmentWarehouse.Address?.Building,
-              Office = ymReturn.FulfillmentWarehouse.Address?.Number,
-            }
-          };
-          if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
-          {
-            @return.TargetWarehouse.Address.Latitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
-            @return.TargetWarehouse.Address.Longitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
-          }
+      //if (ymReturn?.FulfillmentWarehouse != null)
+      //{
+      //  if (ymReturn.ShipmentStatus == YMReturnShipmentStatusType.InTransit)
+      //  {
+      //    @return.TargetWarehouse = new Warehouse()
+      //    {
+      //      ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
+      //      Name = ymReturn.FulfillmentWarehouse.Name,
+      //      Address = new Address()
+      //      {
+      //        City = ymReturn.FulfillmentWarehouse.Address?.City,
+      //        Street = ymReturn.FulfillmentWarehouse.Address?.Street,
+      //        House = ymReturn.FulfillmentWarehouse.Address?.Building,
+      //        Office = ymReturn.FulfillmentWarehouse.Address?.Number,
+      //      }
+      //    };
+      //    if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
+      //    {
+      //      @return.TargetWarehouse.Address.Latitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
+      //      @return.TargetWarehouse.Address.Longitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
+      //    }
 
-        }
-        else
-        {
+      //  }
+      //  else
+      //  {
 
-          @return.CurrentWarehouse = new Warehouse()
-          {
-            ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
-            Name = ymReturn.FulfillmentWarehouse.Name,
-            Address = new Address()
-            {
-              City = ymReturn.FulfillmentWarehouse.Address?.City,
-              Street = ymReturn.FulfillmentWarehouse.Address?.Street,
-              House = ymReturn.FulfillmentWarehouse.Address?.Building,
-              Office = ymReturn.FulfillmentWarehouse.Address?.Number,
-            }
-          };
-          if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
-          {
-            @return.CurrentWarehouse.Address.Latitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
-            @return.CurrentWarehouse.Address.Longitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
-          }
-        }
-      }
+      //    @return.CurrentWarehouse = new Warehouse()
+      //    {
+      //      ExternalId = ymReturn.FulfillmentWarehouse.Id.ToString(),
+      //      Name = ymReturn.FulfillmentWarehouse.Name,
+      //      Address = new Address()
+      //      {
+      //        City = ymReturn.FulfillmentWarehouse.Address?.City,
+      //        Street = ymReturn.FulfillmentWarehouse.Address?.Street,
+      //        House = ymReturn.FulfillmentWarehouse.Address?.Building,
+      //        Office = ymReturn.FulfillmentWarehouse.Address?.Number,
+      //      }
+      //    };
+      //    if (ymReturn.FulfillmentWarehouse.Address?.Gps != null)
+      //    {
+      //      @return.CurrentWarehouse.Address.Latitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Latitude;
+      //      @return.CurrentWarehouse.Address.Longitude = (double)ymReturn.FulfillmentWarehouse.Address.Gps.Longitude;
+      //    }
+      //  }
+      //}
     }
+  }
+
+
+  public static class OzStatusMapper
+  {
+    private static readonly IReadOnlyDictionary<OZVisualStatus, YMReturnShipmentStatusType> _map
+        = new Dictionary<OZVisualStatus, YMReturnShipmentStatusType>
+        {
+          // ————————— Начальные / споровые этапы (логистика ещё не задействована)
+          [OZVisualStatus.DisputeOpened] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.DisputeYouOpened] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.DisputeOpening] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.OnSellerApproval] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.OnSellerClarification] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.OnSellerClarificationAfterPartialCompensation]
+                                                                       = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.OfferedPartialCompensation] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.CompensationOffered] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.WaitingCompensation] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.SendingError] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.CompensationRejected] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.CompensationRejectedBySla] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.CompensationRejectedBySeller] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.Approved] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.ApprovedByOzon] = YMReturnShipmentStatusType.Created,
+          [OZVisualStatus.WaitingShipment] = YMReturnShipmentStatusType.Created,
+
+          // ————————— Прибытие на пункт выдачи
+          [OZVisualStatus.ArrivedAtReturnPlace] = YMReturnShipmentStatusType.ReadyForPickup,
+
+          // ————————— Транспортировка
+          [OZVisualStatus.MovingToSeller] = YMReturnShipmentStatusType.InTransit,
+          [OZVisualStatus.ReturningToSellerByCourier] = YMReturnShipmentStatusType.InTransit,
+          [OZVisualStatus.MovingToOzon] = YMReturnShipmentStatusType.InTransit,
+
+          // ————————— Конечная доставка
+          [OZVisualStatus.ReceivedBySeller] = YMReturnShipmentStatusType.Picked,
+          [OZVisualStatus.ReturnedToOzon] = YMReturnShipmentStatusType.FulfilmentReceived,
+
+          // ————————— Утилизация
+          [OZVisualStatus.Utilizing] = YMReturnShipmentStatusType.PreparedForUtilization,
+          [OZVisualStatus.Utilized] = YMReturnShipmentStatusType.Utilized,
+
+          // ————————— Отмена / финальное закрытие выплатой
+          [OZVisualStatus.Cancelled] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.Rejected] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.CrmRejected] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.CancelledDisputeNotOpen] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.ReturnMoneyApproved] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.PartialCompensationReturned] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.ReturnCompensated] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.PartialCompensationInProcess] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.MoneyReturned] = YMReturnShipmentStatusType.Cancelled,
+          [OZVisualStatus.MoneyReturnedBySystem] = YMReturnShipmentStatusType.Cancelled
+        };
+
+    /// <summary>
+    /// Преобразует визуальный статус Ozon в прежде логистический статус возвратной отправки.
+    /// </summary>
+    public static YMReturnShipmentStatusType ToReturnShipmentStatus(this OZVisualStatus status)
+        => _map[status];
   }
 }

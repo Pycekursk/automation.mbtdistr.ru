@@ -145,13 +145,19 @@ ILogger<TelegramBotController> logger)
         var userId = update.Message?.From?.Id ?? update.CallbackQuery?.From.Id;
         var user = await _db.Workers.FirstOrDefaultAsync(w => w.TelegramId == userId.ToString());
 
+        if (update.Message?.Photo != null)
+        {
+          await _barcodeService.HandlePhotoAsync(update);
+          return Ok();
+        }
+
         if (user?.Role == RoleType.Admin)
         {
-          if (update.Message?.Photo != null)
-          {
-            await _barcodeService.HandlePhotoAsync(update);
-            return Ok();
-          }
+          //if (update.Message?.Photo != null)
+          //{
+          //  await _barcodeService.HandlePhotoAsync(update);
+          //  return Ok();
+          //}
 
           if (update.Message?.Voice != null)
           {
@@ -316,9 +322,6 @@ ILogger<TelegramBotController> logger)
         };
         _db.Workers.Add(worker);
         await _db.SaveChangesAsync();
-        await _botClient.SendMessage(
-            update.Message.Chat.Id,
-            "Добро пожаловать! Вы зарегистрированы как Гость. Ожидайте назначения роли администратором.");
 
         var admins = await _db.Workers
             .Where(w => w.Role == RoleType.Admin)

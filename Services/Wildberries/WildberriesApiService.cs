@@ -4,6 +4,9 @@ using automation.mbtdistr.ru.Services.Wildberries.Models;
 
 using Microsoft.EntityFrameworkCore;
 
+using Newtonsoft.Json;
+
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
 namespace automation.mbtdistr.ru.Services.Wildberries
@@ -52,7 +55,8 @@ namespace automation.mbtdistr.ru.Services.Wildberries
         cabinet,
          queryParams: new Dictionary<string, string>
          {
-           { "is_archive", archive.ToString().ToLowerInvariant() }
+           { "is_archive", archive.ToString().ToLowerInvariant() },
+           { "limit", "200" }
          }
         );
         response.EnsureSuccessStatusCode();
@@ -67,5 +71,40 @@ namespace automation.mbtdistr.ru.Services.Wildberries
         throw;
       }
     }
+
+    //метод получения списка всех заказов
+    public async Task<WBOrdersListResponse?> GetOrdersListAsync(Cabinet cabinet, DateTime? dateFrom = null, int next = 1, int limit = 1000)
+    {
+      try
+      {
+        Dictionary<string, string> queryParams = new Dictionary<string, string>
+        {
+          { "next", next.ToString() },
+          { "limit", limit.ToString() }
+        };
+
+        if (dateFrom.HasValue)
+          queryParams.Add("dateFrom", dateFrom.Value.ToString("yyyy-MM-ddTHH:mm:ss"));
+        else
+          queryParams.Add("dateFrom", DateTime.Now.AddDays(-90).ToString("yyyy-MM-ddTHH:mm:ss"));
+
+        var response = await _wbApiHttpClient.SendRequestAsync(
+          MarketApiRequestType.Orders,
+          cabinet,
+          queryParams: queryParams
+        );
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        var obj = json.FromJson<WBOrdersListResponse>();
+        return obj;
+      }
+      catch (Exception ex)
+      {
+        await Extensions.SendDebugMessage($"public async Task<OrdersListResponse?> GetOrdersListAsync(Cabinet cabinet, int page = 1, int limit = 100)\n\n{ex.Message}\n\n{ex.InnerException?.Message}");
+        throw;
+      }
+    }
   }
+
+
 }

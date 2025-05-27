@@ -20,40 +20,40 @@ else
 {
   <div class="container text-center mt-4">
     <h5 class="text-secondary">@Model?.GreetingMessage</h5>
-    <form>
-      <div class="menu-buttons mt-4">
-        @foreach (var butt in Model?.Menu)
-        {
-          <button action="@butt.Action" type="button" class="@butt.CSS">
-            <i class="@butt.Icon me-2"></i> @butt.Title
-          </button>
-        }
-      </div>
-    </form>
+    @* <form> *@
+    @*   <div class="menu-buttons mt-4"> *@
+    @*     @foreach (var butt in Model?.Menu) *@
+    @*     { *@
+    @*       <button action="@butt.Action" type="button" class="@butt.CSS"> *@
+    @*         <i class="@butt.Icon me-2"></i> @butt.Title *@
+    @*       </button> *@
+    @*     } *@
+    @*   </div> *@
+    @* </form> *@
   </div>
 
-  <script>
-    var workerId = @Model?.WorkerId
-    tg.ready();
+  @* <script> *@
+  @*   var workerId = @Model?.WorkerId *@
+  @*   tg.ready(); *@
 
-    document.addEventListener("DOMContentLoaded", function () {
-        document.querySelectorAll('.menu-buttons button').forEach(button => {
-            button.addEventListener('click', function () {
-                const action = this.getAttribute('action');
-                var data = {
-                    action: action,
-                    workerId: workerId
-                };
-                sendData(data);
-            });
-        });
+  @*   document.addEventListener("DOMContentLoaded", function () { *@
+  @*       document.querySelectorAll('.menu-buttons button').forEach(button => { *@
+  @*           button.addEventListener('click', function () { *@
+  @*               const action = this.getAttribute('action'); *@
+  @*               var data = { *@
+  @*                   action: action, *@
+  @*                   workerId: workerId *@
+  @*               }; *@
+  @*               sendData(data); *@
+  @*           }); *@
+  @*       }); *@
 
-        function sendData(data) {
-            let url = `/botmenu/${data.workerId}/${data.action}`;
-            window.location.href = url;
-        }
-    });
-  </script>
-  @(Html.DevExtreme().ButtonGroup())
+  @*       function sendData(data) { *@
+  @*           let url = `/botmenu/${data.workerId}/${data.action}`; *@
+  @*           window.location.href = url; *@
+  @*       } *@
+  @*   }); *@
+  @* </script> *@
+  @* @(Html.DevExtreme().ButtonGroup()) *@
 
 }

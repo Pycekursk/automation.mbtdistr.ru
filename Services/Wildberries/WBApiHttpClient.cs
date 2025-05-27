@@ -14,6 +14,8 @@ namespace automation.mbtdistr.ru.Services.Wildberries
         { MarketApiRequestType.ReturnsList, ("https://returns-api.wildberries.ru/api/v1/claims", HttpMethod.Get) },
         { MarketApiRequestType.SellerInfo, ("https://common-api.wildberries.ru/api/v1/seller-info", HttpMethod.Get) },
         { MarketApiRequestType.Ping, ("https://api.wildberries.ru/api/v1/ping", HttpMethod.Get) },
+        { MarketApiRequestType.ProductList, ("https://content-api.wildberries.ru/content/v2/get/cards/list", HttpMethod.Post) },
+        { MarketApiRequestType.Orders,("https://statistics-api.wildberries.ru/api/v1/supplier/orders", HttpMethod.Get) },
       };
 
 

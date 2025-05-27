@@ -922,7 +922,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
     /// <summary>
     /// Получает список складов Маркета (FBY).
     /// </summary>
-    public async Task<YMApiResponse<YMListResult<YMFulfillmentWarehouse>>> GetWarehousesAsync(Cabinet cabinet)
+    public async Task<YMListResult<YMFulfillmentWarehouse>?> GetWarehousesAsync(Cabinet cabinet)
     {
       var response = await _yMApiHttpClient.SendRequestAsync(
           MarketApiRequestType.Warehouses,
@@ -935,25 +935,62 @@ namespace automation.mbtdistr.ru.Services.YandexMarket
         Culture = CultureInfo.CurrentCulture,
         Converters = { new StringEnumConverter(), new YMListResultConverter<YMFulfillmentWarehouse>("warehouses") }
       };
-      return JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMFulfillmentWarehouse>>>(json, settings);
+      return JsonConvert.DeserializeObject<YMApiResponse<YMListResult<YMFulfillmentWarehouse>>>(json, settings)?.Result;
     }
 
-    /// <summary>
-    /// Получает информацию по складу Маркета (FBY) по идентификатору.
-    /// </summary>
-    public async Task<YMFulfillmentWarehouse?> GetWarehouseByIdAsync(Cabinet cabinet, long warehouseId)
-    {
-      var allResponse = await GetWarehousesAsync(cabinet);
-      if (allResponse.Status == YMApiResponseStatusType.OK && allResponse.Result != null)
-      {
-        var warehouse = allResponse.Result.Items.FirstOrDefault(w => w.Id == warehouseId);
-        return warehouse;
-      }
-      else
-      {
-        return default;
-      }
-    }
+    ///// <summary>
+    ///// Получает информацию по складу Маркета (FBY) по идентификатору.
+    ///// </summary>
+    //public async Task<Warehouse?> GetWarehouseByIdAsync(Cabinet cabinet, long warehouseId)
+    //{
+    //  using ApplicationDbContext context = new ApplicationDbContext(new DbContextOptions<ApplicationDbContext>());
+    //  // Проверяем наличие склада в БД
+    //  var existingWarehouse = await context.Warehouses
+    //      .FirstOrDefaultAsync(w => w.ExternalId == warehouseId.ToString());
+
+    //  if (existingWarehouse == null)
+    //  {
+    //    var allResponse = await GetWarehousesAsync(cabinet);
+    //    if (allResponse.Status == YMApiResponseStatusType.OK && allResponse.Result != null)
+    //    {
+    //      var ymWarehouse = allResponse.Items.FirstOrDefault(w => w.Id == warehouseId);
+    //      if (ymWarehouse != null)
+    //      {
+    //        var newWarehouse = new Warehouse
+    //        {
+    //          ExternalId = ymWarehouse.Id.ToString(),
+    //          Name = ymWarehouse.Name,
+    //          Address = new automation.mbtdistr.ru.Models.Address
+    //          {
+    //            City = ymWarehouse.Address.City,
+    //            Street = ymWarehouse.Address.Street,
+    //            House = ymWarehouse.Address.Building,
+    //            Office = ymWarehouse.Address.Number,
+    //            Latitude = (double)ymWarehouse.Address.Gps.Latitude,
+    //            Longitude = (double)ymWarehouse.Address.Gps.Longitude,
+    //          },
+    //        };
+    //        context.Warehouses.Add(newWarehouse);
+    //        await context.SaveChangesAsync();
+    //        return newWarehouse;
+    //      }
+    //      else
+    //      {
+    //        await SendDebugMessage($"Склад с ID {warehouseId} не найден в ответе API.");
+    //        return null;
+
+    //      }
+    //    }
+    //    else
+    //    {
+    //      return default;
+    //    }
+    //  }
+    //  else
+    //  {
+    //    return existingWarehouse;
+    //  }
+    //}
 
     #endregion
 

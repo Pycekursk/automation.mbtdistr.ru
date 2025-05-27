@@ -53,14 +53,14 @@ namespace automation.mbtdistr.ru.Services
       var meta = geoObject
           .GetProperty("metaDataProperty")
           .GetProperty("GeocoderMetaData");
-      var fullAddress = meta.GetProperty("text").GetString();
-
       // 3) Компоненты разбора адреса
       //    находятся в meta -> Address -> Components
       var compRoot = meta
           .GetProperty("Address")
           .GetProperty("Components")
           .EnumerateArray();
+
+      var fullAddress = meta.GetProperty("Address").GetProperty("formatted").ToString();
 
       var result = new automation.mbtdistr.ru.Models.Address
       {
@@ -94,8 +94,6 @@ namespace automation.mbtdistr.ru.Services
           case "postal_code":
             result.ZipCode = name;
             break;
-          // Yandex не отдаёт отдельного office — можно попытаться
-          // вытянуть из полного адреса regex-ом, но обычно не требуется.
           default:
             break;
         }

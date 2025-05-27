@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250527052805_Orders")]
+    partial class Orders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -382,9 +385,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int?>("ReturnId")
-                        .HasColumnType("int");
-
                     b.Property<string>("SellScheme")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -402,8 +402,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CabinetId");
-
-                    b.HasIndex("ReturnId");
 
                     b.ToTable("Orders");
                 });
@@ -504,11 +502,8 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<int?>("CurrentWarehouseId")
                         .HasColumnType("int");
 
-                    b.Property<string>("OrderExternalId")
+                    b.Property<string>("OrderId")
                         .HasColumnType("longtext");
-
-                    b.Property<int?>("OrderId")
-                        .HasColumnType("int");
 
                     b.Property<string>("OrderNumber")
                         .HasColumnType("longtext");
@@ -518,9 +513,6 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.Property<DateTime?>("OrderedAt")
                         .HasColumnType("datetime(6)");
-
-                    b.Property<string>("PostingNumber")
-                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("datetime(6)");
@@ -554,8 +546,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("CabinetId");
 
                     b.HasIndex("CurrentWarehouseId");
-
-                    b.HasIndex("OrderId");
 
                     b.HasIndex("ReturnId")
                         .HasDatabaseName("IX_Returns_ReturnId");
@@ -1312,13 +1302,7 @@ namespace automation.mbtdistr.ru.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("automation.mbtdistr.ru.Models.Return", "Return")
-                        .WithMany()
-                        .HasForeignKey("ReturnId");
-
                     b.Navigation("Cabinet");
-
-                    b.Navigation("Return");
                 });
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
@@ -1355,10 +1339,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_Returns_CurrentWarehouse");
 
-                    b.HasOne("automation.mbtdistr.ru.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId");
-
                     b.HasOne("automation.mbtdistr.ru.Models.Warehouse", "TargetWarehouse")
                         .WithMany("DestinationReturns")
                         .HasForeignKey("TargetWarehouseId")
@@ -1393,8 +1373,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Cabinet");
 
                     b.Navigation("CurrentWarehouse");
-
-                    b.Navigation("Order");
 
                     b.Navigation("Storage");
 

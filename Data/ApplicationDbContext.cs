@@ -1,4 +1,5 @@
 ﻿using automation.mbtdistr.ru.Models;
+using automation.mbtdistr.ru.Services.Wildberries.Models;
 using automation.mbtdistr.ru.Services.YandexMarket;
 using automation.mbtdistr.ru.Services.YandexMarket.Models;
 
@@ -44,6 +45,10 @@ namespace automation.mbtdistr.ru.Data
 
     //public DbSet<ReturnMainInfo> ReturnMainInfo { get; set; }
 
+    public DbSet<WBOrder> WBOrders { get; set; }
+
+    public DbSet<Order> Orders { get; set; }
+
     public DbSet<YMSupplyRequest> YMSupplyRequests { get; set; }
 
     public DbSet<YMSupplyRequestLocation> YMSupplyRequestLocations { get; set; }
@@ -55,16 +60,6 @@ namespace automation.mbtdistr.ru.Data
     public DbSet<YMSupplyRequestItem> YMSupplyRequestItems { get; set; }
 
     public DbSet<YMSupplyRequestReference> YMSupplyRequestReferences { get; set; }
-
-    public DbSet<YMOrder> YMOrders { get; set; }
-
-    public DbSet<YMOrderBuyer> YMOrderBuyers { get; set; }
-
-    public DbSet<YMOrderDelivery> YMOrderDeliveries { get; set; }
-
-    public DbSet<YMOrderItem> YMOrderItems { get; set; }
-
-    public DbSet<YMCurrencyValue> YMCurrencyValues { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -112,90 +107,6 @@ namespace automation.mbtdistr.ru.Data
       modelBuilder.ApplyConfiguration(new YMOrderBuyerConfiguration());
       modelBuilder.ApplyConfiguration(new YMOrderDeliveryConfiguration());
       modelBuilder.ApplyConfiguration(new YMOrderItemConfiguration());
-
-      //     // 1. Один-ко-многим: заявка → дочерние ссылки
-      //     modelBuilder.Entity<YMSupplyRequestReference>()
-      //         .HasOne(rf => rf.Request)
-      //         .WithMany(r => r.ChildrenLinks)
-      //         .HasForeignKey(rf => rf.RequestId)
-      //         .OnDelete(DeleteBehavior.Cascade);
-
-      //     modelBuilder.Entity<YMSupplyRequestReference>()
-      //     .HasOne(rf => rf.RelatedRequest)
-      //     .WithOne(r => r.ParentLink)
-      //     .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
-      //     .IsRequired(false)                            // optional
-      //     .OnDelete(DeleteBehavior.Cascade);
-
-      //     modelBuilder.Entity<YMSupplyRequestItem>()
-      //         .HasOne(i => i.Price)
-      //         .WithOne(p => p.SupplyRequestItem)
-      //         .HasForeignKey<YMCurrencyValue>(p => p.YMSupplyRequestItemId)
-      //         .OnDelete(DeleteBehavior.Cascade);
-
-      //     modelBuilder.Entity<YMSupplyRequestItem>()
-      //         .HasOne(i => i.Counters)
-      //         .WithOne(c => c.Item)
-      //         .HasForeignKey<YMSupplyRequestItemCounters>(c => c.Id) // при совпадении ID с item.Id
-      //         .OnDelete(DeleteBehavior.Cascade);
-
-      //     modelBuilder.Entity<YMSupplyRequest>()
-      //.HasMany(r => r.Items)
-      //.WithOne(i => i.SupplyRequest)
-      //.HasForeignKey(i => i.SupplyRequestId)
-      //.OnDelete(DeleteBehavior.Cascade);
-
-      //     // 1) Один-ко-многим: YMSupplyRequest → ChildrenLinks
-      //     modelBuilder.Entity<YMSupplyRequest>()
-      //         .HasMany(r => r.ChildrenLinks)
-      //         .WithOne(rf => rf.Request)
-      //         .HasForeignKey(rf => rf.RequestId)
-      //         .OnDelete(DeleteBehavior.Cascade);
-
-      //     // 2) Один-к-одному (опционально): YMSupplyRequest → ParentLink
-      //     modelBuilder.Entity<YMSupplyRequest>()
-      //         .HasOne(r => r.ParentLink)
-      //         .WithOne(rf => rf.RelatedRequest)
-      //         .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
-      //         .OnDelete(DeleteBehavior.Restrict);
-
-      //     // ─── SupplyRequest → TargetLocation ────────
-      //     modelBuilder.Entity<YMSupplyRequest>()
-      //         .HasOne(r => r.TargetLocation)
-      //         .WithMany(l => l.AsTargetInRequests)
-      //         .HasForeignKey(r => r.TargetLocationServiceId)
-      //         .OnDelete(DeleteBehavior.Restrict);
-
-      //     // ─── SupplyRequest → TransitLocation ───────
-      //     modelBuilder.Entity<YMSupplyRequest>()
-      //         .HasOne(r => r.TransitLocation)
-      //         .WithMany(l => l.AsTransitInRequests)
-      //         .HasForeignKey(r => r.TransitLocationServiceId)
-      //         .OnDelete(DeleteBehavior.Restrict);
-
-      //     // ─── Location → Address ────────────────────
-      //     modelBuilder.Entity<YMSupplyRequestLocation>()
-      //         .HasOne(l => l.Address)
-      //         .WithMany(a => a.LocationAddresses)
-      //         .HasForeignKey(l => l.AddressId)
-      //         .OnDelete(DeleteBehavior.Restrict);
-
-      // ─── Конфигурация ссылок между заявками ────────────────────
-
-      // 1) Один-ко-многим: YMSupplyRequest → ChildrenLinks (Cascade при удалении заявки)
-      //modelBuilder.Entity<YMSupplyRequest>()
-      //    .HasMany(r => r.ChildrenLinks)
-      //    .WithOne(rf => rf.Request)
-      //    .HasForeignKey(rf => rf.RequestId)
-      //    .OnDelete(DeleteBehavior.Cascade);
-
-      //// 2) Один-к-одному (опционально): YMSupplyRequest → ParentLink (Restrict, чтобы не удалялся родитель)
-      //modelBuilder.Entity<YMSupplyRequest>()
-      //    .HasOne(r => r.ParentLink)
-      //    .WithOne(rf => rf.RelatedRequest)
-      //    .HasForeignKey<YMSupplyRequestReference>(rf => rf.RelatedRequestId)
-      //    .IsRequired(false)
-      //    .OnDelete(DeleteBehavior.Restrict);
 
       // ─── Конфигурация элементов заявки ──────────────────────────
 
@@ -248,6 +159,20 @@ namespace automation.mbtdistr.ru.Data
         .HasOne(c => c.Settings)
         .WithOne(s => s.Cabinet)
         .HasForeignKey<CabinetSettings>(s => s.CabinetId);
+
+      // 1:* Cabinet ↔ Order
+      modelBuilder.Entity<Order>()
+        .HasOne(o => o.Cabinet)
+        .WithMany(c => c.Orders)
+        .HasForeignKey(o => o.CabinetId)
+        .OnDelete(DeleteBehavior.Cascade);
+
+      // 1:* Cabinet ↔ Return
+      modelBuilder.Entity<Return>()
+        .HasOne(r => r.Cabinet)
+        .WithMany(c => c.Returns)
+        .HasForeignKey(r => r.CabinetId)
+        .OnDelete(DeleteBehavior.Cascade);
 
       // 1:* CabinetSettings ↔ ConnectionParameter
       modelBuilder.Entity<ConnectionParameter>()

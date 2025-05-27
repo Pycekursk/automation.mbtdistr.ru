@@ -15,6 +15,9 @@ namespace automation.mbtdistr.ru.Models
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Username { get; set; }
+
+    public string? SessionStorage { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public NotificationOptions NotificationOptions { get; set; } = new NotificationOptions();

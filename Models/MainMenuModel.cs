@@ -2,6 +2,8 @@
 {
   public class MainMenuModel
   {
+    public int WorkerId { get; set; } = 0; // Идентификатор работника, для которого создается меню. По умолчанию 0 (гость).
+
     public List<MainMenuButton> Buttons { get; set; } = new List<MainMenuButton>();
 
     public MainMenuButton? Selected { get; set; }
@@ -42,19 +44,27 @@
         case RoleType.Courier:
           buttons.Add(new MainMenuButton(4, "Заявки", ButtonIcon.Car, "supplieslist"));
           buttons.Add(new MainMenuButton(5, "Склады", ButtonIcon.Home, "warehouseslist"));
-          
+
           break;
         case RoleType.Director:
           buttons.Add(new MainMenuButton(2, "Заказы", ButtonIcon.Ordersbox, "orderslist", false));
           buttons.Add(new MainMenuButton(3, "Возвраты", ButtonIcon.Undo, "returnslist"));
           buttons.Add(new MainMenuButton(4, "Заявки", ButtonIcon.Car, "supplieslist"));
           buttons.Add(new MainMenuButton(5, "Склады", ButtonIcon.Home, "warehouseslist"));
-          
+
           break;
         default:
           break;
       }
       MainMenuModel? model = new MainMenuModel(buttons);
+      if (worker.Id > 0)
+      {
+        model.WorkerId = worker.Id;
+      }
+      else
+      {
+        model = CreateDefault(worker);
+      }
       return model;
     }
 

@@ -39,13 +39,18 @@ namespace automation.mbtdistr.ru.Models
     public int Id { get; set; }
 
     [ForeignKey("ReturnProduct")]
-    public int ReturnProductId { get; set; }
+    public int? ReturnProductId { get; set; }
 
     [Newtonsoft.Json.JsonIgnore]
-    public ReturnProduct ReturnProduct { get; set; }
+    public ReturnProduct? ReturnProduct { get; set; }
 
+    //[ForeignKey(nameof(Storage))]
+    //public int? StorageId { get; set; }
 
-    public decimal? Amount { get; set; }
+    //[Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+    //public Storage? Storage { get; set; }
+
+    public double? Amount { get; set; }
     public string? Currency { get; set; }
   }
 }

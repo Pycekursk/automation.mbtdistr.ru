@@ -208,7 +208,11 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 
     [Display(Name = "Стоимость товаров до скидок")]
     [JsonProperty("buyerItemsTotalBeforeDiscount")]
-    public decimal BuyerItemsTotalBeforeDiscount { get; set; }
+    public double BuyerItemsTotalBeforeDiscount { get; set; }
+
+    [Display(Name = "Конечная стоимость")]
+    [JsonProperty("buyerTotal")]
+    public double BuyerTotal { get; set; }
 
     [Display(Name = "Дата оформления заказа")]
     [JsonProperty("creationDate")]
@@ -227,7 +231,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 
     [Display(Name = "Стоимость доставки")]
     [JsonProperty("deliveryTotal")]
-    public decimal DeliveryTotal { get; set; }
+    public double DeliveryTotal { get; set; }
 
     [Display(Name = "Тестовый заказ")]
     [JsonProperty("fake")]
@@ -243,7 +247,7 @@ namespace automation.mbtdistr.ru.Services.YandexMarket.Models
 
     [Display(Name = "Платёж покупателя")]
     [JsonProperty("itemsTotal")]
-    public decimal ItemsTotal { get; set; }
+    public double ItemsTotal { get; set; }
 
     [Display(Name = "Способ оплаты")]
     [JsonProperty("paymentMethod")]

@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function () {
+﻿document.addEventListener('DOMContentLoaded', function () {
     let touchStartX = 0;
     let touchStartY = 0;
 
@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const viewportEl = document.querySelector('.dx-viewport > .container-fluid');
 
-        if (!viewportEl) return; // ���������
+        if (!viewportEl) return; // безопасно
 
         const rect = viewportEl.getBoundingClientRect();
         const swipeZoneWidth = window.innerWidth - rect.left;
@@ -40,7 +40,41 @@ document.addEventListener('DOMContentLoaded', function () {
     Fancybox.bind();
 });
 
-// ��� ��� ��������� ����������
+//document.addEventListener("DOMContentLoaded", async () => {
+//    const tg = window.Telegram.WebApp;
+//    tg.ready();
+//    let userId = tg.initDataUnsafe?.user?.id;
+//    console.log("Идентификатор пользователя:", userId);
+//    try {
+//        console.log("Загружаем сессию для пользователя:", userId);
+//        const res = await fetch(`/api/pwa/getsession/${userId}`);
+//        if (res.ok) {
+//            const sessionData = await res.text();
+//            console.log("Сессия загружена:", sessionData);
+//            applySessionData(sessionData);
+//        }
+//    } catch (err) {
+//        console.error("Ошибĸа загрузĸи сессии:", err);
+//    }
+//});
+
+//window.addEventListener("beforeunload", async () => {
+//    console.log("Сохраняем сессию перед закрытием...");
+//    let userId = tg.initDataUnsafe?.user?.id;
+//    const data = JSON.stringify(sessionStorage); // или sessionStorage, если это строка
+//    const blob = new Blob([data], { type: "application/json" });
+//    try {
+//        await navigator.sendBeacon(`/api/pwa/savesession/${userId}`, blob);
+//    } catch (err) {
+//        console.error("Ошибĸа сохранения сессии:", err);
+//    }
+//});
+
+//function applySessionData(data) {
+//    if (data !== "")
+//        sessionStorage = JSON.parse(data);
+//}
+
 if (!window.Telegram) {
     window.Telegram = {
         WebApp: {

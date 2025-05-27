@@ -27,6 +27,8 @@ namespace automation.mbtdistr.ru.Models
 
     public ICollection<Warehouse>? Warehouses { get; set; }
 
+    public ICollection<Order>? Orders { get; set; }
+
     public override string ToString()
     {
       StringBuilder sb = new StringBuilder();

@@ -2,9 +2,8 @@
 {
   public enum MarketApiRequestType
   {
-
-    ProductList,         
-    ProductInfo,         
+    ProductList,
+    ProductInfo,
     ReturnsList,
     ReturnInfo,
     SellerInfo,
@@ -22,7 +21,9 @@
     ReturnDecision,
     SubmitReturnDecision,
     OfferCardsContentStatus,
-    Warehouses
+    Warehouses,
+    PostingFBO,
+    PostingFBS,
     // и так далее...
   }
 }

@@ -146,7 +146,7 @@
      .LoadPanel(loadPanel => loadPanel.Enabled(true))
      .Scrolling(scrolling => scrolling.Mode(GridScrollingMode.Virtual))
      .Scrolling(scrolling => scrolling.ColumnRenderingMode(GridColumnRenderingMode.Virtual))
-     .StateStoring(s => s.Enabled(true).Type(StateStoringType.SessionStorage).StorageKey($"DataGridState_{Context.Request.Path.ToString().Trim('/').Replace('/', '_')}"))
+     .StateStoring(s => s.Enabled(true).Type(StateStoringType.LocalStorage).StorageKey($"DataGridState_{Context.Request.Path.ToString().Trim('/').Replace('/', '_')}"))
      .Sorting(sorting => sorting.Mode(GridSortingMode.Multiple))
      .HeaderFilter(h => h.Visible(true))
      .Selection(s => s.Mode(SelectionMode.Single))

@@ -61,6 +61,22 @@ namespace automation.mbtdistr.ru
   public static class Extensions
   {
     /// <summary>
+    /// Метод для глубокого клонирования объекта с использованием JSON-сериализации.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="source"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static T DeepClone<T>(this T source)
+    {
+      if (source == null)
+        throw new ArgumentNullException(nameof(source));
+
+      var json = JsonConvert.SerializeObject(source);
+      return JsonConvert.DeserializeObject<T>(json)!;
+    }
+
+    /// <summary>
     /// Элемент для Lookup: Id = числовое значение enum, Text = DisplayName или имя константы.
     /// </summary>
     public class LookupItem
@@ -400,18 +416,16 @@ namespace automation.mbtdistr.ru
 
         var chatId = admin.TelegramId;
 
-        string? json = obj?.ToJson(new JsonSerializerOptions()
-        {
-          Converters =
-          {
-            new JsonStringEnumMemberConverterFactory(),
-            new DateTimeJsonConverter()
-          },
-          WriteIndented = true,
-          Encoder = JavaScriptEncoder.Create(UnicodeRanges.BasicLatin, UnicodeRanges.Cyrillic),
-          DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-          ReferenceHandler = ReferenceHandler.IgnoreCycles
-        });
+        string? json = Newtonsoft.Json.JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented,
+            new Newtonsoft.Json.JsonSerializerSettings
+            {
+              ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore,
+              Converters =
+              {
+                new Newtonsoft.Json.Converters.StringEnumConverter(),
+                new Newtonsoft.Json.Converters.IsoDateTimeConverter { DateTimeFormat = "yyyy-MM-ddTHH:mm:ss.fffZ" }
+              },
+            });
 
         if (json?.Length > 3500)
         {
@@ -423,7 +437,7 @@ namespace automation.mbtdistr.ru
         }
         else
         {
-          json = $"{caption?.EscapeMarkdownV2()}\n\n```\n{json?.EscapeMarkdownV2()}\n```";
+          json = $"{caption?.EscapeMarkdownV2()}\n\n```\n{json}\n```";
           await BotClient.SendMessage(
               chatId: chatId,
               text: json,
@@ -434,6 +448,8 @@ namespace automation.mbtdistr.ru
       {
         await BotClient.SendMessage(chatId: 1406950293, text: ex.Message);
       }
+
+      await Task.Delay(1000); // Задержка для избежания превышения лимита запросов
     }
 
     public static async Task SendDebugMessage(string message = "", object? data = null)

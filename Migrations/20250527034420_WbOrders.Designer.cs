@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using automation.mbtdistr.ru.Data;
 
@@ -11,9 +12,11 @@ using automation.mbtdistr.ru.Data;
 namespace automation.mbtdistr.ru.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250527034420_WbOrders")]
+    partial class WbOrders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -352,62 +355,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.ToTable("NotificationOptions");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.Order", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CabinetId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("CanceledAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("ExternalId")
-                        .HasColumnType("longtext");
-
-                    b.Property<double>("FinishedPrice")
-                        .HasColumnType("double");
-
-                    b.Property<string>("OrderStatus")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<int?>("ReturnId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("SellScheme")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("ShipmentStatus")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<double>("TotalPrice")
-                        .HasColumnType("double");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CabinetId");
-
-                    b.HasIndex("ReturnId");
-
-                    b.ToTable("Orders");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
                 {
                     b.Property<int>("Id")
@@ -504,11 +451,8 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<int?>("CurrentWarehouseId")
                         .HasColumnType("int");
 
-                    b.Property<string>("OrderExternalId")
+                    b.Property<string>("OrderId")
                         .HasColumnType("longtext");
-
-                    b.Property<int?>("OrderId")
-                        .HasColumnType("int");
 
                     b.Property<string>("OrderNumber")
                         .HasColumnType("longtext");
@@ -518,9 +462,6 @@ namespace automation.mbtdistr.ru.Migrations
 
                     b.Property<DateTime?>("OrderedAt")
                         .HasColumnType("datetime(6)");
-
-                    b.Property<string>("PostingNumber")
-                        .HasColumnType("longtext");
 
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("datetime(6)");
@@ -539,10 +480,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<string>("ShipmentStatus")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
                     b.Property<int?>("TargetWarehouseId")
                         .HasColumnType("int");
 
@@ -554,8 +491,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.HasIndex("CabinetId");
 
                     b.HasIndex("CurrentWarehouseId");
-
-                    b.HasIndex("OrderId");
 
                     b.HasIndex("ReturnId")
                         .HasDatabaseName("IX_Returns_ReturnId");
@@ -821,11 +756,8 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<long>("Id")
                         .HasColumnType("bigint");
 
-                    b.Property<double>("BuyerItemsTotalBeforeDiscount")
-                        .HasColumnType("double");
-
-                    b.Property<double>("BuyerTotal")
-                        .HasColumnType("double");
+                    b.Property<decimal>("BuyerItemsTotalBeforeDiscount")
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<DateTime>("CreationDate")
                         .HasColumnType("datetime(6)");
@@ -833,14 +765,14 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Property<int>("Currency")
                         .HasColumnType("int");
 
-                    b.Property<double>("DeliveryTotal")
-                        .HasColumnType("double");
+                    b.Property<decimal>("DeliveryTotal")
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<bool>("Fake")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<double>("ItemsTotal")
-                        .HasColumnType("double");
+                    b.Property<decimal>("ItemsTotal")
+                        .HasColumnType("decimal(65,30)");
 
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("int");
@@ -1304,23 +1236,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Worker");
                 });
 
-            modelBuilder.Entity("automation.mbtdistr.ru.Models.Order", b =>
-                {
-                    b.HasOne("automation.mbtdistr.ru.Models.Cabinet", "Cabinet")
-                        .WithMany("Orders")
-                        .HasForeignKey("CabinetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("automation.mbtdistr.ru.Models.Return", "Return")
-                        .WithMany()
-                        .HasForeignKey("ReturnId");
-
-                    b.Navigation("Cabinet");
-
-                    b.Navigation("Return");
-                });
-
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Price", b =>
                 {
                     b.HasOne("automation.mbtdistr.ru.Models.ReturnProduct", "ReturnProduct")
@@ -1354,10 +1269,6 @@ namespace automation.mbtdistr.ru.Migrations
                         .HasForeignKey("CurrentWarehouseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("FK_Returns_CurrentWarehouse");
-
-                    b.HasOne("automation.mbtdistr.ru.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId");
 
                     b.HasOne("automation.mbtdistr.ru.Models.Warehouse", "TargetWarehouse")
                         .WithMany("DestinationReturns")
@@ -1393,8 +1304,6 @@ namespace automation.mbtdistr.ru.Migrations
                     b.Navigation("Cabinet");
 
                     b.Navigation("CurrentWarehouse");
-
-                    b.Navigation("Order");
 
                     b.Navigation("Storage");
 
@@ -1715,8 +1624,6 @@ namespace automation.mbtdistr.ru.Migrations
 
             modelBuilder.Entity("automation.mbtdistr.ru.Models.Cabinet", b =>
                 {
-                    b.Navigation("Orders");
-
                     b.Navigation("Returns");
 
                     b.Navigation("Settings")
