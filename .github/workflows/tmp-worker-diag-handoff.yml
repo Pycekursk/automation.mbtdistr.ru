@@ -1,0 +1,31 @@
+name: Temporary Worker Diagnostic Handoff
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download signed diagnostic Worker archive
+        env:
+          URL_B64: aHR0cHM6Ly9yZWxlYXNlLWFzc2V0cy5naXRodWJ1c2VyY29udGVudC5jb20vZ2l0aHViLXByb2R1Y3Rpb24tcmVsZWFzZS1hc3NldC8xMjU1MjA4MjA2L2I3ZjMwZDM0LTEzOGUtNDA5Zi1hYzQ2LTAwZDBlZDE4NzI0NT9zcD1yJnN2PTIwMTgtMTEtMDkmc3I9YiZzcHI9aHR0cHMmc2U9MjAyNi0wOC0yM1QxOCUzQTU5JTNBMzhaJnJzY2Q9YXR0YWNobWVudCUzQitmaWxlbmFtZSUzRE9uZUM3Ny5Bc3luY1dvcmtlci1yZXNvdXJjZS1sYW5lcy1hM2ZkOTdmMjBhMjVlZjg1ZGQ2ZThkNDk3MjZjNjY2MzQxYTEwMjgwLnppcCZyc2N0PWFwcGxpY2F0aW9uJTJGb2N0ZXQtc3RyZWFtJnNrb2lkPTk2YzJkNDEwLTU3MTEtNDNhMS1hZWRkLWFiMTk0N2FhN2FiMCZza3RpZD0zOThhNjY1NC05OTdiLTQ3ZTktYjEyYi05NTE1Yjg5NmI0ZGUmc2t0PTIwMjYtMDgtMjNUMTclM0E1OCUzQTQyWiZza2U9MjAyNi0wOC0yM1QxOCUzQTU5JTNBMzhaJnNrcz1iJnNrdj0yMDE4LTExLTA5JnNpZz00cGhURVlERnFEY2dvR2Z1OGZ1andoVEYxQkd2WXZjZ1cxbFRHJTJGOUlSNEUlM0Qmand0PWV5SjBlWEFpT2lKS1YxUWlMQ0poYkdjaU9pSklVekkxTmlKOS5leUpwYzNNaU9pSm5hWFJvZFdJdVkyOXRJaXdpWVhWa0lqb2ljbVZzWldGelpTMWhjM05sZEhNdVoybDBhSFZpZFhObGNtTnZiblJsYm5RdVkyOXRJaXdpYTJWNUlqb2lhMlY1TVNJc0ltVjRjQ0k2TVRjNE56VXdPVGt6TWl3aWJtSm1Jam94TnpnM05UQTRNVE15TENKd1lYUm9Jam9pY21Wc1pXRnpaV0Z6YzJWMGNISnZaSFZqZEdsdmJpNWliRzlpTG1OdmNtVXVkMmx1Wkc5M2N5NXVaWFFpZlEuTXFmMmJMbzkyVm51U0ttTVdfYWc4OE9GLW04cnoxcHU5VUdhdW9mR2l2ayZyZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWF0dGFjaG1lbnQlM0IlMjBmaWxlbmFtZSUzRE9uZUM3Ny5Bc3luY1dvcmtlci1yZXNvdXJjZS1sYW5lcy1hM2ZkOTdmMjBhMjVlZjg1ZGQ2ZThkNDk3MjZjNjY2MzQxYTEwMjgwLnppcCZyZXNwb25zZS1jb250ZW50LXR5cGU9YXBwbGljYXRpb24lMkZvY3RldC1zdHJlYW0=
+        run: |
+          set -euo pipefail
+          url="$(printf '%s' "$URL_B64" | base64 -d)"
+          curl --fail --location --retry 2 "$url" -o OneC77.AsyncWorker-resource-lanes-DIAG-a3fd97f.zip
+          test "$(stat -c%s OneC77.AsyncWorker-resource-lanes-DIAG-a3fd97f.zip)" -gt 1000000
+          unzip -t OneC77.AsyncWorker-resource-lanes-DIAG-a3fd97f.zip >/dev/null
+
+      - name: Upload handoff artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-resource-lanes-diag-handoff
+          path: OneC77.AsyncWorker-resource-lanes-DIAG-a3fd97f.zip
+          if-no-files-found: error
+          retention-days: 1
