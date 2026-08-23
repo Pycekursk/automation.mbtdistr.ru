@@ -17,8 +17,14 @@ jobs:
       - name: Download encrypted Worker archive
         run: >-
           curl --fail --location --retry 2
+          --request POST
           'https://temp.sh/kUJmQ/OneC77.AsyncWorker-resource-lanes-27281a2515eb4f40706bb2ae1259dc02907ee9c6.zip.enc'
           --output OneC77.AsyncWorker-resource-lanes.zip.enc
+
+      - name: Verify encrypted payload
+        run: |
+          test "$(stat -c%s OneC77.AsyncWorker-resource-lanes.zip.enc)" -gt 1000000
+          file OneC77.AsyncWorker-resource-lanes.zip.enc
 
       - name: Upload encrypted handoff artifact
         uses: actions/upload-artifact@v4
